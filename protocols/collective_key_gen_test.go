@@ -1,10 +1,10 @@
-package main
+package protocols
 
 import (
-	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/log"
 	"github.com/lca1/lattigo/bfv"
 	"go.dedis.ch/kyber/v3/suites"
+	"go.dedis.ch/onet/v3"
+	"go.dedis.ch/onet/v3/log"
 	"testing"
 
 	"time"
@@ -13,7 +13,7 @@ import (
 
 func TestCollectiveKeyGeneration(t *testing.T) {
 
-	log.Lvl2("Started test")
+	log.Lvl1("Started test")
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
 
@@ -26,7 +26,10 @@ func TestCollectiveKeyGeneration(t *testing.T) {
 
 	ckgp := pi.(*CollectiveKeyGenerationProtocol)
 	ckgp.Params = bfv.DefaultParams[0]
-	ckgp.Start()
+	err = ckgp.Start()
+	if err != nil{
+		t.Fatal("Could not start the tree : " , err)
+	}
 	log.Lvl2("Collective Key Generated")
 
 	<- time.After(time.Second) // Leave some time for children to terminate

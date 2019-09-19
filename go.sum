@@ -18,8 +18,6 @@ github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORN
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
-github.com/lca1/lattigo v0.0.0-20190902085529-ef25de20988e h1:e15hWOy7luw89DRrgMqVL4sp6OLxXjZjn7+86Jm2tFg=
-github.com/lca1/lattigo v0.0.0-20190902085529-ef25de20988e/go.mod h1:knvFdgV0mll9NmHHEXN1X8bNGj57eifx6s5/NxFgfoM=
 github.com/lca1/lattigo v0.0.0-20190903093119-24efc3631967 h1:y3Y2Zn8+mlFECynnq9IKzMBZKs0Gxm8d6tZXDOlM9bA=
 github.com/lca1/lattigo v0.0.0-20190903093119-24efc3631967/go.mod h1:knvFdgV0mll9NmHHEXN1X8bNGj57eifx6s5/NxFgfoM=
 github.com/montanaflynn/stats v0.5.0/go.mod h1:wL8QJuTMNUDYhXwkmfOly8iTdp5TEcJFWZD2D7SIkUc=
