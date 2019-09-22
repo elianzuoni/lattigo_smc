@@ -3,6 +3,7 @@ package protocols
 import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"protocols/utils"
 )
 
 func init() {
@@ -28,18 +29,49 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	}
 
 	log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
-
+	//utils.PrintNewKeyPair()
 	log.Lvl1(ckgp.ServerIdentity(), " Got key :", ckg_0)
 	//Afterwards need to do RLK, CKS, PCKS and then we are ready to run
 	return nil
 }
 
-//
-//func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
-//	log.Lvl1(ckgp.ServerIdentity(), "Shutting down system.")
-//	//maybe free some resources here...
-//	//close(ckgp.ChannelParams)
-//	//close(ckgp.ChannelPublicKey)
-//	//close(ckgp.ChannelPublicKeyShares)
-//	return nil
-//}
+
+func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
+	log.Lvl1(ckgp.ServerIdentity(), ": shutting down.")
+	ckgp.TreeNodeInstance.Shutdown()
+	return nil
+}
+
+
+
+
+/** *****************PROTOCOLS FOR KEY SWITCHING******************* **/
+
+
+func (cks *CollectiveKeySwitchingProtocol) Start() error{
+	log.Lvl1(cks.ServerIdentity(), "Starting collective key switching for key : " , cks.Params)
+
+
+	return nil
+
+}
+
+
+func (cks *CollectiveKeySwitchingProtocol) Dispatch() error{
+
+	//start the key switching
+	res, err := cks.CollectiveKeySwitching()
+	utils.Check(err)
+
+	log.Lvl1("Resulting key : " , res)
+
+	return nil
+
+}
+
+func (cks *CollectiveKeySwitchingProtocol) Shutdown() error{
+	cks.TreeNodeInstance.Shutdown()
+	return nil
+
+
+}

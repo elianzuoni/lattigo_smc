@@ -32,7 +32,7 @@ func LoadSecretKey(ctx *bfv.BfvContext) (sk *bfv.SecretKey, err error) {
 	if data, err = ioutil.ReadFile("secret"); err != nil {
 		return nil , fmt.Errorf("could not read key: %s", err)
 	}
-	err = sk.UnMarshalBinary(data, ctx)
+	err = sk.UnmarshalBinary(data, ctx)
 	return
 }
 
@@ -42,4 +42,14 @@ func GetSecretKey(ctx *bfv.BfvContext) (sk *bfv.SecretKey, err error) {
 	}
 	sk = ctx.NewKeyGenerator().NewSecretKey()
 	return sk, SaveSecretKey(sk, ctx)
+}
+
+
+//check for errors.
+func Check(err error){
+	if err != nil{
+		fmt.Printf("error : %v", err)
+		return
+	}
+
 }

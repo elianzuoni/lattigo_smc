@@ -14,10 +14,6 @@ import (
 
 
 
-//type StructPrivateKey struct{
-//	//Might need to add more so declare it as struct
-//	bfv.SecretKey
-//}
 
 func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
@@ -51,6 +47,8 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 	ckg := dbfv.NewCKG(bfvCtx.GetContextQ(), crsGen.Clock())
 	//get si
 	sk, err := utils.GetSecretKey(bfvCtx)
+
+	//sk := bfvCt
 	if err != nil {
 		return ring.Poly{}, fmt.Errorf("error when loading the secret key: %s", err)
 	}

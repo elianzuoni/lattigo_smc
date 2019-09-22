@@ -13,7 +13,7 @@ func check(err error) {
 	}
 }
 
-func main() {
+func Main() {
 
 	N := 4
 
