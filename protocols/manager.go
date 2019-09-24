@@ -15,7 +15,7 @@ func init() {
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 	log.Lvl1(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
 
-	ckgp.ChannelParams <- StructParameters{nil, Parameters{ckgp.Params}}
+	ckgp.ChannelParams <- StructParameters{ckgp.TreeNode(), Parameters{ckgp.Params}}
 	return nil
 }
 
@@ -31,7 +31,12 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
 	//utils.PrintNewKeyPair()
 	log.Lvl1(ckgp.ServerIdentity(), " Got key :", ckg_0)
+	//
 	//Afterwards need to do RLK, CKS, PCKS and then we are ready to run
+
+
+
+
 	return nil
 }
 
@@ -45,12 +50,15 @@ func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
 
 
 
-/** *****************PROTOCOLS FOR KEY SWITCHING******************* **/
+
+/** *****************Utility FOR KEY SWITCHING******************* **/
+
 
 
 func (cks *CollectiveKeySwitchingProtocol) Start() error{
 	log.Lvl1(cks.ServerIdentity(), "Starting collective key switching for key : " , cks.Params)
-
+	//TODO why hhere have to write all ??
+	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(),SwitchingParameters{cks.Params.Params,cks.Params.SkInput,cks.Params.SkOutput,cks.Params.cipher}}
 
 	return nil
 
@@ -75,3 +83,7 @@ func (cks *CollectiveKeySwitchingProtocol) Shutdown() error{
 
 
 }
+
+
+
+

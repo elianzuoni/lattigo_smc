@@ -10,6 +10,7 @@ import (
 
 
 type KeyRing struct {
+	//Ideally use maybe this in the future to have a single structure.. but maybe it will get too big ~ check later
 	//everything needed for the keys.
 	*dbfv.CKG
 	*dbfv.EkgProtocol
@@ -44,20 +45,20 @@ type CollectiveKeySwitchingProtocol struct{
 }
 
 type SwitchingParameters struct{
-	Params Parameters
+	Params bfv.Parameters
 	//also need skIn, skOut
-	Skinput ring.Poly
+	SkInput ring.Poly
 	SkOutput ring.Poly
 	cipher bfv.Ciphertext
 }
 
 type StructSwitchParameters struct{
-	*onet.TreeNodeInstance
+	*onet.TreeNode
 	SwitchingParameters
 }
 
 type StructCiphertext struct{
-	*onet.TreeNodeInstance
+	*onet.TreeNode
 	bfv.Ciphertext
 }
 

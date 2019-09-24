@@ -29,13 +29,12 @@ input : skInput,skOuput - the key under what ct is encrypted and skOutput the ke
 func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphertext,error){
 
 	params := <- cks.ChannelParams
-	bfvParam := params.Params.Params
+	//bfvParam := params.Params.Params
 	//send parameters to children.
 	//N, t uint64, ModulieQ, ModulieP []uint64, sigma float64
 	//bfvCtx , err := bfv.NewBfvContextWithParam(bfvParam.N,bfvParam.T,bfvParam.Qi,bfvParam.Pi,bfvParam.Sigma)
 	//utils.Check(err)
 
-	//TODO check degree how to get it.
 	res := params.cipher
 
 	err1 := cks.SendToChildrenInParallel(&SwitchingParameters{params.Params,params.Skinput,params.SkOutput,params.cipher})
@@ -50,29 +49,49 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 	ctx := ring.NewContext()
 	key_switch := dbfv.NewCKS(&params.Skinput,&params.SkOutput,ctx,params.Params.Params.Sigma)
 
-	h := key_switch.KeySwitch(params.cipher.Value()[1]) //TODO Check if [1] = c1 , c0 = [0]
-
-	//aggregate only if root -> because otherwise c0 is added many times !
+	h := key_switch.KeySwitch(params.cipher.Value()[1]) //TODO Check if cipher[1] = c1 , c0 = cipher[0]
 
 
-	if !cks.IsRoot() {
+	//TODO re-read this code and make cleaner
+	if !cks.IsLeaf() {
 		hs := make([]*ring.Poly,len(cks.Children())+1)
 		hs = append(hs,h)
 		for i := 0; i < len(cks.Children()); i++ {
 			child := <-cks.ChannelPublicKey
 			hs = append(hs, &child.PublicKey.Poly)
+
 		}
 
 		//aggregate
-		key_switch.Aggregate(params.cipher.Value()[0],hs)
+		if cks.IsRoot(){
+			key_switch.Aggregate(params.cipher.Value()[0],hs)
+		}else{
+			//use an empty cipher text this way it does not add c0 many times.
+			tmp := new(bfv.Ciphertext)
+			tmp.Value()[0].Zero()
 
+			key_switch.Aggregate(tmp.Value()[0],hs)
+			//send your resulting h which is tmp.Value[0] !
+			err := cks.SendToParent(tmp.Value()[0])
+			utils.Check(err)
+		}
+
+	}else{
+		//if it is a leaf just send h to the parent
+		err := cks.SendToParent(h)
+		utils.Check(err)
 	}
+
+
+
+
+
 
 
 	//propagate the cipher text.
 	//the root propagates the cipher text to everyone.
-	//this is not a purely decentralized way of doing
-	//TODO check if ok
+	//this is not strict following of protocol
+	//TODO check if ok to do that.
 	if cks.IsRoot() {
 		res = params.cipher //root already has the cipher
 	} else {

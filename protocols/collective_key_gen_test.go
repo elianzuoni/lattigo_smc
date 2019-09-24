@@ -31,13 +31,19 @@ func TestCollectiveKeyGeneration(t *testing.T) {
 	if err != nil{
 		t.Fatal("Could not start the tree : " , err)
 	}
+
 	log.Lvl1("Collective Key Generated")
 
 	<- time.After(time.Second) // Leave some time for children to terminate
 	//time.Sleep(time.Second)
 
-	ckgp.Shutdown()
-	local.CloseAll()
+	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
+			Will be better once we ca have all the suites of protocol rolling out. We can know when to stop this protocol.
+	Ideally id like to call this vvv so it can all shutdown outside of the collectivekeygen
+	//local.CloseAll()
+	 */
+
+	//local.CloseAll()
 
 
 

@@ -85,6 +85,8 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 	if err != nil {
 		return ring.Poly{}, err
 	}
+
+	ckgp.Done()
 	return ckg_0, nil
 }
 
