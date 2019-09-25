@@ -2,7 +2,7 @@ package utils
 
 import (
 	"fmt"
-	"github.com/lca1/lattigo/bfv"
+	"github.com/ldsec/lattigo/bfv"
 	"io/ioutil"
 )
 
@@ -15,11 +15,11 @@ func PrintNewKeyPair() {
 	}
 	kg := ctx.NewKeyGenerator()
 	sk := kg.NewSecretKey()
-	fmt.Println(sk.MarshalBinary(ctx))
+	fmt.Println(sk.MarshalBinary())
 }
 
 func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext) error {
-	data, err := sk.MarshalBinary(ctx)
+	data, err := sk.MarshalBinary()
 	if err != nil {
 		return err
 	}
@@ -28,11 +28,12 @@ func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext) error {
 
 func LoadSecretKey(ctx *bfv.BfvContext) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	sk = ctx.NewKeyGenerator().NewSecretKeyEmpty()
+	sk = ctx.NewKeyGenerator().NewSecretKey()
 	if data, err = ioutil.ReadFile("secret"); err != nil {
 		return nil , fmt.Errorf("could not read key: %s", err)
 	}
-	err = sk.UnmarshalBinary(data, ctx)
+
+	err = sk.UnmarshalBinary(data)
 	return
 }
 

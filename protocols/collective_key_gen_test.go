@@ -1,7 +1,7 @@
 package protocols
 
 import (
-	"github.com/lca1/lattigo/bfv"
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"

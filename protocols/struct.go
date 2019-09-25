@@ -1,9 +1,9 @@
 package protocols
 
 import (
-	"github.com/lca1/lattigo/bfv"
-	"github.com/lca1/lattigo/dbfv"
-	"github.com/lca1/lattigo/ring"
+	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 )
 

@@ -3,9 +3,9 @@ package protocols
 import (
 	"errors"
 	"fmt"
-	"github.com/lca1/lattigo/bfv"
-	"github.com/lca1/lattigo/dbfv"
-	"github.com/lca1/lattigo/ring"
+	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"log"
 	"protocols/utils"
@@ -47,7 +47,6 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 	ckg := dbfv.NewCKG(bfvCtx.GetContextQ(), crsGen.Clock())
 	//get si
 	sk, err := utils.GetSecretKey(bfvCtx)
-
 	//sk := bfvCt
 	if err != nil {
 		return ring.Poly{}, fmt.Errorf("error when loading the secret key: %s", err)
@@ -56,6 +55,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 	if ckg.GenShare(sk.Get()) != nil {
 		return ring.Poly{}, fmt.Errorf("cannot generate share: %s", err)
 	}
+
 	partial := ckg.GetShare()
 	//if parent get share from child and aggregate
 	if !ckgp.IsLeaf() {
@@ -67,6 +67,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 			}
 		}
 	}
+
 	//send to parent
 	err = ckgp.SendToParent(&PublicKeyShare{*partial})
 	// has no effect for root node
@@ -85,7 +86,6 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 	if err != nil {
 		return ring.Poly{}, err
 	}
-
 	ckgp.Done()
 	return ckg_0, nil
 }

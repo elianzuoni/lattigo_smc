@@ -1,9 +1,9 @@
 package protocols
 
 import (
-	"github.com/lca1/lattigo/bfv"
-	"github.com/lca1/lattigo/dbfv"
-	"github.com/lca1/lattigo/ring"
+	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3/log"
 	"protocols/utils"
 )
@@ -37,17 +37,17 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 
 	res := params.cipher
 
-	err1 := cks.SendToChildrenInParallel(&SwitchingParameters{params.Params,params.Skinput,params.SkOutput,params.cipher})
+	err1 := cks.SendToChildren(&SwitchingParameters{params.Params,params.SkInput,params.SkOutput,params.cipher})
 	if err1 != nil{
 		log.Lvl1("Error : " , err1)
-		return &res,err1[0]
+		return &res,err1
 	}
 
 
 
 
 	ctx := ring.NewContext()
-	key_switch := dbfv.NewCKS(&params.Skinput,&params.SkOutput,ctx,params.Params.Params.Sigma)
+	key_switch := dbfv.NewCKS(&params.SkInput,&params.SkOutput,ctx,params.Params.Sigma)
 
 	h := key_switch.KeySwitch(params.cipher.Value()[1]) //TODO Check if cipher[1] = c1 , c0 = cipher[0]
 

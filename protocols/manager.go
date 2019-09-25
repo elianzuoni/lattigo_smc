@@ -28,7 +28,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 		return e
 	}
 
-	log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
+	//log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
 	//utils.PrintNewKeyPair()
 	log.Lvl1(ckgp.ServerIdentity(), " Got key :", ckg_0)
 	//
@@ -42,7 +42,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
 
 func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
-	log.Lvl1(ckgp.ServerIdentity(), ": shutting down.")
+	//log.Lvl1(ckgp.ServerIdentity(), ": shutting down.")
 	ckgp.TreeNodeInstance.Shutdown()
 	return nil
 }
