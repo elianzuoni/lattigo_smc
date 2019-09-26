@@ -8,18 +8,22 @@ import (
 
 func PrintNewKeyPair() {
 	params := bfv.DefaultParams[0]
-	ctx, err := bfv.NewBfvContextWithParam(params.N, params.T, params.Qi, params.Pi, params.Sigma)
+	ctx, err := bfv.NewBfvContextWithParam(&params)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	kg := ctx.NewKeyGenerator()
-	sk := kg.NewSecretKey()
-	fmt.Println(sk.MarshalBinary())
+	//TODO p = 0 here
+	sk , err := kg.NewSecretKey(0.5)
+	if err != nil {
+		fmt.Printf("Error : %v \n", err)
+	}
+	fmt.Println(sk.MarshalBinary(ctx))
 }
 
 func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext) error {
-	data, err := sk.MarshalBinary()
+	data, err := sk.MarshalBinary(ctx)
 	if err != nil {
 		return err
 	}
@@ -28,12 +32,16 @@ func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext) error {
 
 func LoadSecretKey(ctx *bfv.BfvContext) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	sk = ctx.NewKeyGenerator().NewSecretKey()
+	p := 0.5
+	sk,err = ctx.NewKeyGenerator().NewSecretKey(p)
+	if err != nil {
+		return nil, err
+	}
 	if data, err = ioutil.ReadFile("secret"); err != nil {
 		return nil , fmt.Errorf("could not read key: %s", err)
 	}
 
-	err = sk.UnmarshalBinary(data)
+	err = sk.UnmarshalBinary(data,ctx)
 	return
 }
 
@@ -41,7 +49,12 @@ func GetSecretKey(ctx *bfv.BfvContext) (sk *bfv.SecretKey, err error) {
 	if sk, err = LoadSecretKey(ctx); sk != nil {
 		return
 	}
-	sk = ctx.NewKeyGenerator().NewSecretKey()
+	//TODO p = 0.5 here
+
+	sk,err = ctx.NewKeyGenerator().NewSecretKey(0.5)
+	if err != nil{
+		return nil, err
+	}
 	return sk, SaveSecretKey(sk, ctx)
 }
 

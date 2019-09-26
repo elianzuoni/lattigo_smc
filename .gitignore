@@ -1,2 +1,6 @@
 .DS_Store
 .idea/
+
+# Stuff from the simulation builds
+simulation/build/
+simulation/test_data/

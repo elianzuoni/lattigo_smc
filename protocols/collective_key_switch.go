@@ -71,7 +71,7 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 			tmp.Value()[0].Zero()
 
 			key_switch.Aggregate(tmp.Value()[0],hs)
-			//send your resulting h which is tmp.Value[0] !
+			//send your resulting h which is tmp.Value[0]
 			err := cks.SendToParent(tmp.Value()[0])
 			utils.Check(err)
 		}

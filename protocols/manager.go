@@ -57,7 +57,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
 
 func (cks *CollectiveKeySwitchingProtocol) Start() error{
 	log.Lvl1(cks.ServerIdentity(), "Starting collective key switching for key : " , cks.Params)
-	//TODO why hhere have to write all ??
+	//TODO why here have to write all ??
 	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(),SwitchingParameters{cks.Params.Params,cks.Params.SkInput,cks.Params.SkOutput,cks.Params.cipher}}
 
 	return nil

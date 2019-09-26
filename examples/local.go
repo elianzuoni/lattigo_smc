@@ -2,9 +2,10 @@ package examples
 
 import (
 	"fmt"
-	"github.com/lca1/lattigo/bfv"
-	"github.com/lca1/lattigo/dbfv"
-	"github.com/lca1/lattigo/ring"
+	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
+	"github.com/ldsec/lattigo/ring"
+	"log"
 )
 
 func check(err error) {
@@ -29,15 +30,15 @@ func Main() {
 
 	params := bfv.DefaultParams[3]
 	params.T = 65537
-	bfvctx,err := bfv.NewBfvContextWithParam(params.N, params.T, params.Qi, params.Pi, params.Sigma)
+	bfvctx,err := bfv.NewBfvContextWithParam(&params)
 	check(err)
 
 	bitDecomp := uint64(60)
-	modlen := len(bfvctx.GetContextQ().Modulus)
+	modlen := len(bfvctx.ContextQ().Modulus)
 	bitLog := uint64((60 + (60 % bitDecomp)) / bitDecomp)
 
 
-	crsGen, _ := dbfv.NewCRPGenerator([]byte{'l','a', 't', 't', 'i', 'g', 'o'}, bfvctx.GetContextQ())
+	crsGen, _ := dbfv.NewCRPGenerator([]byte{'l','a', 't', 't', 'i', 'g', 'o'}, bfvctx.ContextQ())
 	crs := crsGen.Clock()
 	crp := make([][]*ring.Poly, modlen)
 	for i := 0; i < modlen; i++ {
@@ -46,23 +47,30 @@ func Main() {
 			crp[i][j] = crsGen.Clock()
 		}
 	}
+	//TODO p = 0.0 here
 
-	tsk,tpk, err := bfvctx.NewKeyGenerator().NewKeyPair()
+	tsk,tpk, err := bfvctx.NewKeyGenerator().NewKeyPair(0.0)
 	check(err)
 	colSk := &bfv.SecretKey{}
-	colSk.Set(bfvctx.GetContextQ().NewPoly())
+	colSk.Set(bfvctx.ContextQ().NewPoly())
 
 	P := make([]*party, N, N)
 	for i := range P {
 		pi :=  &party{}
 		P[i] = pi
-		pi.sk = bfvctx.NewKeyGenerator().NewSecretKey()
-		pi.input = []uint64{0,1,0,1,0,1,0,0}
-		pi.CKG = dbfv.NewCKG(bfvctx.GetContextQ(), crs)
-		pi.EkgProtocol = dbfv.NewEkgProtocol(bfvctx.GetContextQ(), bitDecomp)
-		pi.PCKS = dbfv.NewPCKS(pi.sk.Get(), tpk.Get(), bfvctx.GetContextQ(), params.Sigma)
+		//TODO p = 0.0 here
 
-		bfvctx.GetContextQ().Add(colSk.Get(), pi.sk.Get(), colSk.Get()) //TODO: doc says "return"
+		pi.sk,err = bfvctx.NewKeyGenerator().NewSecretKey(0.0)
+		if err != nil {
+			log.Printf("error : %v \n", err)
+			return
+		}
+		pi.input = []uint64{0,1,0,1,0,1,0,0}
+		pi.CKG = dbfv.NewCKG(bfvctx.ContextQ(), crs)
+		pi.EkgProtocol = dbfv.NewEkgProtocol(bfvctx.ContextQ(), bitDecomp)
+		pi.PCKS = dbfv.NewPCKS(pi.sk.Get(), tpk.Get(), bfvctx.ContextQ(), params.Sigma)
+
+		bfvctx.ContextQ().Add(colSk.Get(), pi.sk.Get(), colSk.Get()) //TODO: doc says "return"
 	}
 
 	fmt.Println("> CKG Phase")
@@ -75,14 +83,16 @@ func Main() {
 	_ = P[0].AggregateShares(cpkShares) // TODO: interface not ideal
 	pk, err := P[0].Finalize()
 	check(err)
-	encryptor, err := bfvctx.NewEncryptor(pk)
+	encryptor, err := bfvctx.NewEncryptor(pk,tsk)
 
 
 	fmt.Println("> RKG Phase")
 	samples := make([][][]*ring.Poly, N) // TODO: type for [][]*ring.Poly ?
 	for i, pi := range P {
 		samples[i] = make([][]*ring.Poly, modlen)
-		pi.rlkEphemSk = pi.NewEphemeralKey()
+		//TODO p = 0.0 here
+
+		pi.rlkEphemSk ,err = pi.NewEphemeralKey(0.0)
 		samples[i] = pi.GenSamples(pi.rlkEphemSk, pi.sk.Get(), crp)
 	}
 	aggregatedSamples := make([][][][2]*ring.Poly, N) // TODO: term aggreg not ideal
@@ -95,7 +105,9 @@ func Main() {
 		keySwitched[i] = pi.EkgProtocol.KeySwitch(pi.rlkEphemSk, pi.sk.Get(), sum)
 	}
 	rlk := new(bfv.EvaluationKey)
-	rlk.SetRelinKeys([][][][2]*ring.Poly{P[0].ComputeEVK(keySwitched, sum)}, bitDecomp)
+	//TODO take the version from master branch later..
+	//bfv.KeyGenerator.NewRelinKey([][][][2]*ring.Poly{P[0].ComputeEVK(keySwitched, sum)}, bitDecomp,1,1)
+	//rlk.NewRelinKey([][][][2]*ring.Poly{P[0].ComputeEVK(keySwitched, sum)}, bitDecomp)
 	check(err)
 
 
@@ -119,7 +131,8 @@ func Main() {
 	for i, pi := range P {
 		err = encoder.EncodeUint(pi.input, pt)
 		check(err)
-		err = encryptor.Encrypt(pt, encInputs[i])
+
+		err = encryptor.EncryptFromPk(pt, encInputs[i])
 		check(err)
 	}
 

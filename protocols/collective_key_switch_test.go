@@ -13,7 +13,8 @@ func TestCollectiveSwitching(t *testing.T) {
 
 	//go from skIn -> skOut -> skIn and check equality of cipher text.
 
-	//repeat n times 
+	//repeat n times
+
 
 
 

@@ -1,0 +1,9 @@
+Simulation = "KeyGenerationSim"
+Servers = 3
+BF = 2
+Rounds = 1
+Suite = "Ed25519"
+# SingleHost = True
+
+Depth
+1

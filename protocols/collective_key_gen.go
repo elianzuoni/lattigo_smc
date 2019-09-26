@@ -7,7 +7,7 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
-	"log"
+	"go.dedis.ch/onet/v3/log"
 	"protocols/utils"
 )
 
@@ -39,14 +39,19 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 	if err != nil {
 		return ring.Poly{}, fmt.Errorf("could not forward parameters to the ")
 	}
-	bfvCtx, err := bfv.NewBfvContextWithParam(params.Params.N, params.Params.T, params.Params.Qi, params.Params.Pi, params.Params.Sigma)
+	bfvCtx, err := bfv.NewBfvContextWithParam(&params.Params)
 	if err != nil {
 		return ring.Poly{}, fmt.Errorf("recieved invalid parameter set")
 	}
-	crsGen, _ := dbfv.NewCRPGenerator([]byte{'l', 'a', 't', 't', 'i', 'g', 'o'}, bfvCtx.GetContextQ())
-	ckg := dbfv.NewCKG(bfvCtx.GetContextQ(), crsGen.Clock())
+
+	log.Lvl1(ckgp.ServerIdentity(), " sent params to child ")
+	crsGen, _ := dbfv.NewCRPGenerator([]byte{'l', 'a', 't', 't', 'i', 'g', 'o'}, bfvCtx.ContextQ())
+	ckg := dbfv.NewCKG(bfvCtx.ContextQ(), crsGen.Clock())
 	//get si
+	log.Lvl1(ckgp.ServerIdentity(), " loading secret key,,.")
 	sk, err := utils.GetSecretKey(bfvCtx)
+
+	log.Lvl1(ckgp.ServerIdentity(), " got secret key ")
 	//sk := bfvCt
 	if err != nil {
 		return ring.Poly{}, fmt.Errorf("error when loading the secret key: %s", err)
