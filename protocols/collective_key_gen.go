@@ -33,7 +33,7 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Poly, error) {
 
 	params := <-ckgp.ChannelParams
-	log.Printf("Started CKG with params %+v", params.Params)
+	log.Lvl3("Started CKG with params ", params.Params)
 	err := ckgp.SendToChildren(&Parameters{params.Params})
 	// forwards the params to children, no effect if leaf
 	if err != nil {
@@ -44,14 +44,11 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 		return ring.Poly{}, fmt.Errorf("recieved invalid parameter set")
 	}
 
-	log.Lvl1(ckgp.ServerIdentity(), " sent params to child ")
 	crsGen, _ := dbfv.NewCRPGenerator([]byte{'l', 'a', 't', 't', 'i', 'g', 'o'}, bfvCtx.ContextQ())
 	ckg := dbfv.NewCKG(bfvCtx.ContextQ(), crsGen.Clock())
 	//get si
-	log.Lvl1(ckgp.ServerIdentity(), " loading secret key,,.")
 	sk, err := utils.GetSecretKey(bfvCtx)
 
-	log.Lvl1(ckgp.ServerIdentity(), " got secret key ")
 	//sk := bfvCt
 	if err != nil {
 		return ring.Poly{}, fmt.Errorf("error when loading the secret key: %s", err)
@@ -91,7 +88,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (ring.Pol
 	if err != nil {
 		return ring.Poly{}, err
 	}
-	ckgp.Done()
+
 	return ckg_0, nil
 }
 

@@ -1,9 +1,12 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/ring"
 	"io/ioutil"
+	"reflect"
 )
 
 func PrintNewKeyPair() {
@@ -65,7 +68,24 @@ func Check(err error){
 		fmt.Printf("error : %v", err)
 		return
 	}
-
 }
 
+
+
+func ComparePolys(poly ring.Poly, poly2 ring.Poly) error {
+
+	marsh1,err1 := poly.MarshalBinary()
+	if err1 != nil{
+		return err1
+	}
+	marsh2, err2 := poly2.MarshalBinary()
+	if err2 != nil{
+		return err2
+	}
+
+	if !reflect.DeepEqual(marsh1,marsh2) {
+		return errors.New("Marshalling of polynoms %v and %v not equal.")
+	}
+	return nil
+}
 

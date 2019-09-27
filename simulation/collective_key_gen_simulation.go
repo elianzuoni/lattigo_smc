@@ -3,10 +3,12 @@ package simulation
 import (
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "protocols/protocols"
+	"protocols/utils"
 )
 
 type KeyGenerationSim struct {
@@ -14,7 +16,7 @@ type KeyGenerationSim struct {
 }
 
 func init(){
-	onet.SimulationRegister("KeyGenerationSim",NewSimulationKeyGen)
+	onet.SimulationRegister("CollectiveKeyGeneration",NewSimulationKeyGen)
 }
 
 func NewSimulationKeyGen(config string)(onet.Simulation, error){
@@ -55,32 +57,11 @@ func (s *KeyGenerationSim)Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
 
 	log.Lvl1("Size : " , size, " rounds : " , s.Rounds)
-	//for round := 0; round < s.Rounds; round ++{
-	//	round := monitor.NewTimeMeasure("round")
-	//	pi,err := config.Overlay.CreateProtocol("KeyGenerationSim",config.Tree,onet.NilServiceID)
-	//
-	//	if err != nil {
-	//		log.Fatal("Couldn't create new node:", err)
-	//	}
-	//
-	//	ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
-	//	ckgp.Params = bfv.DefaultParams[0]
-	//	log.Lvl1("Starting ckgp")
-	//	err = ckgp.Start()
-	//
-	//	ckg_0 := (<-ckgp.ChannelPublicKey).Poly
-	//
-	//
-	//	log.Lvl1("Public key is : " ,ckg_0)
-	//	round.Record()
-	//	if err != nil{
-	//		log.Fatal("Could not start the tree : " , err)
-	//	}
-	//}
+
 	round := monitor.NewTimeMeasure("round")
 
 	//TODO what is the service ID ?
-	pi,err := config.Overlay.StartProtocol("KeyGenerationSim",config.Tree,onet.NilServiceID)
+	pi,err := config.Overlay.StartProtocol("CollectiveKeyGeneration",config.Tree,onet.NilServiceID)
 		if err != nil {
 			log.Fatal("Couldn't create new node:", err)
 		}
@@ -90,14 +71,34 @@ func (s *KeyGenerationSim)Run(config *onet.SimulationConfig) error {
 		log.Lvl1("Starting ckgp")
 		err = ckgp.Start()
 
-		ckg_0 := (<-ckgp.ChannelPublicKey).Poly
+	log.Lvl1("Collective Key Generated for " ,len(ckgp.Roster().List) , " nodes.\n\tNow comparing all polynomials.")
 
+	//check if we have all the same polys ckg_0
+	keys := make([]ring.Poly,len(ckgp.Roster().List))
 
-		log.Lvl1("Public key is : " ,ckg_0)
-		round.Record()
+	for i := 0 ; i < len(ckgp.Roster().List); i++{
+		//get the keys.
+		pk :=( <- ckgp.ChannelPublicKey).Poly
+		keys[i] = pk
+	}
+	for _,k1 := range(keys){
+		for _, k2 := range(keys){
+			err := utils.ComparePolys(k1,k2)
+			if err != nil{
+				log.Error("Error in polynomial comparison : ", err)
+				return err
+			}
+		}
+	}
+
+	round.Record()
 		if err != nil{
 			log.Fatal("Could not start the tree : " , err )
 		}
+
+
+	log.Lvl1("finished")
 	return nil
+
 
 }

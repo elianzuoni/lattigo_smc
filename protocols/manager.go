@@ -4,10 +4,11 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"protocols/utils"
+	"time"
 )
 
 func init() {
-	onet.GlobalProtocolRegister("FVCollectiveKeyGeneration", NewCollectiveKeyGeneration)
+	onet.GlobalProtocolRegister("CollectiveKeyGeneration", NewCollectiveKeyGeneration)
 }
 
 
@@ -29,12 +30,27 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	}
 
 	//log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
-	//utils.PrintNewKeyPair()
-	log.Lvl1(ckgp.ServerIdentity(), " Got key :", ckg_0)
-	//
-	//Afterwards need to do RLK, CKS, PCKS and then we are ready to run
+	//log.Lvl1(ckgp.ServerIdentity(), " Got key :", ckg_0)
 
 
+
+
+	//TODO turn off in real scenario..
+	//for the test - send all to root and in the test check that all keys are equals.
+
+	var test = true
+	if test {
+		//if ! ckgp.IsRoot(){
+			err := ckgp.SendTo(ckgp.Root(),&PublicKey{ckg_0})
+			if err != nil{
+				log.Lvl1("Error in key sending to root : " , err)
+			}
+		//}
+		//wait to allow test to get the values.
+		<- time.After(time.Second*2)
+
+	}
+	ckgp.Done()
 
 
 	return nil
