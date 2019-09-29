@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
+	"go.dedis.ch/onet/v3/log"
 	"io/ioutil"
 	"reflect"
 )
@@ -17,30 +19,49 @@ func PrintNewKeyPair() {
 		return
 	}
 	kg := ctx.NewKeyGenerator()
-	//TODO p = 0 here
-	sk , err := kg.NewSecretKey(0.5)
+	//TODO p = 0.3 here
+	p := 1.0/3
+	sk , err := kg.NewSecretKey(p)
 	if err != nil {
 		fmt.Printf("Error : %v \n", err)
 	}
 	fmt.Println(sk.MarshalBinary(ctx))
 }
 
-func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext) error {
+func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext,seed string) error {
 	data, err := sk.MarshalBinary(ctx)
+
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile("secret", data, 0644)
+	log.Lvl1("saving file..",seed, " \n ")
+	xs := sha256.Sum256([]byte(seed))
+	fingerprint := fmt.Sprintf("%x", xs)
+	log.Lvl4("Saving a new key. sha : " , fingerprint)
+
+	err = ioutil.WriteFile("SecretKey"+fingerprint, data, 0644)
+
+	if err != nil{
+		log.Lvl1("file is not saved...",err)
+		return err
+	}
+	return nil
 }
 
-func LoadSecretKey(ctx *bfv.BfvContext) (sk *bfv.SecretKey, err error) {
+func LoadSecretKey(ctx *bfv.BfvContext,seed string) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	p := 0.5
+	p := 1.0/3
 	sk,err = ctx.NewKeyGenerator().NewSecretKey(p)
 	if err != nil {
 		return nil, err
 	}
-	if data, err = ioutil.ReadFile("secret"); err != nil {
+
+
+	xs := sha256.Sum256([]byte(seed))
+	fingerprint := fmt.Sprintf("%x", xs)
+	log.Lvl1("Loading a key. sha : " , fingerprint)
+
+	if data, err = ioutil.ReadFile("SecretKey"+fingerprint); err != nil {
 		return nil , fmt.Errorf("could not read key: %s", err)
 	}
 
@@ -48,18 +69,57 @@ func LoadSecretKey(ctx *bfv.BfvContext) (sk *bfv.SecretKey, err error) {
 	return
 }
 
-func GetSecretKey(ctx *bfv.BfvContext) (sk *bfv.SecretKey, err error) {
-	if sk, err = LoadSecretKey(ctx); sk != nil {
+func GetSecretKey(ctx *bfv.BfvContext,seed string) (sk *bfv.SecretKey, err error) {
+	if sk, err = LoadSecretKey(ctx,seed); sk != nil {
 		return
 	}
-	//TODO p = 0.5 here
-
-	sk,err = ctx.NewKeyGenerator().NewSecretKey(0.5)
+	//TODO p = 0.3 here
+	p := 1.0/3
+	sk,err = ctx.NewKeyGenerator().NewSecretKey(p)
 	if err != nil{
 		return nil, err
 	}
-	return sk, SaveSecretKey(sk, ctx)
+	return sk, SaveSecretKey(sk, ctx,seed)
 }
+
+//Save the public key so it can be loaded afterwards.
+func SavePublicKey(pk *bfv.PublicKey, ctx *bfv.BfvContext,seed string) error {
+	data, err := pk.MarshalBinary()
+
+	if err != nil {
+		return err
+	}
+	log.Lvl1("saving file..",seed, " \n ")
+	xs := sha256.Sum256([]byte(seed))
+	fingerprint := fmt.Sprintf("%x", xs)
+	log.Lvl4("Saving a new key. sha : " , fingerprint)
+
+	err = ioutil.WriteFile("PublicKey"+fingerprint, data, 0644)
+
+	if err != nil{
+		log.Lvl1("file is not saved...",err)
+		return err
+	}
+	return nil
+}
+//Load public key
+func LoadPublicKey(ctx *bfv.BfvContext, seed string)(pk *bfv.PublicKey, err error){
+	var data []byte
+	pk = ctx.NewPublicKey()
+
+
+	xs := sha256.Sum256([]byte(seed))
+	fingerprint := fmt.Sprintf("%x", xs)
+	log.Lvl1("Loading a public key. sha : " , fingerprint)
+
+	if data, err = ioutil.ReadFile("PublicKey"+fingerprint); err != nil {
+		return nil , fmt.Errorf("could not read key: %s", err)
+	}
+
+	err = pk.UnmarshalBinary(data)
+	return
+}
+
 
 
 //check for errors.
@@ -70,8 +130,6 @@ func Check(err error){
 	}
 }
 
-
-
 func ComparePolys(poly ring.Poly, poly2 ring.Poly) error {
 
 	marsh1,err1 := poly.MarshalBinary()
@@ -79,6 +137,23 @@ func ComparePolys(poly ring.Poly, poly2 ring.Poly) error {
 		return err1
 	}
 	marsh2, err2 := poly2.MarshalBinary()
+	if err2 != nil{
+		return err2
+	}
+
+	if !reflect.DeepEqual(marsh1,marsh2) {
+		return errors.New("Marshalling of polynoms %v and %v not equal.")
+	}
+	return nil
+}
+
+func CompareKeys(k1 bfv.PublicKey, k2 bfv.PublicKey) error {
+	//find more optimal way...
+	marsh1,err1 := k1.MarshalBinary()
+	if err1 != nil{
+		return err1
+	}
+	marsh2, err2 := k2.MarshalBinary()
 	if err2 != nil{
 		return err2
 	}

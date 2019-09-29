@@ -1,13 +1,5 @@
 package examples
 
-import (
-	"fmt"
-	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/dbfv"
-	"github.com/ldsec/lattigo/ring"
-	"log"
-)
-
 func check(err error) {
 	if err != nil {
 		panic(err)
@@ -15,13 +7,13 @@ func check(err error) {
 }
 
 func Main() {
-
+/*
 	N := 4
 
 	type party struct {
-		*dbfv.CKG
-		*dbfv.EkgProtocol
-		*dbfv.PCKS
+		*dbfv.CKGProtocol
+		*dbfv.RKGProtocol
+		*dbfv.PCKSProtocol
 
 		sk *bfv.SecretKey
 		rlkEphemSk *ring.Poly
@@ -39,7 +31,7 @@ func Main() {
 
 
 	crsGen, _ := dbfv.NewCRPGenerator([]byte{'l','a', 't', 't', 'i', 'g', 'o'}, bfvctx.ContextQ())
-	crs := crsGen.Clock()
+	//crs := crsGen.Clock()
 	crp := make([][]*ring.Poly, modlen)
 	for i := 0; i < modlen; i++ {
 		crp[i] = make([]*ring.Poly, bitLog)
@@ -48,8 +40,8 @@ func Main() {
 		}
 	}
 	//TODO p = 0.0 here
-
-	tsk,tpk, err := bfvctx.NewKeyGenerator().NewKeyPair(0.0)
+	p:= 1.0/3
+	tsk,tpk, err := bfvctx.NewKeyGenerator().NewKeyPair(p)
 	check(err)
 	colSk := &bfv.SecretKey{}
 	colSk.Set(bfvctx.ContextQ().NewPoly())
@@ -66,9 +58,9 @@ func Main() {
 			return
 		}
 		pi.input = []uint64{0,1,0,1,0,1,0,0}
-		pi.CKG = dbfv.NewCKG(bfvctx.ContextQ(), crs)
-		pi.EkgProtocol = dbfv.NewEkgProtocol(bfvctx.ContextQ(), bitDecomp)
-		pi.PCKS = dbfv.NewPCKS(pi.sk.Get(), tpk.Get(), bfvctx.ContextQ(), params.Sigma)
+		pi.CKGProtocol = dbfv.NewCKGProtocol(bfvctx)
+		pi.RKGProtocol = dbfv.NewEkgProtocol(bfvctx, bitDecomp)
+		pi.PCKSProtocol = dbfv.NewPCKSProtocol(bfvctx, params.Sigma)
 
 		bfvctx.ContextQ().Add(colSk.Get(), pi.sk.Get(), colSk.Get()) //TODO: doc says "return"
 	}
@@ -76,6 +68,7 @@ func Main() {
 	fmt.Println("> CKG Phase")
 	cpkShares := make([]*ring.Poly, N, N)
 	for i, pi := range P {
+
 		err = pi.GenShare(pi.sk.Get())
 		check(err)
 		cpkShares[i] = pi.GetShare()
@@ -166,5 +159,5 @@ func Main() {
 	res, err := encoder.DecodeUint(ptres)
 	check(err)
 	fmt.Printf("%v\n", res[:len(P[0].input)])
-
+*/
 }

@@ -16,7 +16,7 @@ func init() {
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 	log.Lvl1(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
 
-	ckgp.ChannelParams <- StructParameters{ckgp.TreeNode(), Parameters{ckgp.Params}}
+	ckgp.ChannelParams <- StructParameters{ckgp.TreeNode(), ckgp.Params}
 	return nil
 }
 
@@ -30,7 +30,8 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	}
 
 	//log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
-	//log.Lvl1(ckgp.ServerIdentity(), " Got key :", ckg_0)
+	xs := ckg_0.Get()
+	log.Lvl4(ckgp.ServerIdentity(), " Got key :", xs[0] ," \n. " , xs[1])
 
 
 
@@ -41,7 +42,8 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	var test = true
 	if test {
 		//if ! ckgp.IsRoot(){
-			err := ckgp.SendTo(ckgp.Root(),&PublicKey{ckg_0})
+			err := ckgp.SendTo(ckgp.Root(),ckg_0.Get()[0])
+
 			if err != nil{
 				log.Lvl1("Error in key sending to root : " , err)
 			}
@@ -50,6 +52,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 		<- time.After(time.Second*2)
 
 	}
+	log.Lvl1(ckgp.ServerIdentity() , " : im done")
 	ckgp.Done()
 
 

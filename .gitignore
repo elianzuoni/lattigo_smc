@@ -4,3 +4,5 @@
 # Stuff from the simulation builds
 simulation/build/
 simulation/test_data/
+protocols/keys/
+

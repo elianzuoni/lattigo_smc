@@ -3,9 +3,7 @@ package protocols
 import (
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3/log"
-	"protocols/utils"
 )
 
 //This file is for the collective key switching
@@ -46,40 +44,31 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 
 
 
-	ctx := ring.NewContext()
-	key_switch := dbfv.NewCKS(&params.SkInput,&params.SkOutput,ctx,params.Params.Sigma)
+	ctx,err := bfv.NewBfvContextWithParam(&params.Params)
+	if err != nil{
+		return &bfv.Ciphertext{},err
+	}
 
-	h := key_switch.KeySwitch(params.cipher.Value()[1]) //TODO Check if cipher[1] = c1 , c0 = cipher[0]
+	key_switch := dbfv.NewCKSProtocol(ctx,params.Params.Sigma)
+	h := key_switch.AllocateShare()
+	key_switch.GenShare(&params.SkInput,&params.SkOutput,&params.cipher,h)
 
 
-	//TODO re-read this code and make cleaner
 	if !cks.IsLeaf() {
-		hs := make([]*ring.Poly,len(cks.Children())+1)
-		hs = append(hs,h)
+
 		for i := 0; i < len(cks.Children()); i++ {
-			child := <-cks.ChannelPublicKey
-			hs = append(hs, &child.PublicKey.Poly)
+			child := <-cks.ChannelCKSShare
+			//aggregate
+			key_switch.AggregateShares(h,&child.Poly,h)
 
 		}
 
-		//aggregate
-		if cks.IsRoot(){
-			key_switch.Aggregate(params.cipher.Value()[0],hs)
-		}else{
-			//use an empty cipher text this way it does not add c0 many times.
-			tmp := new(bfv.Ciphertext)
-			tmp.Value()[0].Zero()
+	}
 
-			key_switch.Aggregate(tmp.Value()[0],hs)
-			//send your resulting h which is tmp.Value[0]
-			err := cks.SendToParent(tmp.Value()[0])
-			utils.Check(err)
-		}
-
-	}else{
-		//if it is a leaf just send h to the parent
-		err := cks.SendToParent(h)
-		utils.Check(err)
+	//send to parent.
+	err = cks.SendToParent(h)
+	if err != nil{
+		return nil,err
 	}
 
 
@@ -93,12 +82,14 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 	//this is not strict following of protocol
 	//TODO check if ok to do that.
 	if cks.IsRoot() {
-		res = params.cipher //root already has the cipher
+		res := bfv.Ciphertext{}
+
+		key_switch.KeySwitch(h,&params.cipher,&res)
 	} else {
 		res = (<-cks.ChannelCiphertext).Ciphertext // receive final cipher from parents.
 	}
 
-	err := cks.SendToChildren(&res)
+	err = cks.SendToChildren(&res)
 	// forward the resulting ciphertext to the children
 	if err != nil {
 		return &res, err

@@ -2,7 +2,6 @@ package protocols
 
 import (
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -14,7 +13,8 @@ import (
 
 
 func TestLocalCollectiveKeyGeneration(t *testing.T) {
-	nbnodes := 30
+	nbnodes := 3
+	//log.SetDebugVisible(4)
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
@@ -37,33 +37,38 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	log.Lvl1("Collective Key Generated for " ,len(ckgp.Roster().List) , " nodes.\n\tNow comparing all polynomials.")
 
 	//check if we have all the same polys ckg_0
-	keys := make([]ring.Poly,len(ckgp.Roster().List))
+	CheckKeys(ckgp, err, t)
 
-	for i := 0 ; i < len(ckgp.Roster().List); i++{
-		//get the keys.
-		pk :=( <- ckgp.ChannelPublicKey).Poly
-		keys[i] = pk
-	}
-	for _,k1 := range(keys){
-		for _, k2 := range(keys){
-			err := utils.ComparePolys(k1,k2)
-			if err != nil{
-				log.Error("Error in polynomial comparison : ", err)
-			}
-		}
-	}
-
-
-	<- time.After(time.Second)
+	<-time.After(time.Second)
 
 	log.Lvl1("Success")
 	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
 			Will be better once we ca have all the suites of protocol rolling out. We can know when to stop this protocol.
 	Ideally id like to call this vvv so it can all shutdown outside of the collectivekeygen
 	//local.CloseAll()
-	 */
+	*/
 
+}
 
+func CheckKeys(ckgp *CollectiveKeyGenerationProtocol, err error, t *testing.T) {
+	keys := make([]bfv.PublicKey, len(ckgp.Roster().List))
+	ctx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	for i := 0; i < len(ckgp.Roster().List); i++ {
+		//get the keys.
+		seed := (*ckgp.List()[i].ServerIdentity).String()
+
+		key, _ := utils.LoadPublicKey(ctx, seed)
+		keys[i] = *key
+	}
+	for _, k1 := range (keys) {
+		for _, k2 := range (keys) {
+			err := utils.CompareKeys(k1, k2)
+			if err != nil {
+				log.Error("Error in polynomial comparison : ", err)
+				t.Fail()
+			}
+		}
+	}
 }
 
 //same as local except we use TCP. 
@@ -90,25 +95,11 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T){
 	}
 
 	log.Lvl1("Collective Key Generated for " ,len(ckgp.Roster().List) , " nodes.\n\tNow comparing all polynomials.")
+	<- time.After(time.Second) // Leave some time for children to terminate
 
 	//check if we have all the same polys ckg_0
-	keys := make([]ring.Poly,len(ckgp.Roster().List))
+	CheckKeys(ckgp, err, t)
 
-	for i := 0 ; i < len(ckgp.Roster().List); i++{
-		//get the keys.
-		pk :=( <- ckgp.ChannelPublicKey).Poly
-		keys[i] = pk
-	}
-	for _,k1 := range(keys){
-		for _, k2 := range(keys){
-			err := utils.ComparePolys(k1,k2)
-			if err != nil{
-				log.Error("Error in polynomial comparison : ", err)
-			}
-		}
-	}
-
-	<- time.After(time.Second) // Leave some time for children to terminate
 
 	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
 			Will be better once we ca have all the suites of protocol rolling out. We can know when to stop this protocol.
