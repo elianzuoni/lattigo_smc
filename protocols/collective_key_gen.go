@@ -67,6 +67,9 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	ckg_1 := crsGen.Clock()
 	ckg.GenShare(sk.Get(),ckg_1,partial)
 
+	bfvCtx.NewPublicKey()
+
+
 
 
 	log.Lvl4(ckgp.ServerIdentity(), "Hello")

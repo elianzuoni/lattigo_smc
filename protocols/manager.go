@@ -9,6 +9,7 @@ import (
 
 func init() {
 	onet.GlobalProtocolRegister("CollectiveKeyGeneration", NewCollectiveKeyGeneration)
+	onet.GlobalProtocolRegister("CollectiveKeySwitching",NewCollectiveKeySwitching)
 }
 
 
@@ -76,9 +77,13 @@ func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
 
 func (cks *CollectiveKeySwitchingProtocol) Start() error{
 	log.Lvl1(cks.ServerIdentity(), "Starting collective key switching for key : " , cks.Params)
-	//TODO why here have to write all ??
-	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(),SwitchingParameters{cks.Params.Params,cks.Params.SkInput,cks.Params.SkOutput,cks.Params.cipher}}
-
+	//TODO Here only the master node gets access to the ciphertext because its a pointer.
+	//find a way to take advantage of the unmarshaling
+	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(),SwitchingParameters{cks.Params.Params,cks.Params.SkInputHash,cks.Params.SkOutputHash,cks.Params.cipher}}
+	//cks.ChannelCiphertext <- StructCiphertext{
+	//	TreeNode:   cks.,
+	//	Ciphertext: bfv.Ciphertext{},
+	//}
 	return nil
 
 }
@@ -87,10 +92,12 @@ func (cks *CollectiveKeySwitchingProtocol) Start() error{
 func (cks *CollectiveKeySwitchingProtocol) Dispatch() error{
 
 	//start the key switching
+
 	res, err := cks.CollectiveKeySwitching()
 	utils.Check(err)
 
-	log.Lvl1("Resulting key : " , res)
+	log.Lvl1("Resulting ciphertext : " , *res)
+
 
 	return nil
 

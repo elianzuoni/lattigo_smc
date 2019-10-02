@@ -37,9 +37,9 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	log.Lvl1("Collective Key Generated for " ,len(ckgp.Roster().List) , " nodes.\n\tNow comparing all polynomials.")
 
 	//check if we have all the same polys ckg_0
-	CheckKeys(ckgp, err, t)
 
 	<-time.After(time.Second)
+	CheckKeys(ckgp.List(), err, t)
 
 	log.Lvl1("Success")
 	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
@@ -50,12 +50,12 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 
 }
 
-func CheckKeys(ckgp *CollectiveKeyGenerationProtocol, err error, t *testing.T) {
-	keys := make([]bfv.PublicKey, len(ckgp.Roster().List))
+func CheckKeys(tree []*onet.TreeNode, err error, t *testing.T) {
+	keys := make([]bfv.PublicKey, len(tree))
 	ctx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-	for i := 0; i < len(ckgp.Roster().List); i++ {
+	for i := 0; i < len(tree); i++ {
 		//get the keys.
-		seed := (*ckgp.List()[i].ServerIdentity).String()
+		seed := (tree)[i].ServerIdentity.String()
 
 		key, _ := utils.LoadPublicKey(ctx, seed)
 		keys[i] = *key
@@ -98,7 +98,7 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T){
 	<- time.After(time.Second) // Leave some time for children to terminate
 
 	//check if we have all the same polys ckg_0
-	CheckKeys(ckgp, err, t)
+	CheckKeys(ckgp.List(), err, t)
 
 
 	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.

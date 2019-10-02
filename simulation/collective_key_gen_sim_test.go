@@ -13,6 +13,8 @@ func TestMain(m *testing.M){
 
 func TestSimulationCollectiveKeyGen(t *testing.T){
 	log.SetDebugVisible(1)
+
+
 	simul.Start("key_gen_config.toml")
 
 	<- time.After(time.Second*5)

@@ -1,9 +1,11 @@
 package protocols
 
 import (
+	"errors"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
+	"strings"
 )
 
 
@@ -47,13 +49,71 @@ type StructCKSShare struct{
 	*onet.TreeNode
 	ring.Poly
 }
+
+
 type SwitchingParameters struct{
 	Params bfv.Parameters
 	//also need skIn, skOut
-	SkInput ring.Poly
-	SkOutput ring.Poly
+	SkInputHash string
+	SkOutputHash string
 	cipher bfv.Ciphertext
 }
+
+//Quick experience to marshal the swiching parameters. - works TODO need to clean up
+func (sp *SwitchingParameters)MarshalBinary() (data []byte, err error){
+	var buffer strings.Builder
+
+	data = make([]byte,0)
+	param ,err := sp.Params.MarshalBinary()
+	len_param := len(param)
+	data = append(data, byte(len_param))
+	buffer.WriteByte(byte(len_param))
+	buffer.Write(param)
+	//add the strings...
+	hashes := []byte(sp.SkInputHash+","+sp.SkOutputHash)
+	buffer.WriteByte(byte(len(hashes)))
+	buffer.Write(hashes)
+
+	//add the cipher..
+	cipher, err := sp.cipher.MarshalBinary()
+	buffer.WriteByte(byte(len(cipher)))
+	buffer.Write(cipher)
+
+	return []byte(buffer.String()), nil
+
+}
+
+
+func (sp *SwitchingParameters)UnmarshalBinary(data []byte) (err error){
+	ptr := data[0]
+	byte_param := data[1:ptr+1]
+	err = sp.Params.UnmarshalBinary(byte_param)
+
+	//then get the hashes..
+	ptr++
+	len_hashes := data[ptr]
+	hashes := data[ptr+1:ptr + len_hashes+1]
+	ptr += len_hashes + 2
+	xs := strings.Split(string(hashes),",")
+	if len(xs) != 2{
+		return errors.New("Error on hashes")
+
+	}
+	sp.SkInputHash = xs[0]
+	sp.SkOutputHash = xs[1]
+	//finally the cipher text..
+	bfvCtx,err := bfv.NewBfvContextWithParam(&sp.Params)
+
+	len_cipher := data[ptr]
+	ptr++
+	sp.cipher = *bfvCtx.NewRandomCiphertext(128)
+	err = sp.cipher.UnmarshalBinary(data[ptr:ptr+len_cipher])
+
+	return nil
+
+
+}
+
 
 type StructSwitchParameters struct{
 	*onet.TreeNode
@@ -65,16 +125,7 @@ type StructCiphertext struct{
 	bfv.Ciphertext
 }
 
-//type Parameters struct {
-//	Params bfv.Parameters
-//}
-//
-//type PublicKey struct {
-//	ring.Poly
-//}
-//type Parameters struct{
-//	Params bfv.Parameters
-//}
+
 type CollectiveKeyShare struct {
 	ring.Poly
 }
@@ -96,3 +147,7 @@ type StructPublicKey struct {
 	*onet.TreeNode
 	ring.Poly
 }
+
+
+
+

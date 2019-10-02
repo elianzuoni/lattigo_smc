@@ -3,12 +3,12 @@ package simulation
 import (
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "protocols/protocols"
 	"protocols/utils"
+	"time"
 )
 
 type KeyGenerationSim struct {
@@ -72,25 +72,9 @@ func (s *KeyGenerationSim)Run(config *onet.SimulationConfig) error {
 		err = ckgp.Start()
 
 	log.Lvl1("Collective Key Generated for " ,len(ckgp.Roster().List) , " nodes.\n\tNow comparing all polynomials.")
-
+	<- time.After(2*time.Second)
 	//check if we have all the same polys ckg_0
-	keys := make([]ring.Poly,len(ckgp.Roster().List))
-
-	for i := 0 ; i < len(ckgp.Roster().List); i++{
-		//get the keys.
-		pk :=( <- ckgp.ChannelPublicKey).Poly
-		keys[i] = pk
-	}
-	for _,k1 := range(keys){
-		for _, k2 := range(keys){
-			err := utils.ComparePolys(k1,k2)
-			if err != nil{
-				log.Error("Error in polynomial comparison : ", err)
-				return err
-			}
-		}
-	}
-
+	CheckKeys(ckgp,err)
 	round.Record()
 		if err != nil{
 			log.Fatal("Could not start the tree : " , err )
@@ -101,4 +85,26 @@ func (s *KeyGenerationSim)Run(config *onet.SimulationConfig) error {
 	return nil
 
 
+}
+
+
+
+func CheckKeys(ckgp *proto.CollectiveKeyGenerationProtocol, err error) {
+	keys := make([]bfv.PublicKey, len(ckgp.Roster().List))
+	ctx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	for i := 0; i < len(ckgp.Roster().List); i++ {
+		//get the keys.
+		seed := (*ckgp.List()[i].ServerIdentity).String()
+
+		key, _ := utils.LoadPublicKey(ctx, seed)
+		keys[i] = *key
+	}
+	for _, k1 := range (keys) {
+		for _, k2 := range (keys) {
+			err := utils.CompareKeys(k1, k2)
+			if err != nil {
+				log.Error("Error in polynomial comparison : ", err)
+			}
+		}
+	}
 }
