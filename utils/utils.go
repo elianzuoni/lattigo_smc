@@ -20,16 +20,15 @@ func PrintNewKeyPair() {
 	}
 	kg := ctx.NewKeyGenerator()
 	//TODO p = 0.3 here
-	p := 1.0/3
-	sk , err := kg.NewSecretKey(p)
+	sk  := kg.NewSecretKey()
 	if err != nil {
 		fmt.Printf("Error : %v \n", err)
 	}
-	fmt.Println(sk.MarshalBinary(ctx))
+	fmt.Println(sk.MarshalBinary())
 }
 
 func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext,seed string) error {
-	data, err := sk.MarshalBinary(ctx)
+	data, err := sk.MarshalBinary()
 
 	if err != nil {
 		return err
@@ -50,11 +49,8 @@ func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext,seed string) error {
 
 func LoadSecretKey(ctx *bfv.BfvContext,seed string) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	p := 1.0/3
-	sk,err = ctx.NewKeyGenerator().NewSecretKey(p)
-	if err != nil {
-		return nil, err
-	}
+	sk = ctx.NewKeyGenerator().NewSecretKey()
+
 
 
 	xs := sha256.Sum256([]byte(seed))
@@ -65,7 +61,7 @@ func LoadSecretKey(ctx *bfv.BfvContext,seed string) (sk *bfv.SecretKey, err erro
 		return nil , fmt.Errorf("could not read key: %s", err)
 	}
 
-	err = sk.UnmarshalBinary(data,ctx)
+	err = sk.UnmarshalBinary(data)
 	return
 }
 
@@ -73,12 +69,10 @@ func GetSecretKey(ctx *bfv.BfvContext,seed string) (sk *bfv.SecretKey, err error
 	if sk, err = LoadSecretKey(ctx,seed); sk != nil {
 		return
 	}
-	//TODO p = 0.3 here
-	p := 1.0/3
-	sk,err = ctx.NewKeyGenerator().NewSecretKey(p)
-	if err != nil{
-		return nil, err
-	}
+	sk = ctx.NewKeyGenerator().NewSecretKey()
+	//if err != nil{
+	//	return nil, err
+	//}
 	return sk, SaveSecretKey(sk, ctx,seed)
 }
 

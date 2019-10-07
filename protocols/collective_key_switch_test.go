@@ -42,7 +42,7 @@ func TestCollectiveSwitching(t *testing.T) {
 	keygen := bfvCtx.NewKeyGenerator()
 	sidIn := tree.List()[in].ServerIdentity
 	SkInput ,err := utils.LoadSecretKey(bfvCtx,sidIn.String())
-	PkInput , err := keygen.NewPublicKey(SkInput)
+	PkInput  := keygen.NewPublicKey(SkInput)
 	sidOut := tree.List()[out].ServerIdentity
 	SkOutput ,err := utils.LoadSecretKey(bfvCtx,sidOut.String())
 	//PkOutput, err := keygen.NewPublicKey(SkOutput)
@@ -55,20 +55,23 @@ func TestCollectiveSwitching(t *testing.T) {
 	}
 
 	PlainText := bfvCtx.NewPlaintext()
-	encoder := bfvCtx.NewBatchEncoder()
+	encoder,err := bfvCtx.NewBatchEncoder()
 	log.Print(PlainText.Degree())
 	err = encoder.EncodeUint(bfvCtx.NewRandomPlaintextCoeffs(),PlainText)
 	if err != nil{
 		log.Print("Could not encode plaintext : " , err)
 		t.Fail()
 	}
-	Encryptor ,err := bfvCtx.NewEncryptor(PkInput,SkInput)
-	CipherText,err := Encryptor.EncryptFromSkNew(PlainText)
+
+	Encryptor ,err := bfvCtx.NewEncryptorFromPk(PkInput)
+
+	CipherText,err := Encryptor.EncryptNew(PlainText)
 	if err != nil{
 		log.Print("error in encryption : " , err)
 		t.Fail()
 	}
 
+	CipherText = bfvCtx.NewRandomCiphertext(1)
 
 
 
@@ -82,7 +85,7 @@ func TestCollectiveSwitching(t *testing.T) {
 		Params:  bfv.DefaultParams[0],
 		SkInputHash:  sidIn.String(),
 		SkOutputHash: sidOut.String(),
-		cipher:   *CipherText,
+		Ciphertext:   *CipherText,
 	}
 
 

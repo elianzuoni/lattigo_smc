@@ -38,7 +38,7 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 
 	//check if we have all the same polys ckg_0
 
-	<-time.After(time.Second)
+	<-time.After(2*time.Second)
 	CheckKeys(ckgp.List(), err, t)
 
 	log.Lvl1("Success")

@@ -56,7 +56,7 @@ type SwitchingParameters struct{
 	//also need skIn, skOut
 	SkInputHash string
 	SkOutputHash string
-	cipher bfv.Ciphertext
+	bfv.Ciphertext
 }
 
 //Quick experience to marshal the swiching parameters. - works TODO need to clean up
@@ -75,8 +75,8 @@ func (sp *SwitchingParameters)MarshalBinary() (data []byte, err error){
 	buffer.Write(hashes)
 
 	//add the cipher..
-	cipher, err := sp.cipher.MarshalBinary()
-	buffer.WriteByte(byte(len(cipher)))
+	cipher, err := sp.Ciphertext.MarshalBinary()
+
 	buffer.Write(cipher)
 
 	return []byte(buffer.String()), nil
@@ -93,7 +93,7 @@ func (sp *SwitchingParameters)UnmarshalBinary(data []byte) (err error){
 	ptr++
 	len_hashes := data[ptr]
 	hashes := data[ptr+1:ptr + len_hashes+1]
-	ptr += len_hashes + 2
+	ptr += len_hashes + 1
 	xs := strings.Split(string(hashes),",")
 	if len(xs) != 2{
 		return errors.New("Error on hashes")
@@ -104,11 +104,13 @@ func (sp *SwitchingParameters)UnmarshalBinary(data []byte) (err error){
 	//finally the cipher text..
 	bfvCtx,err := bfv.NewBfvContextWithParam(&sp.Params)
 
-	len_cipher := data[ptr]
-	ptr++
-	sp.cipher = *bfvCtx.NewRandomCiphertext(128)
-	err = sp.cipher.UnmarshalBinary(data[ptr:ptr+len_cipher])
-
+	//len_cipher := data[ptr]
+	//ptr++
+	sp.Ciphertext = *bfvCtx.NewCiphertext(1)
+	err = sp.Ciphertext.UnmarshalBinary(data[ptr:])
+	if err !=nil{
+		return err
+	}
 	return nil
 
 

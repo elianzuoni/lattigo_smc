@@ -55,7 +55,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	ckg := dbfv.NewCKGProtocol(bfvCtx)
 	//get si
 	sk, err := utils.GetSecretKey(bfvCtx,ckgp.ServerIdentity().String())
-	b , err := sk.MarshalBinary(bfvCtx)
+	b , err := sk.MarshalBinary()
 	log.Lvl4(ckgp.ServerIdentity()," my secret key : " , b)
 	if err != nil {
 		return bfv.PublicKey{}, fmt.Errorf("error when loading the secret key: %s", err)
@@ -66,8 +66,6 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	partial := ckg.AllocateShares()
 	ckg_1 := crsGen.Clock()
 	ckg.GenShare(sk.Get(),ckg_1,partial)
-
-	bfvCtx.NewPublicKey()
 
 
 

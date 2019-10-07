@@ -11,7 +11,7 @@ import (
 func TestMarshallingSwitchingParameters(t *testing.T){
 	bfvCtx, err  := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	PlainText := bfvCtx.NewPlaintext()
-	encoder := bfvCtx.NewBatchEncoder()
+	encoder,err := bfvCtx.NewBatchEncoder()
 	err = encoder.EncodeUint(bfvCtx.NewRandomPlaintextCoeffs(),PlainText)
 	if err != nil{
 		log.Print("Could not encode plaintext : " , err)
@@ -23,7 +23,7 @@ func TestMarshallingSwitchingParameters(t *testing.T){
 		Params:       bfv.DefaultParams[0],
 		SkInputHash:  "123456",
 		SkOutputHash: "hjkdsaufdsijfsoidajfoidscnmijdsahfiudsojfdsaihfiudsafdsij",
-		cipher:       *cipher,
+		Ciphertext:       *cipher,
 	}
 
 	data , err := sp.MarshalBinary()

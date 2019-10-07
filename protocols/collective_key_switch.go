@@ -2,6 +2,7 @@ package protocols
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
@@ -40,52 +41,70 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 	//if !cks.IsRoot(){
 	//	<- time.After(10000*time.Second)
 	//}
-	params := <- cks.ChannelParams
-	//bfvParam := params.Params.Params
-	//send parameters to children.
-	//N, t uint64, ModulieQ, ModulieP []uint64, sigma float64
-	//bfvCtx , err := bfv.NewBfvContextWithParam(bfvParam.N,bfvParam.T,bfvParam.Qi,bfvParam.Pi,bfvParam.Sigma)
-	//utils.Check(err)
+	cks.Params =(<- cks.ChannelParams).SwitchingParameters
 
-	//res := params.cipher
-	x , _ := params.cipher.MarshalBinary()
-	log.Print(cks.ServerIdentity(), " has cipher text : " , x[0:10])
 
-	err1 := cks.SendToChildren(&SwitchingParameters{params.Params,params.SkInputHash,params.SkOutputHash,params.cipher})
-	if err1 != nil{
-		log.Lvl1("Error : " , err1)
-		return &bfv.Ciphertext{},err1
+
+
+
+	err := cks.SendToChildren(&SwitchingParameters{cks.Params.Params,cks.Params.SkInputHash,cks.Params.SkOutputHash,cks.Params.Ciphertext})
+	if err != nil{
+		log.Lvl1("Error : " , err)
+		return &bfv.Ciphertext{},err
 	}
 
 
 
-	bfvContext,err := bfv.NewBfvContextWithParam(&params.Params)
-	SkInput,err := utils.LoadSecretKey(bfvContext,params.SkInputHash)
-	SkOutput , err := utils.LoadSecretKey(bfvContext,params.SkOutputHash)
+	bfvContext,err := bfv.NewBfvContextWithParam(&cks.Params.Params)
+	SkInput,err := utils.LoadSecretKey(bfvContext,cks.Params.SkInputHash)
+	SkOutput , err := utils.LoadSecretKey(bfvContext,cks.Params.SkOutputHash)
 	if err != nil{
 		return &bfv.Ciphertext{},err
 	}
 
-	key_switch := dbfv.NewCKSProtocol(bfvContext,params.Params.Sigma)
+
+
+	//sanity test for cipher text sending....
+	if cks.IsRoot(){
+		c := *bfvContext.NewRandomCiphertext(1)
+		err := cks.SendToChildren(&c)
+		if err != nil{
+			fmt.Print("cant send cipher...",err)
+		}
+	}else{
+		c := (<- cks.ChannelCiphertext).Ciphertext
+		fmt.Print("Got cipher ! " , c.Degree())
+	}
+
+
+
+
+	key_switch := dbfv.NewCKSProtocol(bfvContext,cks.Params.Params.Sigma)
 	h := key_switch.AllocateShare()
 
-	key_switch.GenShare(SkInput.Get(),SkOutput.Get(),&params.cipher,h)
+	key_switch.GenShare(SkInput.Get(),SkOutput.Get(),&cks.Params.Ciphertext,h)
 
 
 	if !cks.IsLeaf() {
 
 		for i := 0; i < len(cks.Children()); i++ {
 			child := <-cks.ChannelCKSShare
+			log.Lvl4(cks.ServerIdentity() ,  " : aggregating !  ")
+
 			//aggregate
-			key_switch.AggregateShares(h,&child.Poly,h)
+			share := dbfv.CKSShare(&ring.Poly{child.Coeffs})
+			key_switch.AggregateShares(h,share,h)
 
 		}
 
 	}
 
 	//send to parent.
+	log.Lvl4(cks.ServerIdentity() ,  " : sending my h ")
 	sending := ring.Poly{h.Coeffs}
 	err = cks.SendToParent(&sending)
+	log.Lvl4(cks.ServerIdentity() ,  " : sent my h ")
+
 	if err != nil{
 		return nil,err
 	}
@@ -99,15 +118,16 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 	//propagate the cipher text.
 	//the root propagates the cipher text to everyone.
 	//this is not strict following of protocol
-	//TODO check if ok to do that.
-	res := bfvContext.NewRandomCiphertext(1)
+	res := bfvContext.NewRandomCiphertext(cks.Params.Ciphertext.Degree())
 	//TODO here memory error - most likely the cipher is not saved properly.
 	if cks.IsRoot() {
 
-		key_switch.KeySwitch(h,&params.cipher,res)
+		key_switch.KeySwitch(h,&cks.Params.Ciphertext,res)
 	} else {
-		val := (<-cks.ChannelCiphertext)
-		res = &val.Ciphertext // receive final cipher from parents.
+		log.Lvl4("Waiting on cipher text " )
+		val := <-cks.ChannelCiphertext
+		log.Print(cks.ServerIdentity(), " : " , val.Ciphertext)
+		//res = &val.Ciphertext // receive final cipher from parents.
 	}
 
 	err = cks.SendToChildren(res)

@@ -78,12 +78,10 @@ func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
 func (cks *CollectiveKeySwitchingProtocol) Start() error{
 	log.Lvl1(cks.ServerIdentity(), "Starting collective key switching for key : " , cks.Params)
 	//TODO Here only the master node gets access to the ciphertext because its a pointer.
-	//find a way to take advantage of the unmarshaling
-	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(),SwitchingParameters{cks.Params.Params,cks.Params.SkInputHash,cks.Params.SkOutputHash,cks.Params.cipher}}
-	//cks.ChannelCiphertext <- StructCiphertext{
-	//	TreeNode:   cks.,
-	//	Ciphertext: bfv.Ciphertext{},
-	//}
+	//find a way to take advantage of the unmarshalin
+
+	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(),SwitchingParameters{cks.Params.Params,cks.Params.SkInputHash,cks.Params.SkOutputHash,cks.Params.Ciphertext}}
+
 	return nil
 
 }
