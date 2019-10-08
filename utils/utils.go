@@ -33,7 +33,7 @@ func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext,seed string) error {
 	if err != nil {
 		return err
 	}
-	log.Lvl1("saving file..",seed, " \n ")
+	log.Lvl4("saving file..",seed, " \n ")
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
 	log.Lvl4("Saving a new key. sha : " , fingerprint)
@@ -41,7 +41,7 @@ func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext,seed string) error {
 	err = ioutil.WriteFile("SecretKey"+fingerprint, data, 0644)
 
 	if err != nil{
-		log.Lvl1("file is not saved...",err)
+		log.Lvl4("file is not saved...",err)
 		return err
 	}
 	return nil
@@ -55,7 +55,7 @@ func LoadSecretKey(ctx *bfv.BfvContext,seed string) (sk *bfv.SecretKey, err erro
 
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
-	log.Lvl1("Loading a key. sha : " , fingerprint)
+	log.Lvl4(seed , " : Loading a key. sha : " , fingerprint)
 
 	if data, err = ioutil.ReadFile("SecretKey"+fingerprint); err != nil {
 		return nil , fmt.Errorf("could not read key: %s", err)
@@ -69,10 +69,9 @@ func GetSecretKey(ctx *bfv.BfvContext,seed string) (sk *bfv.SecretKey, err error
 	if sk, err = LoadSecretKey(ctx,seed); sk != nil {
 		return
 	}
+
 	sk = ctx.NewKeyGenerator().NewSecretKey()
-	//if err != nil{
-	//	return nil, err
-	//}
+
 	return sk, SaveSecretKey(sk, ctx,seed)
 }
 
@@ -83,7 +82,7 @@ func SavePublicKey(pk *bfv.PublicKey, ctx *bfv.BfvContext,seed string) error {
 	if err != nil {
 		return err
 	}
-	log.Lvl1("saving file..",seed, " \n ")
+	log.Lvl4("saving file..",seed, " \n ")
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
 	log.Lvl4("Saving a new key. sha : " , fingerprint)
@@ -91,7 +90,7 @@ func SavePublicKey(pk *bfv.PublicKey, ctx *bfv.BfvContext,seed string) error {
 	err = ioutil.WriteFile("PublicKey"+fingerprint, data, 0644)
 
 	if err != nil{
-		log.Lvl1("file is not saved...",err)
+		log.Lvl4("file is not saved...",err)
 		return err
 	}
 	return nil
@@ -104,7 +103,7 @@ func LoadPublicKey(ctx *bfv.BfvContext, seed string)(pk *bfv.PublicKey, err erro
 
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
-	log.Lvl1("Loading a public key. sha : " , fingerprint)
+	log.Lvl4("Loading a public key. sha : " , fingerprint)
 
 	if data, err = ioutil.ReadFile("PublicKey"+fingerprint); err != nil {
 		return nil , fmt.Errorf("could not read key: %s", err)
@@ -158,3 +157,19 @@ func CompareKeys(k1 bfv.PublicKey, k2 bfv.PublicKey) error {
 	return nil
 }
 
+
+
+// equalslice compares two slices of uint64 values, and return true if they are equal, else false.
+func Equalslice(a, b []uint64) bool {
+
+	if len(a) != len(b) {
+		return false
+	}
+
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

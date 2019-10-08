@@ -134,6 +134,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	if err != nil{
 		return *pubkey, err
 	}
+
 	return *pubkey, nil
 }
 

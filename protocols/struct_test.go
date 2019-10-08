@@ -1,8 +1,10 @@
 package protocols
 
 import (
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
+	"protocols/utils"
 	"testing"
 )
 
@@ -53,4 +55,27 @@ func TestMarshallingSwitchingParameters(t *testing.T){
 	}
 	//TODO check cipher texts.
 	return
+}
+
+
+func TestCiphertextMarshal(t *testing.T){
+	receiver := new(bfv.Ciphertext)
+	ctx ,_:= bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	cipher := ctx.NewRandomCiphertext(1)
+	data,_ := cipher.MarshalBinary()
+
+	_ = receiver.UnmarshalBinary(data)
+	for i := 0 ; uint64(i) < receiver.Degree()+1; i ++{
+		err := utils.ComparePolys(*receiver.Value()[0],*cipher.Value()[0])
+		if err != nil{
+			fmt.Print(err)
+			t.Fail()
+			return
+		}
+	}
+
+
+	fmt.Print("Success")
+
+
 }

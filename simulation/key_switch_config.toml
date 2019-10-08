@@ -1,0 +1,14 @@
+Simulation = "CollectiveKeySwitching"
+Servers = 5
+BF = 2
+Rounds = 1
+Suite = "Ed25519"
+# SingleHost = True
+
+# here you can have for different depth to test.
+# keep in mind that if the number of nodes will be Sum(BF^i) i [0,Depth]
+Depth
+1
+2
+
+

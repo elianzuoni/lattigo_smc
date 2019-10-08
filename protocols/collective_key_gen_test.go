@@ -15,7 +15,7 @@ import (
 func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	nbnodes := 3
 	//log.SetDebugVisible(4)
-	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
+	log.Lvl4("Started to test key generation on a simulation with nodes amount : ", nbnodes)
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
 

@@ -110,9 +110,9 @@ func Main() {
 	for i := range encInputs {
 		encInputs[i] = bfvctx.NewCiphertext(1)
 	}
-	encLvl1 := make([]*bfv.Ciphertext, N/2, N/2)
-	for i := range encLvl1 {
-		encLvl1[i] = bfvctx.NewCiphertext(2)
+	encLvl4 := make([]*bfv.Ciphertext, N/2, N/2)
+	for i := range encLvl4 {
+		encLvl4[i] = bfvctx.NewCiphertext(2)
 	}
 	encRes := bfvctx.NewCiphertext(2)
 	evaluator, err := bfvctx.NewEvaluator()
@@ -130,7 +130,7 @@ func Main() {
 	}
 
 	fmt.Println("> Eval Phase")
-	err = evaluator.Mul(encInputs[0], encInputs[1], encLvl1[0])
+	err = evaluator.Mul(encInputs[0], encInputs[1], encLvl4[0])
 	check(err)
 	err = evaluator.Mul(encInputs[2], encInputs[3], encLvl1[1])
 	check(err)

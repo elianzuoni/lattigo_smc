@@ -32,7 +32,7 @@ func NewSimulationKeyGen(config string)(onet.Simulation, error){
 
 func (s* KeyGenerationSim) Setup(dir string,hosts []string)(*onet.SimulationConfig,error){
 	//setup following the config file.
-	log.Lvl1("Setting up the simulations")
+	log.Lvl4("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc,hosts,2000)
 	err := s.CreateTree(sc)
@@ -48,7 +48,7 @@ func (s* KeyGenerationSim) Node(config *onet.SimulationConfig)error{
 		log.Fatal("Error node not found")
 	}
 
-	log.Lvl1("Node setup")
+	log.Lvl4("Node setup")
 
 	return s.SimulationBFTree.Node(config)
 }
@@ -56,7 +56,7 @@ func (s* KeyGenerationSim) Node(config *onet.SimulationConfig)error{
 func (s *KeyGenerationSim)Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
 
-	log.Lvl1("Size : " , size, " rounds : " , s.Rounds)
+	log.Lvl4("Size : " , size, " rounds : " , s.Rounds)
 
 	round := monitor.NewTimeMeasure("round")
 
@@ -68,7 +68,7 @@ func (s *KeyGenerationSim)Run(config *onet.SimulationConfig) error {
 
 		ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
 		ckgp.Params = bfv.DefaultParams[0]
-		log.Lvl1("Starting ckgp")
+		log.Lvl4("Starting ckgp")
 		err = ckgp.Start()
 
 	log.Lvl1("Collective Key Generated for " ,len(ckgp.Roster().List) , " nodes.\n\tNow comparing all polynomials.")
