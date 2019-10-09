@@ -21,7 +21,7 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 		TreeNodeInstance:       n,
 	}
 
-	if e := p.RegisterChannels(&p.ChannelParams,  &p.ChannelPublicKeyShares,&p.ChannelPublicKey); e != nil {
+	if e := p.RegisterChannels(&p.ChannelParams,  &p.ChannelPublicKeyShares,&p.ChannelRing); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 
@@ -105,7 +105,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 		ckg_0 = ring.Poly{partial.Coeffs}
 	}else{
 		log.Lvl4("Fetching ckg0")
-		ckg_0 = (<-ckgp.ChannelPublicKey).Poly // else, receive it from parents
+		ckg_0 = (<-ckgp.ChannelRing).Poly // else, receive it from parents
 		log.Lvl4("got : " , ckg_0)
 
 	}

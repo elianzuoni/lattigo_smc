@@ -17,10 +17,11 @@ func Test() bool {
 func init() {
 	onet.GlobalProtocolRegister("CollectiveKeyGeneration", NewCollectiveKeyGeneration)
 	onet.GlobalProtocolRegister("CollectiveKeySwitching",NewCollectiveKeySwitching)
+	onet.GlobalProtocolRegister("PublicCollectiveKeySwitching", NewPublicCollectiveKeySwitching)
 }
 
 
-
+/*****************COLLECTIVE KEY GENERATION ONET HANDLERS *******************/
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 	log.Lvl4(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
 
@@ -77,13 +78,13 @@ func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
 
 
 
-/** *****************Utility FOR KEY SWITCHING******************* **/
+/** *****************KEY SWITCHING ONET HANDLERS ******************* **/
 
 
 
 func (cks *CollectiveKeySwitchingProtocol) Start() error{
 	log.Lvl4(cks.ServerIdentity(), "Starting collective key switching for key : " , cks.Params)
-	//TODO Here only the master node gets access to the ciphertext because its a pointer.
+	//TODO Here only the master node gets access to the ciphertext
 	//find a way to take advantage of the unmarshalin
 
 	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(),SwitchingParameters{cks.Params.Params,cks.Params.SkInputHash,cks.Params.SkOutputHash,cks.Params.Ciphertext}}
@@ -103,8 +104,9 @@ func (cks *CollectiveKeySwitchingProtocol) Dispatch() error{
 	log.Lvl4(cks.ServerIdentity(), " : Resulting ciphertext - " , d[0:25])
 	//send it back when testing to check...
 
-	cks.SendTo(cks.Root(),res)
-
+	if test{
+		cks.SendTo(cks.Root(),res)
+	}
 	if !cks.IsRoot() && test{
 		cks.Done()
 	}
@@ -120,6 +122,57 @@ func (cks *CollectiveKeySwitchingProtocol) Shutdown() error{
 
 }
 
+/********* PUBLIC KEY SWITCHING ONET HANDLERS ********************/
 
+func (pcks *PublicCollectiveKeySwitchingProtocol) Start() error{
+	log.Lvl4(pcks.ServerIdentity(), " starting public collective key switching with parameters : " ,  pcks.Params)
+
+	pcks.ChannelParams <- StructParameters{
+		TreeNode: pcks.TreeNode(),
+		Params:   pcks.Params,
+	}
+
+	pcks.ChannelCiphertext <- StructCiphertext{
+		TreeNode:   pcks.TreeNode(),
+		Ciphertext: pcks.Ciphertext,
+	}
+	pcks.ChannelPublicKey <- StructPublicKey{
+		TreeNode:  pcks.TreeNode(),
+		PublicKey: pcks.PublicKey,
+	}
+	pcks.ChannelSk <- StructSk{
+		TreeNode: pcks.TreeNode(),
+		SK : SK{pcks.Sk},
+	}
+
+
+	return nil
+
+}
+
+func (pcks *PublicCollectiveKeySwitchingProtocol) Dispatch() error {
+
+	log.Lvl1("Dispatching ! ")
+	res , err := pcks.PublicCollectiveKeySwitching()
+
+	if err != nil{
+		log.Fatal("Error : " , err)
+	}
+	return nil
+	if test{
+		pcks.SendTo(pcks.Root(),res)
+	}
+	if !pcks.IsRoot() && test{
+		pcks.Done()
+	}
+
+
+	return nil
+
+}
+
+func (pcks *PublicCollectiveKeySwitchingProtocol) Shutdown() error{
+	return pcks.TreeNodeInstance.Shutdown()
+}
 
 

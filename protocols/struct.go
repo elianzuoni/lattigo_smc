@@ -3,6 +3,7 @@ package protocols
 import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"strings"
@@ -31,7 +32,7 @@ type CollectiveKeyGenerationProtocol struct {
 
 	ChannelParams          chan StructParameters
 	ChannelPublicKeyShares chan StructPublicKeyShare
-	ChannelPublicKey       chan StructPublicKey
+	ChannelRing      chan StructRing
 }
 
 
@@ -45,6 +46,43 @@ type CollectiveKeySwitchingProtocol struct{
 	ChannelCKSShare chan StructCKSShare
 }
 
+
+type PublicCollectiveKeySwitchingProtocol struct{
+	*onet.TreeNodeInstance
+
+	Params bfv.Parameters
+	bfv.PublicKey
+	//TODO check if needed - maybe its always the same private key
+	Sk string
+	bfv.Ciphertext
+
+	ChannelParams chan StructParameters
+	//todo change it to channel public key
+	ChannelPublicKey chan StructPublicKey
+	ChannelSk chan StructSk
+	ChannelCiphertext chan StructCiphertext
+	ChannelPCKS chan StructPCKS
+}
+
+type StructPCKS struct{
+	*onet.TreeNode
+	dbfv.PCKSShare
+}
+
+type StructPublicKey struct{
+	*onet.TreeNode
+	bfv.PublicKey
+}
+
+
+type StructSk struct{
+	*onet.TreeNode
+	SK
+}
+
+type SK struct{
+	SecretKey string
+}
 type StructCKSShare struct{
 	*onet.TreeNode
 	ring.Poly
@@ -58,6 +96,8 @@ type SwitchingParameters struct{
 	SkOutputHash string
 	bfv.Ciphertext
 }
+
+
 
 //Quick experience to marshal the swiching parameters. - works TODO need to clean up
 func (sp *SwitchingParameters)MarshalBinary() (data []byte, err error){
@@ -145,7 +185,7 @@ type StructPublicKeyShare struct {
 	CollectiveKeyShare
 }
 
-type StructPublicKey struct {
+type StructRing struct {
 	*onet.TreeNode
 	ring.Poly
 }
