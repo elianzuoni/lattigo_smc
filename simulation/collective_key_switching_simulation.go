@@ -66,11 +66,7 @@ func (s *KeySwitchingSim)Run(config *onet.SimulationConfig) error {
 
 	round := monitor.NewTimeMeasure("round")
 
-	//TODO what is the service ID ?
-	pi,err := config.Overlay.StartProtocol("CollectiveKeySwitching",config.Tree,onet.NilServiceID)
-	if err != nil {
-		log.Fatal("Couldn't create new node:", err)
-	}
+
 
 
 	bfvCtx,err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
@@ -130,6 +126,11 @@ func (s *KeySwitchingSim)Run(config *onet.SimulationConfig) error {
 	CipherText,err := Encryptor.EncryptNew(PlainText)
 
 
+	//TODO what is the service ID ?
+	pi,err := config.Overlay.StartProtocol("CollectiveKeySwitching",config.Tree,onet.NilServiceID)
+	if err != nil {
+		log.Fatal("Couldn't create new node:", err)
+	}
 
 	cksp := pi.(*proto.CollectiveKeySwitchingProtocol)
 	cksp.Params = proto.SwitchingParameters{
@@ -143,7 +144,7 @@ func (s *KeySwitchingSim)Run(config *onet.SimulationConfig) error {
 	err = cksp.Start()
 
 	log.Lvl4("Collective key switch done for  " ,len(cksp.Roster().List) , " nodes.\n\tNow comparing verifying ciphers.")
-	<- time.After(2*time.Second)
+	<- time.After(5*time.Second)
 
 
 	//check if all ciphers are ok
@@ -192,25 +193,3 @@ func (s *KeySwitchingSim)Run(config *onet.SimulationConfig) error {
 
 
 }
-
-
-//
-//func CheckKeys(ckgp *proto.CollectiveKeyGenerationProtocol, err error) {
-//	keys := make([]bfv.PublicKey, len(ckgp.Roster().List))
-//	ctx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-//	for i := 0; i < len(ckgp.Roster().List); i++ {
-//		//get the keys.
-//		seed := (*ckgp.List()[i].ServerIdentity).String()
-//
-//		key, _ := utils.LoadPublicKey(ctx, seed)
-//		keys[i] = *key
-//	}
-//	for _, k1 := range (keys) {
-//		for _, k2 := range (keys) {
-//			err := utils.CompareKeys(k1, k2)
-//			if err != nil {
-//				log.Error("Error in polynomial comparison : ", err)
-//			}
-//		}
-//	}
-//}

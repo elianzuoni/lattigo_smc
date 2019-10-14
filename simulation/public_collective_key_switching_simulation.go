@@ -1,35 +1,88 @@
-package protocols
+package simulation
 
 import (
+	"errors"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/simul/monitor"
+	proto "protocols/protocols"
 	"protocols/utils"
-	"testing"
 	"time"
 )
 
-func TestPublicCollectiveSwitching(t *testing.T) {
-	//to do this we need to have some keys already.
-	//for this we can set up with the collective key generation
-	const nbnodes = 10
+type PublicKeySwitchingSim struct {
+	onet.SimulationBFTree
+}
+
+func init(){
+	onet.SimulationRegister("PublicCollectiveKeySwitching",NewSimulationPublicKeySwitching)
+}
+
+func NewSimulationPublicKeySwitching(config string)(onet.Simulation, error){
+	sim := &PublicKeySwitchingSim{}
+
+	_,err := toml.Decode(config,sim)
+	if err != nil{
+		return nil,err
+	}
+
+	return sim,nil
+}
+
+func (s* PublicKeySwitchingSim) Setup(dir string,hosts []string)(*onet.SimulationConfig,error){
+	//setup following the config file.
+	log.Lvl4("Setting up the simulation for key switching")
+	sc := &onet.SimulationConfig{}
+	s.CreateRoster(sc,hosts,2000)
+	err := s.CreateTree(sc)
+	if err != nil{
+		return nil, err
+	}
+	return sc,nil
+}
+
+func (s* PublicKeySwitchingSim) Node(config *onet.SimulationConfig)error{
+	idx , _ := config.Roster.Search(config.Server.ServerIdentity.ID)
+	if idx < 0 {
+		log.Fatal("Error node not found")
+	}
+
+	log.Lvl4("Node setup")
+
+	return s.SimulationBFTree.Node(config)
+}
+
+
+
+func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
+	size := config.Tree.Size()
+
+	log.Lvl4("Size : " , size, " rounds : " , s.Rounds)
+
+	round := monitor.NewTimeMeasure("round")
+
+
+
+
 	log.SetDebugVisible(1)
-	log.Lvl1("Started to test collective key switching locally with nodes amount : ", nbnodes)
+	log.Lvl1("Started to test collective key switching locally with nodes amount : ", size)
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
 
-	_, _, tree := local.GenTree(nbnodes, true)
+	_, _, tree := local.GenTree(size, true)
 
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	if err != nil {
 		log.Print("Could not load bfv ctx ", err)
-		t.Fail()
+		return err
 	}
 	i := 0
 	tmp0 := bfvCtx.ContextQ().NewPoly()
-	for i < nbnodes {
+	for i < size {
 		si := tree.Roster.List[i].String()
 		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
 		if err != nil {
@@ -46,12 +99,12 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 	//keygen := bfvCtx.NewKeyGenerator()
 	//PkInput  := keygen.NewPublicKey(SkInput)
 
-	ski, _ := SkInput.MarshalBinary()
+	ski, err := SkInput.MarshalBinary()
 	log.Lvl4("At start ski  : ", ski[0:25])
 
 	if err != nil {
 		log.Print("Could not load secret keys : ", err)
-		t.Fail()
+		return err
 	}
 
 	PlainText := bfvCtx.NewPlaintext()
@@ -61,7 +114,7 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 	err = encoder.EncodeUint(expected, PlainText)
 	if err != nil {
 		log.Print("Could not encode plaintext : ", err)
-		t.Fail()
+		return err
 	}
 
 	Encryptor, err := bfvCtx.NewEncryptorFromSk(SkInput)
@@ -70,16 +123,21 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 
 	if err != nil {
 		log.Print("error in encryption : ", err)
-		t.Fail()
-	}
-
-	pi, err := local.CreateProtocol("PublicCollectiveKeySwitching", tree)
-	if err != nil {
-		t.Fatal("Couldn't create new node:", err)
+		return err
 	}
 	SkOutput := bfvCtx.NewKeyGenerator().NewSecretKey()
 	publickey := bfvCtx.NewKeyGenerator().NewPublicKey(SkOutput)
-	pcksp := pi.(*PublicCollectiveKeySwitchingProtocol)
+
+
+	pi,err := config.Overlay.StartProtocol("PublicCollectiveKeySwitching",config.Tree,onet.NilServiceID)
+	if err != nil {
+		log.Fatal("Couldn't create new node:", err)
+		return err
+	}
+
+
+	<-time.After(5*time.Second)
+	pcksp := pi.(*proto.PublicCollectiveKeySwitchingProtocol)
 	pcksp.Params = bfv.DefaultParams[0]
 	pcksp.Sk = "sk0"
 	pcksp.PublicKey = *publickey
@@ -88,10 +146,10 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 	//cksp.Params = bfv.DefaultParams[0]
 	log.Lvl4("Starting cksp")
 
-	err = pcksp.Start()
-	if err != nil {
-		t.Fatal("Could not start the tree : ", err)
-	}
+	//err = pcksp.Start()
+	//if err != nil {
+	//	return err
+	//}
 
 
 	<-time.After(2 * time.Second)
@@ -101,7 +159,7 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 
 	Decryptor, err := bfvCtx.NewDecryptor(SkOutput)
 	i = 0
-	for i < nbnodes {
+	for i < size {
 		newCipher := (<-pcksp.ChannelCiphertext).Ciphertext
 		d, _ := newCipher.MarshalBinary()
 		log.Lvl4("Got cipher : ", d[0:25])
@@ -114,29 +172,32 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 
 		if !ok {
 			log.Print("Plaintext do not match ")
-			t.Fail()
+
 			pcksp.Done()
-			return
+			return errors.New("Non matching plain text ")
 
 		}
 		i++
 	}
+
 	pcksp.Done()
 	log.Lvl1("Got all matches on ciphers.")
 	//check if the resulting cipher text decrypted with SkOutput works
 
 	log.Lvl1("Success")
-	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
-			Will be better once we ca have all the suites of protocol rolling out. We can know when to stop this protocol.
-	Ideally id like to call this vvv so it can all shutdown outside of the collectivekeygen
-	//local.CloseAll()
-	*/
-	//then choose two random sk from two participant
 
-	//chose a random cipher text.
 
-	//go from skIn -> skOut -> skIn and check equality of cipher text.
 
-	//repeat n times
+	round.Record()
+	if err != nil{
+		log.Fatal("Could not start the tree : " , err )
+	}
+
+
+	log.Lvl4("finished")
+	return nil
+
 
 }
+
+

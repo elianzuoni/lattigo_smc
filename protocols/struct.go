@@ -57,7 +57,8 @@ type PublicCollectiveKeySwitchingProtocol struct{
 	bfv.Ciphertext
 
 	ChannelParams chan StructParameters
-	//todo change it to channel public key
+
+
 	ChannelPublicKey chan StructPublicKey
 	ChannelSk chan StructSk
 	ChannelCiphertext chan StructCiphertext
@@ -85,7 +86,7 @@ type SK struct{
 }
 type StructCKSShare struct{
 	*onet.TreeNode
-	ring.Poly
+	dbfv.CKSShare
 }
 
 
@@ -168,9 +169,9 @@ type StructCiphertext struct{
 }
 
 
-type CollectiveKeyShare struct {
-	ring.Poly
-}
+//type CollectiveKeyShare struct {
+//	dbfv.CKGShare
+//}
 
 
 type StructParameters struct {
@@ -182,7 +183,7 @@ type StructParameters struct {
 
 type StructPublicKeyShare struct {
 	*onet.TreeNode
-	CollectiveKeyShare
+	dbfv.CKGShare
 }
 
 type StructRing struct {

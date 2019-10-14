@@ -15,7 +15,7 @@ func NewPublicCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 		TreeNodeInstance:       n,
 	}
 
-	if e := p.RegisterChannels(&p.ChannelParams,  &p.ChannelPublicKey,&p.ChannelSk,&p.ChannelCiphertext); e != nil {
+	if e := p.RegisterChannels(&p.ChannelParams,  &p.ChannelPublicKey,&p.ChannelSk,&p.ChannelCiphertext,&p.ChannelPCKS); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 
@@ -25,19 +25,21 @@ func NewPublicCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 
 
 
-func (pcks *PublicCollectiveKeySwitchingProtocol) PublicCollectiveKeySwitching()(*bfv.Ciphertext,error){
-	
-	pcks.Params =(<- pcks.ChannelParams).Params
-	log.Lvl4(pcks.ServerIdentity(),"ok params")
-	pcks.Sk = (<-pcks.ChannelSk).SK.SecretKey
-	log.Lvl4(pcks.ServerIdentity(),"ok string")
+func (pcks *PublicCollectiveKeySwitchingProtocol) PublicCollectiveKeySwitching()(*bfv.Ciphertext,error) {
+	if !pcks.IsRoot() {
 
-	pcks.Ciphertext = (<-pcks.ChannelCiphertext).Ciphertext
-	log.Lvl4(pcks.ServerIdentity(),"ok cipher")
-	pcks.PublicKey = (<-pcks.ChannelPublicKey).PublicKey
-	log.Lvl4(pcks.ServerIdentity(),"ok public key ")
-	log.Lvl4(pcks.ServerIdentity(), " : " , pcks.PublicKey.Get()[0].Coeffs[0][0:25])
-	//}
+		pcks.Params = (<-pcks.ChannelParams).Params
+		log.Lvl4(pcks.ServerIdentity(), "ok params")
+		v := (<-pcks.ChannelSk).SK
+		pcks.Sk = v.SecretKey
+		log.Lvl4(pcks.ServerIdentity(), "ok string")
+
+		pcks.Ciphertext = (<-pcks.ChannelCiphertext).Ciphertext
+		log.Lvl4(pcks.ServerIdentity(), "ok cipher")
+		pcks.PublicKey = (<-pcks.ChannelPublicKey).PublicKey
+		log.Lvl4(pcks.ServerIdentity(), "ok public key ")
+		//log.Lvl4(pcks.ServerIdentity(), " : " , pcks.PublicKey.Get()[0].Coeffs[0][0:25])
+	}
 
 	////send them to children..
 	err := pcks.SendToChildren(&pcks.Params)
@@ -49,6 +51,7 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) PublicCollectiveKeySwitching()
 	if err != nil{
 		log.Fatal("error on sending parameter to children : " , err)
 	}
+
 	err = pcks.SendToChildren(&pcks.Ciphertext)
 	if err != nil{
 		log.Fatal("error on sending parameter to children : " , err)
@@ -89,7 +92,7 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) PublicCollectiveKeySwitching()
 	}
 
 	//send the result to your child
-	err = pcks.SendToChildren(&cipher)
+	err = pcks.SendToChildren(cipher)
 	if err != nil{
 		return &bfv.Ciphertext{},err
 	}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"protocols/utils"
@@ -91,7 +90,7 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 			log.Lvl4(cks.ServerIdentity() ,  " : aggregating !  ")
 
 			//aggregate
-			share := dbfv.CKSShare(&ring.Poly{child.Coeffs})
+			share := child.CKSShare
 			key_switch.AggregateShares(share,h,h)
 
 		}
@@ -100,8 +99,8 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching()(*bfv.Ciphert
 
 	//send to parent.
 	log.Lvl4(cks.ServerIdentity() ,  " : sending my h ")
-	sending := ring.Poly{h.Coeffs}
-	err = cks.SendToParent(&sending)
+	//sending := ring.Poly{h.Coeffs}
+	err = cks.SendToParent(&h)
 	log.Lvl4(cks.ServerIdentity() ,  " : sent my h ")
 
 	if err != nil{

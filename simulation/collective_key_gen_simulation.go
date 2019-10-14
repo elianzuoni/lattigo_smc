@@ -62,14 +62,14 @@ func (s *KeyGenerationSim)Run(config *onet.SimulationConfig) error {
 
 	//TODO what is the service ID ?
 	pi,err := config.Overlay.StartProtocol("CollectiveKeyGeneration",config.Tree,onet.NilServiceID)
-		if err != nil {
-			log.Fatal("Couldn't create new node:", err)
-		}
+	if err != nil {
+		log.Fatal("Couldn't create new node:", err)
+	}
 
-		ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
-		ckgp.Params = bfv.DefaultParams[0]
-		log.Lvl4("Starting ckgp")
-		err = ckgp.Start()
+	ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
+	ckgp.Params = bfv.DefaultParams[0]
+	log.Lvl4("Starting ckgp")
+	err = ckgp.Start()
 
 	log.Lvl1("Collective Key Generated for " ,len(ckgp.Roster().List) , " nodes.\n\tNow comparing all polynomials.")
 	<- time.After(2*time.Second)
@@ -99,6 +99,7 @@ func CheckKeys(ckgp *proto.CollectiveKeyGenerationProtocol, err error) {
 		key, _ := utils.LoadPublicKey(ctx, seed)
 		keys[i] = *key
 	}
+
 	for _, k1 := range (keys) {
 		for _, k2 := range (keys) {
 			err := utils.CompareKeys(k1, k2)

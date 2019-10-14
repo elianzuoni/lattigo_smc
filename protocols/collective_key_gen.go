@@ -76,8 +76,8 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 		for i := 0; i < len(ckgp.Children()); i++ {
 			log.Lvl4(ckgp.ServerIdentity(),"waiting..",i)
 			child := <-ckgp.ChannelPublicKeyShares
-			log.Lvl4("Got from child : ", child.Poly)
-			ckg.AggregateShares(&child.Poly,partial,partial)
+			log.Lvl4("Got from child : ", child.CKGShare)
+			ckg.AggregateShares(child.CKGShare,partial,partial)
 
 		}
 	}
@@ -85,13 +85,12 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 
 
 	//send to parent
-	log.Lvl4(ckgp.ServerIdentity(), "Goodbye : " ,partial)
-	sending := &CollectiveKeyShare{ring.Poly{partial.Coeffs}}
+	log.Lvl4(ckgp.ServerIdentity(), "Sending : " ,partial)
+	//sending := &CollectiveKeyShare{ring.Poly{partial.Coeffs}}
 
 	// has no effect for root node
-	err = ckgp.SendToParent(sending)
+	err = ckgp.SendToParent(partial)
 
-	log.Lvl4(ckgp.ServerIdentity(), "Sending : " , sending)
 
 	if err != nil {
 		return bfv.PublicKey{}, err

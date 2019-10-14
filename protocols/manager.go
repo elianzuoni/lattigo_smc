@@ -3,7 +3,6 @@ package protocols
 import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"protocols/utils"
 	"time"
 )
 
@@ -15,9 +14,9 @@ func Test() bool {
 
 
 func init() {
-	onet.GlobalProtocolRegister("CollectiveKeyGeneration", NewCollectiveKeyGeneration)
-	onet.GlobalProtocolRegister("CollectiveKeySwitching",NewCollectiveKeySwitching)
-	onet.GlobalProtocolRegister("PublicCollectiveKeySwitching", NewPublicCollectiveKeySwitching)
+	_,_ = onet.GlobalProtocolRegister("CollectiveKeyGeneration", NewCollectiveKeyGeneration)
+	_,_ = onet.GlobalProtocolRegister("CollectiveKeySwitching",NewCollectiveKeySwitching)
+	_,_ = onet.GlobalProtocolRegister("PublicCollectiveKeySwitching", NewPublicCollectiveKeySwitching)
 }
 
 
@@ -38,17 +37,16 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 		return e
 	}
 
-	//log.Lvl4(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
+	log.Lvl4(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
 	xs := ckg_0.Get()
 	log.Lvl4(ckgp.ServerIdentity(), " Got key :", xs[0] ," \n. " , xs[1])
 
 
 
 
-	//TODO turn off in real scenario..
 	//for the test - send all to root and in the test check that all keys are equals.
 
-	if test {
+	if Test() {
 		//if ! ckgp.IsRoot(){
 			err := ckgp.SendTo(ckgp.Root(),ckg_0.Get()[0])
 
@@ -70,8 +68,8 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
 func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
 	//log.Lvl4(ckgp.ServerIdentity(), ": shutting down.")
-	ckgp.TreeNodeInstance.Shutdown()
-	return nil
+
+	return ckgp.TreeNodeInstance.Shutdown()
 }
 
 
@@ -84,7 +82,6 @@ func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error{
 
 func (cks *CollectiveKeySwitchingProtocol) Start() error{
 	log.Lvl4(cks.ServerIdentity(), "Starting collective key switching for key : " , cks.Params)
-	//TODO Here only the master node gets access to the ciphertext
 	//find a way to take advantage of the unmarshalin
 
 	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(),SwitchingParameters{cks.Params.Params,cks.Params.SkInputHash,cks.Params.SkOutputHash,cks.Params.Ciphertext}}
@@ -99,15 +96,17 @@ func (cks *CollectiveKeySwitchingProtocol) Dispatch() error{
 	//start the key switching
 
 	res, err := cks.CollectiveKeySwitching()
-	utils.Check(err)
+	if err != nil{
+		return err
+	}
 	d , _ := res.MarshalBinary()
 	log.Lvl4(cks.ServerIdentity(), " : Resulting ciphertext - " , d[0:25])
 	//send it back when testing to check...
 
-	if test{
+	if Test(){
 		cks.SendTo(cks.Root(),res)
 	}
-	if !cks.IsRoot() && test{
+	if !cks.IsRoot() && Test(){
 		cks.Done()
 	}
 
@@ -116,8 +115,8 @@ func (cks *CollectiveKeySwitchingProtocol) Dispatch() error{
 }
 
 func (cks *CollectiveKeySwitchingProtocol) Shutdown() error{
-	cks.TreeNodeInstance.Shutdown()
-	return nil
+
+	return cks.TreeNodeInstance.Shutdown()
 
 
 }
@@ -158,11 +157,12 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) Dispatch() error {
 	if err != nil{
 		log.Fatal("Error : " , err)
 	}
-	return nil
-	if test{
-		pcks.SendTo(pcks.Root(),res)
+
+	if Test(){
+		_ = pcks.SendTo(pcks.Root(),res)
 	}
-	if !pcks.IsRoot() && test{
+
+	if !pcks.IsRoot() && Test(){
 		pcks.Done()
 	}
 

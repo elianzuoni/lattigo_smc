@@ -1,0 +1,13 @@
+Simulation = "PublicCollectiveKeySwitching"
+Servers = 5
+BF = 2
+Rounds = 1
+Suite = "Ed25519"
+# SingleHost = True
+
+# number nodes = Sum(BF^i) i [0,Depth]
+Depth
+1
+2
+
+
