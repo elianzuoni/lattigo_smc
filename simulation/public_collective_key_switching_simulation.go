@@ -2,10 +2,8 @@ package simulation
 
 import (
 	"errors"
-	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
-	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
@@ -68,12 +66,12 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 
 
 
-	log.SetDebugVisible(1)
+	log.SetDebugVisible(4)
 	log.Lvl1("Started to test collective key switching locally with nodes amount : ", size)
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
-	defer local.CloseAll()
+	//local := onet.NewLocalTest(suites.MustFind("Ed25519"))
+	//defer local.CloseAll()
 
-	_, _, tree := local.GenTree(size, true)
+	tree := config.Tree
 
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	if err != nil {
@@ -86,7 +84,7 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 		si := tree.Roster.List[i].String()
 		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
 		if err != nil {
-			fmt.Print("error : ", err)
+			log.Print("error : ", err)
 		}
 
 		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
@@ -95,6 +93,10 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 	}
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
+	keygen :=  bfvCtx.NewKeyGenerator()
+	SkOutput :=keygen.NewSecretKey()
+	publickey := keygen.NewPublicKey(SkOutput)
+
 
 	//keygen := bfvCtx.NewKeyGenerator()
 	//PkInput  := keygen.NewPublicKey(SkInput)
@@ -125,9 +127,9 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 		log.Print("error in encryption : ", err)
 		return err
 	}
-	SkOutput := bfvCtx.NewKeyGenerator().NewSecretKey()
-	publickey := bfvCtx.NewKeyGenerator().NewPublicKey(SkOutput)
 
+
+	log.Lvl1("Starting cksp")
 
 	pi,err := config.Overlay.StartProtocol("PublicCollectiveKeySwitching",config.Tree,onet.NilServiceID)
 	if err != nil {
@@ -136,15 +138,12 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 	}
 
 
-	<-time.After(5*time.Second)
+
 	pcksp := pi.(*proto.PublicCollectiveKeySwitchingProtocol)
 	pcksp.Params = bfv.DefaultParams[0]
-	pcksp.Sk = "sk0"
+	pcksp.Sk = proto.SK{SecretKey:"sk0"}
 	pcksp.PublicKey = *publickey
 	pcksp.Ciphertext = *CipherText
-
-	//cksp.Params = bfv.DefaultParams[0]
-	log.Lvl4("Starting cksp")
 
 	//err = pcksp.Start()
 	//if err != nil {
@@ -152,17 +151,22 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 	//}
 
 
-	<-time.After(2 * time.Second)
+	<-time.After(5 * time.Second)
 
 
 	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
 
 	Decryptor, err := bfvCtx.NewDecryptor(SkOutput)
+	if err != nil{
+		log.Error("Could not load decryptor : " , err)
+		return err
+	}
 	i = 0
+	defer pcksp.Done()
 	for i < size {
 		newCipher := (<-pcksp.ChannelCiphertext).Ciphertext
 		d, _ := newCipher.MarshalBinary()
-		log.Lvl4("Got cipher : ", d[0:25])
+		log.Lvl1("Got cipher : ", d[0:25])
 		res := bfvCtx.NewPlaintext()
 		Decryptor.Decrypt(&newCipher, res)
 
@@ -173,14 +177,14 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 		if !ok {
 			log.Print("Plaintext do not match ")
 
-			pcksp.Done()
+			//pcksp.Done()
 			return errors.New("Non matching plain text ")
 
 		}
 		i++
 	}
 
-	pcksp.Done()
+	//pcksp.Done()
 	log.Lvl1("Got all matches on ciphers.")
 	//check if the resulting cipher text decrypted with SkOutput works
 
@@ -189,9 +193,6 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 
 
 	round.Record()
-	if err != nil{
-		log.Fatal("Could not start the tree : " , err )
-	}
 
 
 	log.Lvl4("finished")

@@ -40,11 +40,12 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 
 		i++
 	}
+
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
+	SkOutput := bfvCtx.NewKeyGenerator().NewSecretKey()
+	publickey := bfvCtx.NewKeyGenerator().NewPublicKey(SkOutput)
 
-	//keygen := bfvCtx.NewKeyGenerator()
-	//PkInput  := keygen.NewPublicKey(SkInput)
 
 	ski, _ := SkInput.MarshalBinary()
 	log.Lvl4("At start ski  : ", ski[0:25])
@@ -77,11 +78,10 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
-	SkOutput := bfvCtx.NewKeyGenerator().NewSecretKey()
-	publickey := bfvCtx.NewKeyGenerator().NewPublicKey(SkOutput)
+
 	pcksp := pi.(*PublicCollectiveKeySwitchingProtocol)
 	pcksp.Params = bfv.DefaultParams[0]
-	pcksp.Sk = "sk0"
+	pcksp.Sk = SK{"sk0"}
 	pcksp.PublicKey = *publickey
 	pcksp.Ciphertext = *CipherText
 

@@ -53,7 +53,7 @@ type PublicCollectiveKeySwitchingProtocol struct{
 	Params bfv.Parameters
 	bfv.PublicKey
 	//TODO check if needed - maybe its always the same private key
-	Sk string
+	Sk SK
 	bfv.Ciphertext
 
 	ChannelParams chan StructParameters

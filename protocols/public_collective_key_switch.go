@@ -26,27 +26,29 @@ func NewPublicCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 
 
 func (pcks *PublicCollectiveKeySwitchingProtocol) PublicCollectiveKeySwitching()(*bfv.Ciphertext,error) {
-	if !pcks.IsRoot() {
-
-		pcks.Params = (<-pcks.ChannelParams).Params
-		log.Lvl4(pcks.ServerIdentity(), "ok params")
-		v := (<-pcks.ChannelSk).SK
-		pcks.Sk = v.SecretKey
-		log.Lvl4(pcks.ServerIdentity(), "ok string")
-
-		pcks.Ciphertext = (<-pcks.ChannelCiphertext).Ciphertext
-		log.Lvl4(pcks.ServerIdentity(), "ok cipher")
-		pcks.PublicKey = (<-pcks.ChannelPublicKey).PublicKey
-		log.Lvl4(pcks.ServerIdentity(), "ok public key ")
-		//log.Lvl4(pcks.ServerIdentity(), " : " , pcks.PublicKey.Get()[0].Coeffs[0][0:25])
+	//TODO modify there is 2 SK ...
+	if pcks.IsRoot(){
+		log.Lvl1("I have : " , pcks.Sk)
 	}
+	pcks.Params = (<-pcks.ChannelParams).Params
+	log.Lvl4(pcks.ServerIdentity(), "ok params")
+	v := (<-pcks.ChannelSk)
+	pcks.Sk = v.SK
+	log.Lvl4(pcks.ServerIdentity(), "ok string")
+
+	pcks.Ciphertext = (<-pcks.ChannelCiphertext).Ciphertext
+	log.Lvl4(pcks.ServerIdentity(), "ok cipher")
+	pcks.PublicKey = (<-pcks.ChannelPublicKey).PublicKey
+	log.Lvl4(pcks.ServerIdentity(), "ok public key ")
+	//log.Lvl4(pcks.ServerIdentity(), " : " , pcks.PublicKey.Get()[0].Coeffs[0][0:25])
+
 
 	////send them to children..
 	err := pcks.SendToChildren(&pcks.Params)
 	if err != nil{
 		log.Fatal("error on sending parameter to children : " , err)
 	}
-	sending := SK{SecretKey:pcks.Sk}
+	sending := pcks.Sk
 	err = pcks.SendToChildren(&sending)
 	if err != nil{
 		log.Fatal("error on sending parameter to children : " , err)
@@ -65,17 +67,21 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) PublicCollectiveKeySwitching()
 	bfvCtx,_ := bfv.NewBfvContextWithParam(&pcks.Params)
 	protocol := dbfv.NewPCKSProtocol(bfvCtx,pcks.Params.Sigma)
 	share := protocol.AllocateShares()
-	SecretKey,_ := utils.LoadSecretKey(bfvCtx,pcks.Sk+pcks.ServerIdentity().String())
-
+	SecretKey,err := utils.GetSecretKey(bfvCtx,pcks.Sk.SecretKey+pcks.ServerIdentity().String())
+	if err != nil{
+		log.Error("Error on loading secret key : " , err )
+	}
 	protocol.GenShare(SecretKey.Get(),&pcks.PublicKey,&pcks.Ciphertext,share)
 
 	for _ = range pcks.Children(){
+		log.Lvl1("Getting a child PCKSShare")
 		children := (<-pcks.ChannelPCKS).PCKSShare
 		protocol.AggregateShares(children,share,share)
 
 	}
 
 	//send the share to the parent..
+	log.Lvl1("Sending my PCKSShare")
 	err = pcks.SendToParent(&share)
 	if err != nil{
 		return &bfv.Ciphertext{},err
@@ -92,6 +98,9 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) PublicCollectiveKeySwitching()
 	}
 
 	//send the result to your child
+	d,_ := cipher.MarshalBinary()
+	log.Lvl1("FINAL CIPHER : " , d[0:25])
+	log.Lvl1("Sending final cipher text ! ")
 	err = pcks.SendToChildren(cipher)
 	if err != nil{
 		return &bfv.Ciphertext{},err

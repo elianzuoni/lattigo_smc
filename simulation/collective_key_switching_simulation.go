@@ -141,14 +141,13 @@ func (s *KeySwitchingSim)Run(config *onet.SimulationConfig) error {
 	}
 
 	log.Lvl4("Starting collective key switching protocol")
-	err = cksp.Start()
+	//err = cksp.Start()
 
 	log.Lvl4("Collective key switch done for  " ,len(cksp.Roster().List) , " nodes.\n\tNow comparing verifying ciphers.")
 	<- time.After(5*time.Second)
 
 
 	//check if all ciphers are ok
-	//here for the sake of the test the cipher text is written to a file.
 	if proto.Test(){
 		defer cksp.Done()
 		Decryptor,err := bfvCtx.NewDecryptor(SkOutput)

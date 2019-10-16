@@ -124,7 +124,7 @@ func (cks *CollectiveKeySwitchingProtocol) Shutdown() error{
 /********* PUBLIC KEY SWITCHING ONET HANDLERS ********************/
 
 func (pcks *PublicCollectiveKeySwitchingProtocol) Start() error{
-	log.Lvl4(pcks.ServerIdentity(), " starting public collective key switching with parameters : " ,  pcks.Params)
+	log.Lvl1(pcks.ServerIdentity(), " starting public collective key switching with parameters : " ,  pcks.Params)
 
 	pcks.ChannelParams <- StructParameters{
 		TreeNode: pcks.TreeNode(),
@@ -141,7 +141,7 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) Start() error{
 	}
 	pcks.ChannelSk <- StructSk{
 		TreeNode: pcks.TreeNode(),
-		SK : SK{pcks.Sk},
+		SK : pcks.Sk,
 	}
 
 
