@@ -1,4 +1,4 @@
-module protocols
+module lattigo-smc
 
 go 1.13
 

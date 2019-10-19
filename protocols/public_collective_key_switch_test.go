@@ -6,7 +6,7 @@ import (
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"protocols/utils"
+	"lattigo-smc/utils"
 	"testing"
 	"time"
 )
@@ -45,7 +45,6 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 	SkInput.Set(tmp0)
 	SkOutput := bfvCtx.NewKeyGenerator().NewSecretKey()
 	publickey := bfvCtx.NewKeyGenerator().NewPublicKey(SkOutput)
-
 
 	ski, _ := SkInput.MarshalBinary()
 	log.Lvl4("At start ski  : ", ski[0:25])
@@ -93,9 +92,7 @@ func TestPublicCollectiveSwitching(t *testing.T) {
 		t.Fatal("Could not start the tree : ", err)
 	}
 
-
 	<-time.After(2 * time.Second)
-
 
 	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
 

@@ -8,15 +8,14 @@ import (
 	"testing"
 )
 
-
 //checking if the marshalling works.
-func TestMarshallingSwitchingParameters(t *testing.T){
-	bfvCtx, err  := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+func TestMarshallingSwitchingParameters(t *testing.T) {
+	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	PlainText := bfvCtx.NewPlaintext()
-	encoder,err := bfvCtx.NewBatchEncoder()
-	err = encoder.EncodeUint(bfvCtx.NewRandomPlaintextCoeffs(),PlainText)
-	if err != nil{
-		log.Print("Could not encode plaintext : " , err)
+	encoder, err := bfvCtx.NewBatchEncoder()
+	err = encoder.EncodeUint(bfvCtx.NewRandomPlaintextCoeffs(), PlainText)
+	if err != nil {
+		log.Print("Could not encode plaintext : ", err)
 		t.Fail()
 	}
 	//TODO check degree
@@ -25,31 +24,30 @@ func TestMarshallingSwitchingParameters(t *testing.T){
 		Params:       bfv.DefaultParams[0],
 		SkInputHash:  "123456",
 		SkOutputHash: "hjkdsaufdsijfsoidajfoidscnmijdsahfiudsojfdsaihfiudsafdsij",
-		Ciphertext:       *cipher,
+		Ciphertext:   *cipher,
 	}
 
-	data , err := sp.MarshalBinary()
+	data, err := sp.MarshalBinary()
 
 	sp1 := &SwitchingParameters{}
 	err = sp1.UnmarshalBinary(data)
 
-
-	if err != nil{
+	if err != nil {
 		t.Fail()
 	}
 
 	//compare both...
-	if sp1.SkOutputHash != sp.SkOutputHash{
+	if sp1.SkOutputHash != sp.SkOutputHash {
 		log.Print("Differnet output hashes")
 		t.Fail()
 
 	}
-	if sp1.SkInputHash != sp.SkInputHash{
+	if sp1.SkInputHash != sp.SkInputHash {
 		log.Print("Different input hashes")
 		t.Fail()
 	}
 
-	if !sp1.Params.Equals(&sp.Params){
+	if !sp1.Params.Equals(&sp.Params) {
 		log.Print("Different parameters")
 		t.Fail()
 	}
@@ -57,25 +55,22 @@ func TestMarshallingSwitchingParameters(t *testing.T){
 	return
 }
 
-
-func TestCiphertextMarshal(t *testing.T){
+func TestCiphertextMarshal(t *testing.T) {
 	receiver := new(bfv.Ciphertext)
-	ctx ,_:= bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	ctx, _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	cipher := ctx.NewRandomCiphertext(1)
-	data,_ := cipher.MarshalBinary()
+	data, _ := cipher.MarshalBinary()
 
 	_ = receiver.UnmarshalBinary(data)
-	for i := 0 ; uint64(i) < receiver.Degree()+1; i ++{
-		err := utils.ComparePolys(*receiver.Value()[0],*cipher.Value()[0])
-		if err != nil{
+	for i := 0; uint64(i) < receiver.Degree()+1; i++ {
+		err := utils.ComparePolys(*receiver.Value()[0], *cipher.Value()[0])
+		if err != nil {
 			fmt.Print(err)
 			t.Fail()
 			return
 		}
 	}
 
-
 	fmt.Print("Success")
-
 
 }

@@ -1,4 +1,4 @@
-package simulation
+package main
 
 import (
 	"errors"
@@ -16,35 +16,35 @@ type PublicKeySwitchingSim struct {
 	onet.SimulationBFTree
 }
 
-func init(){
-	onet.SimulationRegister("PublicCollectiveKeySwitching",NewSimulationPublicKeySwitching)
+func init() {
+	onet.SimulationRegister("PublicCollectiveKeySwitching", NewSimulationPublicKeySwitching)
 }
 
-func NewSimulationPublicKeySwitching(config string)(onet.Simulation, error){
+func NewSimulationPublicKeySwitching(config string) (onet.Simulation, error) {
 	sim := &PublicKeySwitchingSim{}
 
-	_,err := toml.Decode(config,sim)
-	if err != nil{
-		return nil,err
+	_, err := toml.Decode(config, sim)
+	if err != nil {
+		return nil, err
 	}
 
-	return sim,nil
+	return sim, nil
 }
 
-func (s* PublicKeySwitchingSim) Setup(dir string,hosts []string)(*onet.SimulationConfig,error){
+func (s *PublicKeySwitchingSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//setup following the config file.
 	log.Lvl4("Setting up the simulation for key switching")
 	sc := &onet.SimulationConfig{}
-	s.CreateRoster(sc,hosts,2000)
+	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
-	return sc,nil
+	return sc, nil
 }
 
-func (s* PublicKeySwitchingSim) Node(config *onet.SimulationConfig)error{
-	idx , _ := config.Roster.Search(config.Server.ServerIdentity.ID)
+func (s *PublicKeySwitchingSim) Node(config *onet.SimulationConfig) error {
+	idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
 	if idx < 0 {
 		log.Fatal("Error node not found")
 	}
@@ -54,17 +54,12 @@ func (s* PublicKeySwitchingSim) Node(config *onet.SimulationConfig)error{
 	return s.SimulationBFTree.Node(config)
 }
 
-
-
-func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
+func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
 
-	log.Lvl4("Size : " , size, " rounds : " , s.Rounds)
+	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
 
 	round := monitor.NewTimeMeasure("round")
-
-
-
 
 	log.SetDebugVisible(4)
 	log.Lvl1("Started to test collective key switching locally with nodes amount : ", size)
@@ -93,10 +88,9 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 	}
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
-	keygen :=  bfvCtx.NewKeyGenerator()
-	SkOutput :=keygen.NewSecretKey()
+	keygen := bfvCtx.NewKeyGenerator()
+	SkOutput := keygen.NewSecretKey()
 	publickey := keygen.NewPublicKey(SkOutput)
-
 
 	//keygen := bfvCtx.NewKeyGenerator()
 	//PkInput  := keygen.NewPublicKey(SkInput)
@@ -128,20 +122,17 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 		return err
 	}
 
-
 	log.Lvl1("Starting cksp")
 
-	pi,err := config.Overlay.StartProtocol("PublicCollectiveKeySwitching",config.Tree,onet.NilServiceID)
+	pi, err := config.Overlay.StartProtocol("PublicCollectiveKeySwitching", config.Tree, onet.NilServiceID)
 	if err != nil {
 		log.Fatal("Couldn't create new node:", err)
 		return err
 	}
 
-
-
 	pcksp := pi.(*proto.PublicCollectiveKeySwitchingProtocol)
 	pcksp.Params = bfv.DefaultParams[0]
-	pcksp.Sk = proto.SK{SecretKey:"sk0"}
+	pcksp.Sk = proto.SK{SecretKey: "sk0"}
 	pcksp.PublicKey = *publickey
 	pcksp.Ciphertext = *CipherText
 
@@ -150,15 +141,13 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 	//	return err
 	//}
 
-
 	<-time.After(5 * time.Second)
-
 
 	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
 
 	Decryptor, err := bfvCtx.NewDecryptor(SkOutput)
-	if err != nil{
-		log.Error("Could not load decryptor : " , err)
+	if err != nil {
+		log.Error("Could not load decryptor : ", err)
 		return err
 	}
 	i = 0
@@ -190,15 +179,9 @@ func (s *PublicKeySwitchingSim)Run(config *onet.SimulationConfig) error {
 
 	log.Lvl1("Success")
 
-
-
 	round.Record()
-
 
 	log.Lvl4("finished")
 	return nil
 
-
 }
-
-

@@ -1,4 +1,4 @@
-package simulation
+package main
 
 import (
 	"go.dedis.ch/onet/v3/log"
@@ -7,18 +7,13 @@ import (
 	"time"
 )
 
-func TestMain(m *testing.M){
-	log.MainTest(m)
-}
-
-func TestSimulationCollectiveKeyGen(t *testing.T){
+//Simulate the collective key generation. With a test.
+func TestSimulationCollectiveKeyGen(t *testing.T) {
 	log.SetDebugVisible(1)
-
 
 	simul.Start("key_gen_config.toml")
 
-	<- time.After(time.Second*5)
-
+	<-time.After(time.Second * 5)
 
 	return
 }

@@ -1,4 +1,4 @@
-package simulation
+package main
 
 import (
 	"go.dedis.ch/onet/v3/log"
@@ -7,15 +7,12 @@ import (
 	"time"
 )
 
-
-func TestSimulationCollectiveKeySwitch(t *testing.T){
+func TestSimulationCollectiveKeySwitch(t *testing.T) {
 	log.SetDebugVisible(1)
-
 
 	simul.Start("key_switch_config.toml")
 
-	<- time.After(time.Second*4)
-
+	<-time.After(time.Second * 4)
 
 	return
 }

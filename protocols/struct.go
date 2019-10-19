@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-
-
 type KeyRing struct {
 	//Ideally use maybe this in the future to have a single structure.. but maybe it will get too big ~ check later
 	//everything needed for the keys.
@@ -18,12 +16,10 @@ type KeyRing struct {
 	//*dbfv.EkgProtocol
 	//*dbfv.PCKS
 
-	sk *bfv.SecretKey
+	sk         *bfv.SecretKey
 	rlkEphemSk *ring.Poly
-	input []uint64
+	input      []uint64
 }
-
-
 
 type CollectiveKeyGenerationProtocol struct {
 	*onet.TreeNodeInstance
@@ -32,22 +28,20 @@ type CollectiveKeyGenerationProtocol struct {
 
 	ChannelParams          chan StructParameters
 	ChannelPublicKeyShares chan StructPublicKeyShare
-	ChannelRing      chan StructRing
+	ChannelRing            chan StructRing
 }
 
-
-type CollectiveKeySwitchingProtocol struct{
+type CollectiveKeySwitchingProtocol struct {
 	*onet.TreeNodeInstance
 
 	Params SwitchingParameters
 
-	ChannelParams chan StructSwitchParameters
+	ChannelParams     chan StructSwitchParameters
 	ChannelCiphertext chan StructCiphertext
-	ChannelCKSShare chan StructCKSShare
+	ChannelCKSShare   chan StructCKSShare
 }
 
-
-type PublicCollectiveKeySwitchingProtocol struct{
+type PublicCollectiveKeySwitchingProtocol struct {
 	*onet.TreeNodeInstance
 
 	Params bfv.Parameters
@@ -58,60 +52,55 @@ type PublicCollectiveKeySwitchingProtocol struct{
 
 	ChannelParams chan StructParameters
 
-
-	ChannelPublicKey chan StructPublicKey
-	ChannelSk chan StructSk
+	ChannelPublicKey  chan StructPublicKey
+	ChannelSk         chan StructSk
 	ChannelCiphertext chan StructCiphertext
-	ChannelPCKS chan StructPCKS
+	ChannelPCKS       chan StructPCKS
 }
 
-type StructPCKS struct{
+type StructPCKS struct {
 	*onet.TreeNode
 	dbfv.PCKSShare
 }
 
-type StructPublicKey struct{
+type StructPublicKey struct {
 	*onet.TreeNode
 	bfv.PublicKey
 }
 
-
-type StructSk struct{
+type StructSk struct {
 	*onet.TreeNode
 	SK
 }
 
-type SK struct{
+type SK struct {
 	SecretKey string
 }
-type StructCKSShare struct{
+type StructCKSShare struct {
 	*onet.TreeNode
 	dbfv.CKSShare
 }
 
-
-type SwitchingParameters struct{
+type SwitchingParameters struct {
 	Params bfv.Parameters
 	//also need skIn, skOut
-	SkInputHash string
+	SkInputHash  string
 	SkOutputHash string
 	bfv.Ciphertext
 }
 
-
-
 //Quick experience to marshal the swiching parameters. - works TODO need to clean up
-func (sp *SwitchingParameters)MarshalBinary() (data []byte, err error){
+func (sp *SwitchingParameters) MarshalBinary() (data []byte, err error) {
 	var buffer strings.Builder
 
-	data = make([]byte,0)
-	param ,err := sp.Params.MarshalBinary()
+	data = make([]byte, 0)
+	param, err := sp.Params.MarshalBinary()
 	len_param := len(param)
 	data = append(data, byte(len_param))
 	buffer.WriteByte(byte(len_param))
 	buffer.Write(param)
 	//add the strings...
-	hashes := []byte(sp.SkInputHash+","+sp.SkOutputHash)
+	hashes := []byte(sp.SkInputHash + "," + sp.SkOutputHash)
 	buffer.WriteByte(byte(len(hashes)))
 	buffer.Write(hashes)
 
@@ -124,62 +113,55 @@ func (sp *SwitchingParameters)MarshalBinary() (data []byte, err error){
 
 }
 
-
-func (sp *SwitchingParameters)UnmarshalBinary(data []byte) (err error){
+func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 	ptr := data[0]
-	byte_param := data[1:ptr+1]
+	byte_param := data[1 : ptr+1]
 	err = sp.Params.UnmarshalBinary(byte_param)
 
 	//then get the hashes..
 	ptr++
 	len_hashes := data[ptr]
-	hashes := data[ptr+1:ptr + len_hashes+1]
+	hashes := data[ptr+1 : ptr+len_hashes+1]
 	ptr += len_hashes + 1
-	xs := strings.Split(string(hashes),",")
-	if len(xs) != 2{
+	xs := strings.Split(string(hashes), ",")
+	if len(xs) != 2 {
 		return errors.New("Error on hashes")
 
 	}
 	sp.SkInputHash = xs[0]
 	sp.SkOutputHash = xs[1]
 	//finally the cipher text..
-	bfvCtx,err := bfv.NewBfvContextWithParam(&sp.Params)
+	bfvCtx, err := bfv.NewBfvContextWithParam(&sp.Params)
 
 	//len_cipher := data[ptr]
 	//ptr++
 	sp.Ciphertext = *bfvCtx.NewCiphertext(1)
 	err = sp.Ciphertext.UnmarshalBinary(data[ptr:])
-	if err !=nil{
+	if err != nil {
 		return err
 	}
 	return nil
 
-
 }
 
-
-type StructSwitchParameters struct{
+type StructSwitchParameters struct {
 	*onet.TreeNode
 	SwitchingParameters
 }
 
-type StructCiphertext struct{
+type StructCiphertext struct {
 	*onet.TreeNode
 	bfv.Ciphertext
 }
-
 
 //type CollectiveKeyShare struct {
 //	dbfv.CKGShare
 //}
 
-
 type StructParameters struct {
 	*onet.TreeNode
 	Params bfv.Parameters
 }
-
-
 
 type StructPublicKeyShare struct {
 	*onet.TreeNode
@@ -190,7 +172,3 @@ type StructRing struct {
 	*onet.TreeNode
 	ring.Poly
 }
-
-
-
-
