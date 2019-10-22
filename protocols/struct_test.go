@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
-	"protocols/utils"
+	"lattigo-smc/utils"
 	"testing"
 )
 
@@ -29,10 +29,11 @@ func TestMarshallingSwitchingParameters(t *testing.T) {
 
 	data, err := sp.MarshalBinary()
 
-	sp1 := &SwitchingParameters{}
+	sp1 := new(SwitchingParameters)
 	err = sp1.UnmarshalBinary(data)
 
 	if err != nil {
+		log.Error("Error in unmarshalling : " , err )
 		t.Fail()
 	}
 

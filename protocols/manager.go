@@ -7,7 +7,8 @@ import (
 )
 
 var test = true
-
+//Test has a variable test used when you want to test so the protocols sends the result back to the root so you
+//can compare the value computed.
 func Test() bool {
 	return test
 }
@@ -16,7 +17,10 @@ func init() {
 	_, _ = onet.GlobalProtocolRegister("CollectiveKeyGeneration", NewCollectiveKeyGeneration)
 	_, _ = onet.GlobalProtocolRegister("CollectiveKeySwitching", NewCollectiveKeySwitching)
 	_, _ = onet.GlobalProtocolRegister("PublicCollectiveKeySwitching", NewPublicCollectiveKeySwitching)
+	_,_ = onet.GlobalProtocolRegister("RelinearizationKey",NewRelinearizationKey)
 }
+
+
 
 /*****************COLLECTIVE KEY GENERATION ONET HANDLERS *******************/
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
@@ -155,3 +159,31 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) Dispatch() error {
 func (pcks *PublicCollectiveKeySwitchingProtocol) Shutdown() error {
 	return pcks.TreeNodeInstance.Shutdown()
 }
+
+
+/*************RELIN KEY ONET HANDLERS***************/
+
+func (rlp *RelinearizationKeyProtocol) Start()error{
+	log.Lvl1(rlp.ServerIdentity() , " : starting relin key protocol")
+	//sending the parameters
+	return nil
+}
+func (rlp *RelinearizationKeyProtocol) Dispatch()error{
+	log.Lvl1("Dispatching for relinearization key protocol! ")
+	res, err := rlp.RelinearizationKey()
+
+	if err != nil {
+		log.Fatal("Error : ", err)
+	}
+
+	if Test() {
+		_ = rlp.SendTo(rlp.Root(), res)
+	}
+
+	if !rlp.IsRoot() && Test() {
+		rlp.Done()
+	}
+
+	return nil
+}
+

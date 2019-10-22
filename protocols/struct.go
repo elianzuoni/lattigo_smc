@@ -9,17 +9,17 @@ import (
 	"strings"
 )
 
-type KeyRing struct {
-	//Ideally use maybe this in the future to have a single structure.. but maybe it will get too big ~ check later
-	//everything needed for the keys.
-	//*dbfv.CKG
-	//*dbfv.EkgProtocol
-	//*dbfv.PCKS
-
-	sk         *bfv.SecretKey
-	rlkEphemSk *ring.Poly
-	input      []uint64
-}
+//type KeyRing struct {
+//	//Ideally use maybe this in the future to have a single structure.. but maybe it will get too big ~ check later
+//	//everything needed for the keys.
+//	//*dbfv.CKG
+//	//*dbfv.EkgProtocol
+//	//*dbfv.PCKS
+//
+//	sk         *bfv.SecretKey
+//	rlkEphemSk *ring.Poly
+//	input      []uint64
+//}
 
 type CollectiveKeyGenerationProtocol struct {
 	*onet.TreeNodeInstance
@@ -58,6 +58,45 @@ type PublicCollectiveKeySwitchingProtocol struct {
 	ChannelPCKS       chan StructPCKS
 }
 
+type RelinearizationKeyProtocol struct {
+	*onet.TreeNodeInstance
+	Params bfv.Parameters
+	//Todo have better variable names once its coded.
+	a [][]*ring.Poly
+	w ring.Poly
+	Sk SK
+	//Channels to send the different parts of the key
+	ChannelRoundOne chan StructRelinKeyRoundOne
+	ChannelRoundTwo chan StructRelinKeyRoundTwo
+	ChannelRoundThree chan StructRelinKeyRoundThree
+	//These are used for testing.
+	//In real protocol use Node() from onet to propagate params
+	ChannelA chan StructA
+	ChannelW chan StructRing
+	ChannelSk chan StructSk
+	ChannelParams chan StructParameters
+
+}
+
+//channels to propagate parameters for RelinKeyProto
+type StructA struct{
+	*onet.TreeNode
+	a [][]*ring.Poly
+}
+
+
+type StructRelinKeyRoundOne struct{
+	*onet.TreeNode
+	dbfv.RKGShareRoundOne
+}
+type StructRelinKeyRoundTwo struct{
+	*onet.TreeNode
+	dbfv.RKGShareRoundTwo
+}
+type StructRelinKeyRoundThree struct{
+	*onet.TreeNode
+	dbfv.RKGShareRoundThree
+}
 type StructPCKS struct {
 	*onet.TreeNode
 	dbfv.PCKSShare
@@ -131,11 +170,11 @@ func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 	sp.SkInputHash = xs[0]
 	sp.SkOutputHash = xs[1]
 	//finally the cipher text..
-	bfvCtx, err := bfv.NewBfvContextWithParam(&sp.Params)
+	//bfvCtx, err := bfv.NewBfvContextWithParam(&sp.Params)
 
 	//len_cipher := data[ptr]
 	//ptr++
-	sp.Ciphertext = *bfvCtx.NewCiphertext(1)
+	sp.Ciphertext = *new(bfv.Ciphertext)
 	err = sp.Ciphertext.UnmarshalBinary(data[ptr:])
 	if err != nil {
 		return err
