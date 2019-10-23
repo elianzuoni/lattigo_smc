@@ -1,12 +1,10 @@
 package protocols
 
 import (
-	"errors"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
-	"strings"
 )
 
 //type KeyRing struct {
@@ -62,8 +60,8 @@ type RelinearizationKeyProtocol struct {
 	*onet.TreeNodeInstance
 	Params bfv.Parameters
 	//Todo have better variable names once its coded.
-	a [][]*ring.Poly
-	w ring.Poly
+	crp CRP
+	//w ring.Poly
 	Sk SK
 	//Channels to send the different parts of the key
 	ChannelRoundOne chan StructRelinKeyRoundOne
@@ -71,17 +69,23 @@ type RelinearizationKeyProtocol struct {
 	ChannelRoundThree chan StructRelinKeyRoundThree
 	//These are used for testing.
 	//In real protocol use Node() from onet to propagate params
-	ChannelA chan StructA
-	ChannelW chan StructRing
+	ChannelCrp chan StructCrp
+	//ChannelW chan StructRing
 	ChannelSk chan StructSk
 	ChannelParams chan StructParameters
+	ChannelEvalKey chan StructEvalKey
 
 }
 
-//channels to propagate parameters for RelinKeyProto
-type StructA struct{
+type StructEvalKey struct{
 	*onet.TreeNode
-	a [][]*ring.Poly
+	bfv.EvaluationKey
+}
+
+//channels to propagate parameters for RelinKeyProto
+type StructCrp struct{
+	*onet.TreeNode
+	CRP
 }
 
 
@@ -128,60 +132,6 @@ type SwitchingParameters struct {
 	bfv.Ciphertext
 }
 
-//Quick experience to marshal the swiching parameters. - works TODO need to clean up
-func (sp *SwitchingParameters) MarshalBinary() (data []byte, err error) {
-	var buffer strings.Builder
-
-	data = make([]byte, 0)
-	param, err := sp.Params.MarshalBinary()
-	len_param := len(param)
-	data = append(data, byte(len_param))
-	buffer.WriteByte(byte(len_param))
-	buffer.Write(param)
-	//add the strings...
-	hashes := []byte(sp.SkInputHash + "," + sp.SkOutputHash)
-	buffer.WriteByte(byte(len(hashes)))
-	buffer.Write(hashes)
-
-	//add the cipher..
-	cipher, err := sp.Ciphertext.MarshalBinary()
-
-	buffer.Write(cipher)
-
-	return []byte(buffer.String()), nil
-
-}
-
-func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
-	ptr := data[0]
-	byte_param := data[1 : ptr+1]
-	err = sp.Params.UnmarshalBinary(byte_param)
-
-	//then get the hashes..
-	ptr++
-	len_hashes := data[ptr]
-	hashes := data[ptr+1 : ptr+len_hashes+1]
-	ptr += len_hashes + 1
-	xs := strings.Split(string(hashes), ",")
-	if len(xs) != 2 {
-		return errors.New("Error on hashes")
-
-	}
-	sp.SkInputHash = xs[0]
-	sp.SkOutputHash = xs[1]
-	//finally the cipher text..
-	//bfvCtx, err := bfv.NewBfvContextWithParam(&sp.Params)
-
-	//len_cipher := data[ptr]
-	//ptr++
-	sp.Ciphertext = *new(bfv.Ciphertext)
-	err = sp.Ciphertext.UnmarshalBinary(data[ptr:])
-	if err != nil {
-		return err
-	}
-	return nil
-
-}
 
 type StructSwitchParameters struct {
 	*onet.TreeNode
@@ -211,3 +161,9 @@ type StructRing struct {
 	*onet.TreeNode
 	ring.Poly
 }
+
+//Wrapper around crp
+type CRP struct{
+	a [][]*ring.Poly
+}
+

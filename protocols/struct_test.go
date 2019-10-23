@@ -75,3 +75,8 @@ func TestCiphertextMarshal(t *testing.T) {
 	fmt.Print("Success")
 
 }
+
+
+func TestCRPMarshal(t *testing.T){
+
+}

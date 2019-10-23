@@ -17,7 +17,7 @@ func init() {
 	_, _ = onet.GlobalProtocolRegister("CollectiveKeyGeneration", NewCollectiveKeyGeneration)
 	_, _ = onet.GlobalProtocolRegister("CollectiveKeySwitching", NewCollectiveKeySwitching)
 	_, _ = onet.GlobalProtocolRegister("PublicCollectiveKeySwitching", NewPublicCollectiveKeySwitching)
-	_,_ = onet.GlobalProtocolRegister("RelinearizationKey",NewRelinearizationKey)
+	_,_ = onet.GlobalProtocolRegister("RelinearizationKeyProtocol",NewRelinearizationKey)
 }
 
 
@@ -166,10 +166,29 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) Shutdown() error {
 func (rlp *RelinearizationKeyProtocol) Start()error{
 	log.Lvl1(rlp.ServerIdentity() , " : starting relin key protocol")
 	//sending the parameters
+	//if Test(){
+	//
+	//	rlp.ChannelSk <- StructSk{
+	//		TreeNode: rlp.TreeNode(),
+	//		SK:       rlp.Sk,
+	//	}
+	//	rlp.ChannelParams <- StructParameters{
+	//		TreeNode: rlp.TreeNode(),
+	//		Params:   rlp.Params,
+	//	}
+	//	log.Lvl1("Going in A ")
+	//	//rlp.ChannelCrp <- StructCrp{
+	//	//	TreeNode: rlp.TreeNode(),
+	//	//	CRP:        rlp.crp,
+	//	//}
+	//	log.Lvl1("Got out of A ")
+	//}
+	log.Lvl1("Done with startup ")
+
 	return nil
 }
 func (rlp *RelinearizationKeyProtocol) Dispatch()error{
-	log.Lvl1("Dispatching for relinearization key protocol! ")
+	log.Lvl1(rlp.ServerIdentity() , " : Dispatching for relinearization key protocol! ")
 	res, err := rlp.RelinearizationKey()
 
 	if err != nil {
@@ -177,13 +196,13 @@ func (rlp *RelinearizationKeyProtocol) Dispatch()error{
 	}
 
 	if Test() {
-		_ = rlp.SendTo(rlp.Root(), res)
+		_ = rlp.SendTo(rlp.Root(), &res)
 	}
 
 	if !rlp.IsRoot() && Test() {
 		rlp.Done()
 	}
-
+	log.Lvl1(rlp.ServerIdentity() ," : exiting dispatch ")
 	return nil
 }
 
