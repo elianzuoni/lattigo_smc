@@ -98,7 +98,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 		r1 = (<-rlp.ChannelRoundOne).RKGShareRoundOne
 
 	}
-	log.Lvl1(rlp.ServerIdentity().String(), ": round 1 share finished")
+	log.Lvl3(rlp.ServerIdentity().String(), ": round 1 share finished")
 
 	//now we do r2
 	rkg.GenShareRoundTwo(r1,sk.Get(),rlp.crp.a,r2)
@@ -121,7 +121,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 		r2 = (<-rlp.ChannelRoundTwo).RKGShareRoundTwo
 
 	}
-	log.Lvl1(rlp.ServerIdentity().String(), " : done with round 2 ")
+	log.Lvl3(rlp.ServerIdentity().String(), " : done with round 2 ")
 	//now round 3....
 	rkg.GenShareRoundThree(r2,u,sk.Get(),r3)
 
@@ -147,7 +147,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 
 
 	//now we can generate key.
-	log.Lvl1(rlp.ServerIdentity(), "Generating the relin key ! ")
+	log.Lvl3(rlp.ServerIdentity(), "Generating the relin key ! ")
 	//since all parties should have r2 and r3 dont need to send it.
 	evalKey := rkg.AllocateEvaluationKey(*bfvCtx)
 	rkg.GenRelinearizationKey(r2,r3,evalKey)

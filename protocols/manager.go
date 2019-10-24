@@ -191,6 +191,10 @@ func (rlp *RelinearizationKeyProtocol) Dispatch()error{
 	log.Lvl1(rlp.ServerIdentity() , " : Dispatching for relinearization key protocol! ")
 	res, err := rlp.RelinearizationKey()
 
+	//small check.
+	data, _ := res.MarshalBinary()
+	log.Lvl1(rlp.ServerIdentity(), " : got key starting with : " , data[0:25])
+
 	if err != nil {
 		log.Fatal("Error : ", err)
 	}
