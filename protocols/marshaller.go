@@ -64,17 +64,17 @@ func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 //TODO test crp marshalling
 
 func (crp *CRP) MarshalBinary()([]byte,error){
-	if len(crp.a) == 0 || len(crp.a[0]) == 0 {
+	if len(crp.A) == 0 || len(crp.A[0]) == 0 {
 		return []byte{},nil
 	}
 	//compute the total data length.
-	ringLen := crp.a[0][0].GetDataLen(true)
-	length := uint64(len(crp.a) * len(crp.a[0])) * ringLen
+	ringLen := crp.A[0][0].GetDataLen(true)
+	length := uint64(len(crp.A) * len(crp.A[0])) * ringLen
 	data := make([]byte,length+2)
-	data[0] = uint8(len(crp.a))
-	data[1] = uint8(len(crp.a[0]))
+	data[0] = uint8(len(crp.A))
+	data[1] = uint8(len(crp.A[0]))
 	ptr := uint64(2)
-	for _, xs := range crp.a{
+	for _, xs := range crp.A{
 		for _, x := range xs{
 			cnt , err := x.WriteTo(data[ptr:ptr+ringLen])
 			if err != nil{
@@ -92,10 +92,10 @@ func (crp *CRP) UnmarshalBinary(data []byte)error{
 	innerLen := data[1]
 	lenRing := uint64((len(data)-2)/int(outerLen)/int(innerLen))
 	//allocate if necessary.
-	if crp.a == nil{
-		crp.a = make([][]*ring.Poly,outerLen)
+	if crp.A == nil{
+		crp.A = make([][]*ring.Poly,outerLen)
 		for i := 0 ; i < int(outerLen); i++{
-			crp.a[i] = make([]*ring.Poly,innerLen)
+			crp.A[i] = make([]*ring.Poly,innerLen)
 		}
 	}
 
@@ -103,8 +103,8 @@ func (crp *CRP) UnmarshalBinary(data []byte)error{
 
 	for i := 0 ; i < int(outerLen); i++{
 		for j := 0 ; j < int(innerLen) ; j ++{
-			crp.a[i][j] = new(ring.Poly)
-			err := crp.a[i][j].UnmarshalBinary(data[ptr:ptr+lenRing])
+			crp.A[i][j] = new(ring.Poly)
+			err := crp.A[i][j].UnmarshalBinary(data[ptr:ptr+lenRing])
 			if err != nil{
 				return err
 			}

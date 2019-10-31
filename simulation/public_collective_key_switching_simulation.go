@@ -7,8 +7,8 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
-	proto "protocols/protocols"
-	"protocols/utils"
+	proto "lattigo-smc/protocols"
+	"lattigo-smc/utils"
 	"time"
 )
 

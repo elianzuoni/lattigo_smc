@@ -28,7 +28,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	if !rlp.IsRoot(){
 		rlp.Sk = (<-rlp.ChannelSk).SK
 		log.Lvl3("Got sk from parent")
-		rlp.crp= (<-rlp.ChannelCrp).CRP
+		rlp.Crp= (<-rlp.ChannelCrp).CRP
 		log.Lvl3("Got a from parent")
 		//rlp.w = (<-rlp.ChannelW).Poly
 		rlp.Params = (<-rlp.ChannelParams).Params
@@ -43,7 +43,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 		log.Error("Could not send secret key " , err)
 		return *new(bfv.EvaluationKey) , err
 	}
-	err = rlp.SendToChildren(&rlp.crp)
+	err = rlp.SendToChildren(&rlp.Crp)
 	if err != nil{
 		log.Error("Could not send vector a " , err)
 		return *new(bfv.EvaluationKey) , err
@@ -77,7 +77,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 
 
 	r1,r2,r3 := rkg.AllocateShares()
-	rkg.GenShareRoundOne(u,sk.Get(),rlp.crp.a,r1)
+	rkg.GenShareRoundOne(u,sk.Get(),rlp.Crp.A,r1)
 	//aggregate the shares.
 	if !rlp.IsLeaf(){
 		for _ = range rlp.Children(){
@@ -101,7 +101,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	log.Lvl3(rlp.ServerIdentity().String(), ": round 1 share finished")
 
 	//now we do r2
-	rkg.GenShareRoundTwo(r1,sk.Get(),rlp.crp.a,r2)
+	rkg.GenShareRoundTwo(r1,sk.Get(),rlp.Crp.A,r2)
 	if !rlp.IsLeaf(){
 		for _ = range rlp.Children(){
 			h0 := (<-rlp.ChannelRoundTwo).RKGShareRoundTwo

@@ -1,48 +1,97 @@
-package protocols
+//This file holds the Relinearization key protocol
+//Contains all method that are implemented in order to implement a protocol from onet.
+package main
 
 import (
+	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
-	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/simul/monitor"
+	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
-	"testing"
+
 	"time"
 )
 
-func TestNewRelinearizationKey(t *testing.T) {
-	//first generate a secret key and from shards and the resulting public key
-	nbnodes := 3
-	log.SetDebugVisible(1)
-	log.Lvl1("Started to test relinearization protocol with nodes amount : ", nbnodes)
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
-	defer local.CloseAll()
+type RelinearizationKeySimulation struct {
+	onet.SimulationBFTree
+}
 
-	_, _, tree := local.GenTree(nbnodes, true)
+
+const bitDecomp = 64
+
+func init() {
+	onet.SimulationRegister("RelinearizationKeyGeneration", NewRelinearizationKeyGeneration)
+}
+
+func NewRelinearizationKeyGeneration(config string) (onet.Simulation, error) {
+	sim := &RelinearizationKeySimulation{}
+
+	_, err := toml.Decode(config, sim)
+	if err != nil {
+		return nil, err
+	}
+
+	return sim, nil
+}
+
+func (s *RelinearizationKeySimulation) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
+	//setup following the config file.
+	log.Lvl4("Setting up the simulations")
+	sc := &onet.SimulationConfig{}
+	s.CreateRoster(sc, hosts, 2000)
+	err := s.CreateTree(sc)
+	if err != nil {
+		return nil, err
+	}
+	return sc, nil
+}
+
+func (s *RelinearizationKeySimulation) Node(config *onet.SimulationConfig) error {
+	//todo inject parameters here !
+	idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
+	if idx < 0 {
+		log.Fatal("Error node not found")
+	}
+
+	log.Lvl4("Node setup")
+
+	return s.SimulationBFTree.Node(config)
+}
+
+func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error {
+	size := config.Tree.Size()
 	SKHash := "sk0"
+
+	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
+
+	round := monitor.NewTimeMeasure("round")
+
+
+
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	if err != nil {
 		log.Print("Could not load bfv ctx ", err)
-		t.Fail()
-		return
+		return err
 	}
 	i := 0
 	tmp0 := bfvCtx.ContextQ().NewPoly()
-	for i < nbnodes {
-		si := tree.Roster.List[i].String()
+	for i < size {
+		si := config.Tree.Roster.List[i].String()
 		sk0, err := utils.GetSecretKey(bfvCtx, SKHash+si)
 		if err != nil {
 			log.Error("error : ", err)
-			t.Fail()
-			return
+			return err
 		}
 
 		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
 
 		i++
 	}
+
 
 	Sk := new(bfv.SecretKey)
 	Sk.Set(tmp0)
@@ -52,12 +101,16 @@ func TestNewRelinearizationKey(t *testing.T) {
 
 	PlainText := bfvCtx.NewPlaintext()
 	encoder, err := bfvCtx.NewBatchEncoder()
+	if err != nil{
+		log.Error(err)
+		return err
+	}
 	expected := bfvCtx.ContextT().NewUniformPoly()
 
 	err = encoder.EncodeUint(expected.Coeffs[0], PlainText)
 	if err != nil {
 		log.Print("Could not encode plaintext : ", err)
-		t.Fail()
+		return err
 	}
 
 
@@ -66,7 +119,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 
 	if err != nil {
 		log.Print("error in encryption : ", err)
-		t.Fail()
+		return err
 	}
 	//multiply it !
 	evaluator := bfvCtx.NewEvaluator()
@@ -81,12 +134,12 @@ func TestNewRelinearizationKey(t *testing.T) {
 
 	//Parameters ***************************
 	//Computation for the crp (a)
-	crpGenerators := make([]*dbfv.CRPGenerator, nbnodes)
-	for i := 0; i < nbnodes; i++ {
+	crpGenerators := make([]*dbfv.CRPGenerator, size)
+	for i := 0; i < size; i++ {
 		crpGenerators[i], err = dbfv.NewCRPGenerator(nil, contextQ)
 		if err != nil {
-			t.Error(err)
-			t.Fail()
+			log.Error(err)
+			return err
 		}
 		crpGenerators[i].Seed([]byte{})
 	}
@@ -100,16 +153,17 @@ func TestNewRelinearizationKey(t *testing.T) {
 
 
 	//The parameters are sk,crp,bfvParams
-	pi, err := local.CreateProtocol("RelinearizationKeyProtocol", tree)
+	pi, err := config.Overlay.CreateProtocol("RelinearizationKeyProtocol", config.Tree,onet.NilServiceID)
 	if err != nil {
-		t.Fatal("Couldn't create new node:", err)
+		log.Error(err)
+		return err
 	}
 
 
-	RelinProtocol := pi.(*RelinearizationKeyProtocol)
+	RelinProtocol := pi.(*proto.RelinearizationKeyProtocol)
 	RelinProtocol.Params = bfv.DefaultParams[0]
-	RelinProtocol.Sk = SK{"sk0"}
-	RelinProtocol.Crp = CRP{A:crp}
+	RelinProtocol.Sk = proto.SK{"sk0"}
+	RelinProtocol.Crp = proto.CRP{A:crp}
 	<- time.After(2*time.Second)
 
 	//Now we can start the protocol
@@ -117,14 +171,14 @@ func TestNewRelinearizationKey(t *testing.T) {
 	defer RelinProtocol.Done()
 	if err != nil{
 		log.Error("Could not start relinearization protocol : " , err )
-		t.Fail()
+		return err
 	}
 
-	//<- time.After(3*time.Second)
+	<- time.After(3*time.Second)
 	log.Lvl1("Collecting the relinearization keys")
-	array := make([]bfv.EvaluationKey, nbnodes)
+	array := make([]bfv.EvaluationKey, size)
 	//check if the keys are the same for all parties
-	for i := 0 ; i < nbnodes; i++{
+	for i := 0 ; i < size; i++{
 		relkey := (<-RelinProtocol.ChannelEvalKey).EvaluationKey
 		data, _ := relkey.MarshalBinary()
 		log.Lvl3("Key starting with : " , data[0:25])
@@ -135,15 +189,15 @@ func TestNewRelinearizationKey(t *testing.T) {
 	err = utils.CompareEvalKeys(array)
 	if err != nil{
 		log.Error("Different relinearization keys : ", err )
-		t.Fail()
-		return
+
+		return err
 	}
 	log.Lvl1("Check : all peers have the same key ")
 	rlk := array[0]
 	ResCipher , err := evaluator.RelinearizeNew(MulCiphertext,&rlk)
 	if err != nil{
 		log.Error("Could not relinearize the cipher text : ", err)
-		t.Fail()
+		return err
 	}
 
 	//decrypt the cipher
@@ -152,9 +206,16 @@ func TestNewRelinearizationKey(t *testing.T) {
 	resDecoded := encoder.DecodeUint(resDecrypted)
 	if ! utils.Equalslice(ExpectedCoeffs.Coeffs[0],resDecoded){
 		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
-		t.Fail()
+		return err
 	}
 	log.Lvl1("Relinearization done.")
 
-}
 
+
+	round.Record()
+
+
+	log.Lvl1("finished")
+	return nil
+
+}

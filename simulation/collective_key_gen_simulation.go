@@ -63,7 +63,7 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 
 	round := monitor.NewTimeMeasure("round")
 
-	//TODO what is the service ID ?
+
 	pi, err := config.Overlay.StartProtocol("CollectiveKeyGeneration", config.Tree, onet.NilServiceID)
 	if err != nil {
 		log.Fatal("Couldn't create new node:", err)

@@ -60,7 +60,7 @@ type RelinearizationKeyProtocol struct {
 	*onet.TreeNodeInstance
 	Params bfv.Parameters
 	//Todo have better variable names once its coded.
-	crp CRP
+	Crp CRP
 	//w ring.Poly
 	Sk SK
 	//Channels to send the different parts of the key
@@ -164,6 +164,6 @@ type StructRing struct {
 
 //Wrapper around crp
 type CRP struct{
-	a [][]*ring.Poly
+	A [][]*ring.Poly
 }
 
