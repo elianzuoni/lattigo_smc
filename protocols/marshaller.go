@@ -61,7 +61,6 @@ func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 
 }
 
-//TODO test crp marshalling
 
 func (crp *CRP) MarshalBinary()([]byte,error){
 	if len(crp.A) == 0 || len(crp.A[0]) == 0 {

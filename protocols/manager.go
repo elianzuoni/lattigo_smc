@@ -12,9 +12,11 @@ var test = true
 func Test() bool {
 	return test
 }
+func TurnOffTest(){
+	test = false
+}
 
 func init() {
-	_, _ = onet.GlobalProtocolRegister("CollectiveKeyGeneration", NewCollectiveKeyGeneration)
 	_, _ = onet.GlobalProtocolRegister("CollectiveKeySwitching", NewCollectiveKeySwitching)
 	_, _ = onet.GlobalProtocolRegister("PublicCollectiveKeySwitching", NewPublicCollectiveKeySwitching)
 	_,_ = onet.GlobalProtocolRegister("RelinearizationKeyProtocol",NewRelinearizationKey)
@@ -24,38 +26,38 @@ func init() {
 
 /*****************COLLECTIVE KEY GENERATION ONET HANDLERS *******************/
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
-	log.Lvl4(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
+	log.Lvl1(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
+	if Test(){
+		log.Lvl1("HI")
+		ckgp.ChannelParams <- StructParameters{ckgp.TreeNode(), ckgp.Params}
+	}
 
-	ckgp.ChannelParams <- StructParameters{ckgp.TreeNode(), ckgp.Params}
+
 	return nil
 }
 
 func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
+	log.Lvl1(ckgp.ServerIdentity() , " Dispatch ", ckgp.IsRoot())
 	ckg_0, e := ckgp.CollectiveKeyGeneration()
 	if e != nil {
 		return e
 	}
 
-	log.Lvl4(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
+	log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
 	xs := ckg_0.Get()
-	log.Lvl4(ckgp.ServerIdentity(), " Got key :", xs[0], " \n. ", xs[1])
+	log.Lvl1(ckgp.ServerIdentity(), " Got key :", xs[0], " \n. ", xs[1])
 
 	//for the test - send all to root and in the test check that all keys are equals.
 
-	if Test() {
-		//if ! ckgp.IsRoot(){
 		err := ckgp.SendTo(ckgp.Root(), ckg_0.Get()[0])
 
 		if err != nil {
 			log.Lvl4("Error in key sending to root : ", err)
 		}
-		//}
-		//wait to allow test to get the values.
 		<-time.After(time.Second * 2)
 
-	}
-	log.Lvl4(ckgp.ServerIdentity(), " : im done")
+	log.Lvl1(ckgp.ServerIdentity(), " : im done")
 	ckgp.Done()
 
 	return nil

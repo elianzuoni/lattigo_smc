@@ -5,7 +5,6 @@ import (
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	ex "lattigo-smc/examples"
 	"lattigo-smc/utils"
 	"testing"
 	"time"
@@ -104,11 +103,4 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 	Ideally id like to call this vvv so it can all shutdown outside of the collectivekeygen
 	//local.CloseAll()
 	*/
-}
-
-func TestAllCollectiveKeyGeneration(t *testing.T) {
-	log.Lvl1("Starting to test key genereation locally")
-	//TODO how to check locally ? ~ make keygen without nodes ?
-	ex.Main()
-
 }

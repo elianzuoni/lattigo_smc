@@ -10,11 +10,23 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/utils"
 )
+const CollectiveKeyGenerationProtocolName = "CollectiveKeyGeneration"
+
+func init(){
+
+	if _, err := onet.GlobalProtocolRegister(CollectiveKeyGenerationProtocolName, NewCollectiveKeyGeneration); err != nil{
+		log.ErrFatal(err, "Could not register CollectiveKeyGeneration protocol : " )
+	}
+
+	//todo here could register messages if marshalling does not work .
+
+}
 
 func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-
+	log.Lvl1("PING")
 	p := &CollectiveKeyGenerationProtocol{
 		TreeNodeInstance: n,
+		//todo maybe register some channels here cf unlynx/protocols/key_switching - for feedback
 	}
 
 	if e := p.RegisterChannels(&p.ChannelParams, &p.ChannelPublicKeyShares, &p.ChannelRing); e != nil {
@@ -26,16 +38,23 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 
 func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.PublicKey, error) {
 
-	params := <-ckgp.ChannelParams
-	log.Lvl3("Started CKG with params ", params.Params)
-	err := ckgp.SendToChildren(&params.Params)
-	// forwards the params to children, no effect if leaf
+	if Test(){
+		log.Lvl1("testing")
+		if !ckgp.IsRoot(){
+			params := <-ckgp.ChannelParams
+			ckgp.Params = params.Params
+		}
 
-	if err != nil {
-		return bfv.PublicKey{}, fmt.Errorf("could not forward parameters to the ")
+		log.Lvl3("Started CKG with params ", ckgp.Params)
+		err := ckgp.SendToChildren(&ckgp.Params)
+		if err != nil {
+			return bfv.PublicKey{}, errors.New("could not forward parameters to the child node")
+		}
 	}
 
-	bfvCtx, err := bfv.NewBfvContextWithParam(&params.Params)
+
+
+	bfvCtx, err := bfv.NewBfvContextWithParam(&ckgp.Params)
 	if err != nil {
 		return bfv.PublicKey{}, fmt.Errorf("recieved invalid parameter set")
 	}
@@ -44,16 +63,18 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	ckg := dbfv.NewCKGProtocol(bfvCtx)
 	//get si
 	sk, err := utils.GetSecretKey(bfvCtx, ckgp.ServerIdentity().String())
-	b, err := sk.MarshalBinary()
-	log.Lvl4(ckgp.ServerIdentity(), " my secret key : ", b)
 	if err != nil {
 		return bfv.PublicKey{}, fmt.Errorf("error when loading the secret key: %s", err)
 	}
+	b, err := sk.MarshalBinary()
+
+	log.Lvl4(ckgp.ServerIdentity(), " my secret key : ", b)
 
 	//generate p0,i
 	partial := ckg.AllocateShares()
 	ckg_1 := crsGen.Clock()
 	ckg.GenShare(sk.Get(), ckg_1, partial)
+	log.Lvl1("Im in")
 
 	log.Lvl4(ckgp.ServerIdentity(), "Hello")
 	//if parent get share from child and aggregate
@@ -102,12 +123,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	//send the ckg_0 to children
 
 	log.Lvl4(ckgp.ServerIdentity(), "sent ckgo : ", pubkey)
-	// forward the collective key to children
-	//if err != nil {
-	//	return bfv.PublicKey{}, err
-	//}
 
-	log.Lvl4(ckgp.ServerIdentity(), "Ugh")
 	//save the key in the a public file.
 	err = utils.SavePublicKey(pubkey, bfvCtx, ckgp.ServerIdentity().String())
 	if err != nil {

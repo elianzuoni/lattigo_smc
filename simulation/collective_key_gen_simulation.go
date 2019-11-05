@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
@@ -10,7 +11,6 @@ import (
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
-	"time"
 )
 
 type KeyGenerationSim struct {
@@ -34,7 +34,7 @@ func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 
 func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//setup following the config file.
-	log.Lvl4("Setting up the simulations")
+	log.Lvl1("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
@@ -45,37 +45,61 @@ func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 }
 
 func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
-	//todo inject parameters here !
-	idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
-	if idx < 0 {
-		log.Fatal("Error node not found")
-	}
+	log.Lvl1("B")
+	//idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
+	//if idx < 0 {
+	//	log.Fatal("Error node not found")
+	//}
 
-	log.Lvl4("Node setup")
+	if _, err := config.Server.ProtocolRegister("CollectiveKeyGenerationSimul",func(tni *onet.TreeNodeInstance)(onet.ProtocolInstance,error){
+		return NewKeyGenerationSimul(tni,s)
+	});err != nil{
+		return errors.New("Error when registering CollectiveKeyGeneration instance " + err.Error())
+	}
+	log.Lvl1("Node setup")
 
 	return s.SimulationBFTree.Node(config)
 }
 
+func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (onet.ProtocolInstance, error) {
+	//This part allows to injec the data to the node ~ we don't need the messy channels.
+	protocol , err := proto.NewCollectiveKeyGeneration(tni)
+	log.Lvl1("HIII")
+
+	if err != nil{
+		return nil, err
+	}
+
+	//cast
+	colkeygen := protocol.(*proto.CollectiveKeyGenerationProtocol)
+	colkeygen.Params = bfv.DefaultParams[0]
+	return colkeygen, nil
+
+}
+
 func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
+	log.Lvl1("A")
 	size := config.Tree.Size()
+
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
 
 	round := monitor.NewTimeMeasure("round")
 
 
-	pi, err := config.Overlay.StartProtocol("CollectiveKeyGeneration", config.Tree, onet.NilServiceID)
+	pi, err := config.Overlay.CreateProtocol("CollectiveKeyGenerationSimul", config.Tree, onet.NilServiceID)
 	if err != nil {
 		log.Fatal("Couldn't create new node:", err)
 	}
 
 	ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
-	ckgp.Params = bfv.DefaultParams[0]
-	log.Lvl4("Starting ckgp")
-	err = ckgp.Start()
+	log.Lvl1("Starting Collective Key Generation simulation")
+	if err = ckgp.Start(); err != nil{
+		return err
+	}
 
 	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.\n\tNow comparing all polynomials.")
-	<-time.After(2 * time.Second)
+	<-ckgp.ProtocolInstance().(*proto.CollectiveKeyGenerationProtocol).ChannelParams
 	//check if we have all the same polys ckg_0
 	CheckKeys(ckgp, err)
 	round.Record()
