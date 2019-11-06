@@ -23,7 +23,7 @@ func init(){
 }
 
 func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl1("PING")
+	log.Lvl1("NewCollectiveKeyGen called")
 	p := &CollectiveKeyGenerationProtocol{
 		TreeNodeInstance: n,
 		//todo maybe register some channels here cf unlynx/protocols/key_switching - for feedback
@@ -74,7 +74,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	partial := ckg.AllocateShares()
 	ckg_1 := crsGen.Clock()
 	ckg.GenShare(sk.Get(), ckg_1, partial)
-	log.Lvl1("Im in")
+	log.Lvl1(ckgp.ServerIdentity() , " generated secret key - waiting for aggregation")
 
 	log.Lvl4(ckgp.ServerIdentity(), "Hello")
 	//if parent get share from child and aggregate

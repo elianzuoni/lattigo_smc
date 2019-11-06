@@ -11,6 +11,7 @@ import (
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
+	"time"
 )
 
 type KeyGenerationSim struct {
@@ -45,7 +46,7 @@ func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 }
 
 func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
-	log.Lvl1("B")
+	log.Lvl1("Node setup...")
 	//idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
 	//if idx < 0 {
 	//	log.Fatal("Error node not found")
@@ -56,15 +57,15 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 	});err != nil{
 		return errors.New("Error when registering CollectiveKeyGeneration instance " + err.Error())
 	}
-	log.Lvl1("Node setup")
+	log.Lvl1("Node setup OK")
 
 	return s.SimulationBFTree.Node(config)
 }
 
 func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (onet.ProtocolInstance, error) {
 	//This part allows to injec the data to the node ~ we don't need the messy channels.
+	log.Lvl1("NewKeygen simul")
 	protocol , err := proto.NewCollectiveKeyGeneration(tni)
-	log.Lvl1("HIII")
 
 	if err != nil{
 		return nil, err
@@ -78,7 +79,7 @@ func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (o
 }
 
 func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
-	log.Lvl1("A")
+	log.Lvl1("Run")
 	size := config.Tree.Size()
 
 
@@ -98,8 +99,10 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 		return err
 	}
 
+	log.Lvl1("Waiting on protocol to finish...")
+	<-time.After(time.Second*2)
 	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.\n\tNow comparing all polynomials.")
-	<-ckgp.ProtocolInstance().(*proto.CollectiveKeyGenerationProtocol).ChannelParams
+
 	//check if we have all the same polys ckg_0
 	CheckKeys(ckgp, err)
 	round.Record()
@@ -112,6 +115,17 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 
 }
 
+
+
+
+
+
+
+
+
+
+
+/*****************UTILITY FOR VERIFYING KEYS *****/
 func CheckKeys(ckgp *proto.CollectiveKeyGenerationProtocol, err error) {
 	keys := make([]bfv.PublicKey, len(ckgp.Roster().List))
 	ctx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])

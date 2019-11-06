@@ -1,9 +1,9 @@
 package protocols
 
 import (
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"time"
 )
 
 var test = true
@@ -28,7 +28,7 @@ func init() {
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 	log.Lvl1(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
 	if Test(){
-		log.Lvl1("HI")
+		log.Lvl1("Testing - sending channel parameteres. ")
 		ckgp.ChannelParams <- StructParameters{ckgp.TreeNode(), ckgp.Params}
 	}
 
@@ -38,7 +38,16 @@ func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 
 func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
-	log.Lvl1(ckgp.ServerIdentity() , " Dispatch ", ckgp.IsRoot())
+	log.Lvl1(ckgp.ServerIdentity() , " Dispatching ; is root = ", ckgp.IsRoot())
+	if !Test(){
+		//send a wake up message
+		log.Lvl1("Sending wake up message")
+		err := ckgp.SendToChildren(&bfv.DefaultParams[0])
+		if err != nil{
+			log.ErrFatal(err, "Could not send wake up message ")
+		}
+
+	}
 	ckg_0, e := ckgp.CollectiveKeyGeneration()
 	if e != nil {
 		return e
@@ -50,12 +59,11 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
 	//for the test - send all to root and in the test check that all keys are equals.
 
-		err := ckgp.SendTo(ckgp.Root(), ckg_0.Get()[0])
+	err := ckgp.SendTo(ckgp.Root(), ckg_0.Get()[0])
 
-		if err != nil {
-			log.Lvl4("Error in key sending to root : ", err)
-		}
-		<-time.After(time.Second * 2)
+	if err != nil {
+		log.Lvl4("Error in key sending to root : ", err)
+	}
 
 	log.Lvl1(ckgp.ServerIdentity(), " : im done")
 	ckgp.Done()
