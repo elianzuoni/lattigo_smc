@@ -21,7 +21,7 @@ type RelinearizationKeySimulation struct {
 }
 
 
-const bitDecomp = 64
+const BitDecomp = 64
 
 func init() {
 	onet.SimulationRegister("RelinearizationKeyGeneration", NewRelinearizationKeyGeneration)
@@ -130,7 +130,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	bfvCtx.ContextT().MulCoeffs(expected, expected, ExpectedCoeffs)
 	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
 	contextQ := bfvCtx.ContextQ()
-	bitLog := uint64((60 + (60 % bitDecomp)) / bitDecomp)
+	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
 
 	//Parameters ***************************
 	//Computation for the crp (a)

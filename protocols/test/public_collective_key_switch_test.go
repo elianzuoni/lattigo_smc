@@ -1,4 +1,4 @@
-package protocols
+package test
 
 import (
 	"fmt"
@@ -6,16 +6,17 @@ import (
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"testing"
 	"time"
 )
 
-func TestCollectiveSwitching(t *testing.T) {
+func TestPublicCollectiveSwitching(t *testing.T) {
 	//to do this we need to have some keys already.
 	//for this we can set up with the collective key generation
-	const nbnodes = 3
-	//log.SetDebugVisible(4)
+	const nbnodes = 10
+	log.SetDebugVisible(1)
 	log.Lvl1("Started to test collective key switching locally with nodes amount : ", nbnodes)
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
@@ -29,35 +30,25 @@ func TestCollectiveSwitching(t *testing.T) {
 	}
 	i := 0
 	tmp0 := bfvCtx.ContextQ().NewPoly()
-	tmp1 := bfvCtx.ContextQ().NewPoly()
 	for i < nbnodes {
 		si := tree.Roster.List[i].String()
 		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
 		if err != nil {
 			fmt.Print("error : ", err)
 		}
-		sk1, err := utils.GetSecretKey(bfvCtx, "sk1"+si)
-		if err != nil {
-			fmt.Print("err : ", err)
-		}
 
 		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
-		bfvCtx.ContextQ().Add(tmp1, sk1.Get(), tmp1)
 
 		i++
 	}
-	SkInput := new(bfv.SecretKey)
-	SkOutput := new(bfv.SecretKey)
-	SkInput.Set(tmp0)
-	SkOutput.Set(tmp1)
 
-	keygen := bfvCtx.NewKeyGenerator()
-	PkInput := keygen.NewPublicKey(SkInput)
+	SkInput := new(bfv.SecretKey)
+	SkInput.Set(tmp0)
+	SkOutput := bfvCtx.NewKeyGenerator().NewSecretKey()
+	publickey := bfvCtx.NewKeyGenerator().NewPublicKey(SkOutput)
 
 	ski, _ := SkInput.MarshalBinary()
 	log.Lvl4("At start ski  : ", ski[0:25])
-	sko, _ := SkOutput.MarshalBinary()
-	log.Lvl4("At start  sko  : ", sko[0:25])
 
 	if err != nil {
 		log.Print("Could not load secret keys : ", err)
@@ -66,7 +57,6 @@ func TestCollectiveSwitching(t *testing.T) {
 
 	PlainText := bfvCtx.NewPlaintext()
 	encoder, err := bfvCtx.NewBatchEncoder()
-	log.Print(PlainText.Degree())
 	expected := bfvCtx.NewRandomPlaintextCoeffs()
 
 	err = encoder.EncodeUint(expected, PlainText)
@@ -75,7 +65,7 @@ func TestCollectiveSwitching(t *testing.T) {
 		t.Fail()
 	}
 
-	Encryptor, err := bfvCtx.NewEncryptorFromPk(PkInput)
+	Encryptor, err := bfvCtx.NewEncryptorFromSk(SkInput)
 
 	CipherText, err := Encryptor.EncryptNew(PlainText)
 
@@ -84,35 +74,33 @@ func TestCollectiveSwitching(t *testing.T) {
 		t.Fail()
 	}
 
-	pi, err := local.CreateProtocol("CollectiveKeySwitching", tree)
+	pi, err := local.CreateProtocol("PublicCollectiveKeySwitching", tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
 
-	cksp := pi.(*CollectiveKeySwitchingProtocol)
-	cksp.Params = SwitchingParameters{
-		Params:       bfv.DefaultParams[0],
-		SkInputHash:  "sk0",
-		SkOutputHash: "sk1",
-		Ciphertext:   *CipherText,
-	}
+	pcksp := pi.(*protocols.PublicCollectiveKeySwitchingProtocol)
+	pcksp.Params = bfv.DefaultParams[0]
+	pcksp.Sk = protocols.SK{"sk0"}
+	pcksp.PublicKey = *publickey
+	pcksp.Ciphertext = *CipherText
 
 	//cksp.Params = bfv.DefaultParams[0]
 	log.Lvl4("Starting cksp")
-	err = cksp.Start()
+
+	err = pcksp.Start()
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
 	}
 
-	log.Lvl1("Collective key switching done. Now comparing the cipher texts. ")
-
 	<-time.After(2 * time.Second)
 
-	Decryptor, err := bfvCtx.NewDecryptor(SkOutput)
+	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
 
+	Decryptor, err := bfvCtx.NewDecryptor(SkOutput)
 	i = 0
 	for i < nbnodes {
-		newCipher := (<-cksp.ChannelCiphertext).Ciphertext
+		newCipher := (<-pcksp.ChannelCiphertext).Ciphertext
 		d, _ := newCipher.MarshalBinary()
 		log.Lvl4("Got cipher : ", d[0:25])
 		res := bfvCtx.NewPlaintext()
@@ -125,13 +113,13 @@ func TestCollectiveSwitching(t *testing.T) {
 		if !ok {
 			log.Print("Plaintext do not match ")
 			t.Fail()
-			cksp.Done()
+			pcksp.Done()
 			return
 
 		}
 		i++
 	}
-	cksp.Done()
+	pcksp.Done()
 	log.Lvl1("Got all matches on ciphers.")
 	//check if the resulting cipher text decrypted with SkOutput works
 

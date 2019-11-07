@@ -10,7 +10,7 @@ import (
 func TestSimulationCollectiveKeySwitch(t *testing.T) {
 	log.SetDebugVisible(1)
 
-	simul.Start("key_switch_config.toml")
+	simul.Start("runconfigs/key_switch_config.toml")
 
 	<-time.After(time.Second * 4)
 

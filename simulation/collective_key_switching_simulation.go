@@ -15,29 +15,45 @@ import (
 
 type KeySwitchingSim struct {
 	onet.SimulationBFTree
+	bfv.Ciphertext
+
 }
+var Cipher bfv.Ciphertext
 
 func init() {
 	onet.SimulationRegister("CollectiveKeySwitching", NewSimulationKeySwitching)
+	//todo find cleaner way
+	bfvCtx  , _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	Cipher = *bfvCtx.NewRandomCiphertext(1)
+
 }
 
 func NewSimulationKeySwitching(config string) (onet.Simulation, error) {
 	sim := &KeySwitchingSim{}
-
 	_, err := toml.Decode(config, sim)
 	if err != nil {
 		return nil, err
 	}
+
+	sim.Ciphertext = Cipher
+
+
+
+
+	log.Lvl1("OK")
 
 	return sim, nil
 }
 
 func (s *KeySwitchingSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//setup following the config file.
-	log.Lvl4("Setting up the simulation for key switching")
+	log.Lvl1("Setting up the simulation for key switching")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
+
+
+
 	if err != nil {
 		return nil, err
 	}
@@ -45,14 +61,44 @@ func (s *KeySwitchingSim) Setup(dir string, hosts []string) (*onet.SimulationCon
 }
 
 func (s *KeySwitchingSim) Node(config *onet.SimulationConfig) error {
+	log.Lvl1("Node setup")
+
 	idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
 	if idx < 0 {
 		log.Fatal("Error node not found")
 	}
 
-	log.Lvl4("Node setup")
+	//Inject the parameters.
+	if _, err := config.Server.ProtocolRegister("CollectiveKeySwitchingSimul",func(tni *onet.TreeNodeInstance)(onet.ProtocolInstance,error){
+		return NewKeySwitchingSimul(tni,s)
+	});err != nil{
+		return errors.New("Error when registering Collective Key Switching instance " + err.Error())
+	}
+	log.Lvl1("Node setup OK")
+
+
 
 	return s.SimulationBFTree.Node(config)
+}
+
+func NewKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (onet.ProtocolInstance, error) {
+	log.Lvl1("NewKeySwitch simul")
+	protocol , err := proto.NewCollectiveKeySwitching(tni)
+
+	if err != nil{
+		return nil, err
+	}
+
+	//cast
+	colkeyswitch := protocol.(*proto.CollectiveKeySwitchingProtocol)
+	colkeyswitch.Params = proto.SwitchingParameters{
+		Params:       bfv.DefaultParams[0],
+		SkInputHash:  "sk0",
+		SkOutputHash: "sk1",
+		Ciphertext:  sim.Ciphertext, //todo How to inject the cipher text...
+	}
+
+	return colkeyswitch, nil
 }
 
 func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
@@ -67,6 +113,25 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 		log.Print("Could not load bfv ctx ", err)
 		return err
 	}
+
+
+	//TODO what is the service ID ?
+	pi, err := config.Overlay.CreateProtocol("CollectiveKeySwitchingSimul", config.Tree, onet.NilServiceID)
+	if err != nil {
+		log.Fatal("Couldn't create Protocol CollectiveKeySwitchingSimul:", err)
+	}
+
+	cksp := pi.(*proto.CollectiveKeySwitchingProtocol)
+
+
+	log.Lvl4("Starting collective key switching protocol")
+	err = cksp.Start()
+
+	log.Lvl4("Collective key switch done for  ", len(cksp.Roster().List), " nodes.\n\tNow comparing verifying ciphers.")
+	<-time.After(5 * time.Second)
+
+
+	//Now we can setup our keys..
 
 	i := 0
 	tmp0 := bfvCtx.ContextQ().NewPoly()
@@ -92,6 +157,80 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	SkInput.Set(tmp0)
 	SkOutput.Set(tmp1)
 
+
+	encoder, err := bfvCtx.NewBatchEncoder()
+	if err != nil{
+		log.Error("Could not start encoder : ", err)
+		return err
+	}
+
+
+
+
+	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
+	if err != nil{
+		log.Error(err)
+		return err
+	}
+
+	//expected
+	ReferencePlaintext := DecryptorInput.DecryptNew(&s.Ciphertext)
+	d, _ := s.Ciphertext.MarshalBinary()
+	log.Lvl1("REFERENCE CIPHER " , d[0:25])
+	expected := encoder.DecodeUint(ReferencePlaintext)
+
+	DecryptorOutput, err := bfvCtx.NewDecryptor(SkOutput)
+	if err != nil{
+		log.Error(err)
+		return err
+	}
+
+
+
+
+
+	//check if all ciphers are ok
+	defer cksp.Done()
+
+	i = 0
+	for i < size {
+		newCipher := (<-cksp.ChannelCiphertext).Ciphertext
+		d, _ := newCipher.MarshalBinary()
+		log.Lvl4("Got cipher : ", d[0:25])
+		res := bfvCtx.NewPlaintext()
+		DecryptorOutput.Decrypt(&newCipher, res)
+
+		log.Lvl1("Comparing a cipher..")
+		decoded := encoder.DecodeUint(res)
+		ok := utils.Equalslice(decoded, expected)
+
+		if !ok {
+			cksp.Done()
+			return errors.New("Plaintext do not match")
+
+		}
+		i++
+	}
+	cksp.Done()
+	log.Lvl1("Got all matches on ciphers.")
+
+
+	round.Record()
+	if err != nil {
+		log.Fatal("Could not start the tree : ", err)
+	}
+
+	log.Lvl4("finished")
+	return nil
+
+}
+
+
+
+/*
+
+
+
 	keygen := bfvCtx.NewKeyGenerator()
 	PkInput := keygen.NewPublicKey(SkInput)
 
@@ -115,63 +254,5 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	CipherText, err := Encryptor.EncryptNew(PlainText)
 
-	//TODO what is the service ID ?
-	pi, err := config.Overlay.StartProtocol("CollectiveKeySwitching", config.Tree, onet.NilServiceID)
-	if err != nil {
-		log.Fatal("Couldn't create new node:", err)
-	}
 
-	cksp := pi.(*proto.CollectiveKeySwitchingProtocol)
-	cksp.Params = proto.SwitchingParameters{
-		Params:       bfv.DefaultParams[0],
-		SkInputHash:  "sk0",
-		SkOutputHash: "sk1",
-		Ciphertext:   *CipherText,
-	}
-
-	log.Lvl4("Starting collective key switching protocol")
-	//err = cksp.Start()
-
-	log.Lvl4("Collective key switch done for  ", len(cksp.Roster().List), " nodes.\n\tNow comparing verifying ciphers.")
-	<-time.After(5 * time.Second)
-
-	//check if all ciphers are ok
-	if proto.Test() {
-		defer cksp.Done()
-		Decryptor, err := bfvCtx.NewDecryptor(SkOutput)
-		if err != nil {
-			return err
-		}
-
-		i = 0
-		for i < size {
-			newCipher := (<-cksp.ChannelCiphertext).Ciphertext
-			d, _ := newCipher.MarshalBinary()
-			log.Lvl4("Got cipher : ", d[0:25])
-			res := bfvCtx.NewPlaintext()
-			Decryptor.Decrypt(&newCipher, res)
-
-			log.Lvl1("Comparing a cipher..")
-			decoded := encoder.DecodeUint(res)
-			ok := utils.Equalslice(decoded, expected)
-
-			if !ok {
-				cksp.Done()
-				return errors.New("Plaintext do not match")
-
-			}
-			i++
-		}
-		cksp.Done()
-		log.Lvl1("Got all matches on ciphers.")
-	}
-
-	round.Record()
-	if err != nil {
-		log.Fatal("Could not start the tree : ", err)
-	}
-
-	log.Lvl4("finished")
-	return nil
-
-}
+*/

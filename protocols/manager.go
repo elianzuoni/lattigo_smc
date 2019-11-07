@@ -26,11 +26,6 @@ func init() {
 /*****************COLLECTIVE KEY GENERATION ONET HANDLERS *******************/
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 	log.Lvl1(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
-	//if Test(){
-	//	log.Lvl1("Testing - sending channel parameteres. ")
-	//	ckgp.ChannelParams <- StructParameters{ckgp.TreeNode(), ckgp.Params}
-	//}
-
 
 	return nil
 }
@@ -81,7 +76,7 @@ func (cks *CollectiveKeySwitchingProtocol) Start() error {
 	log.Lvl4(cks.ServerIdentity(), "Starting collective key switching for key : ", cks.Params)
 	//find a way to take advantage of the unmarshalin
 
-	cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(), SwitchingParameters{cks.Params.Params, cks.Params.SkInputHash, cks.Params.SkOutputHash, cks.Params.Ciphertext}}
+	//cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(), SwitchingParameters{cks.Params.Params, cks.Params.SkInputHash, cks.Params.SkOutputHash, cks.Params.Ciphertext}}
 
 	return nil
 
@@ -89,13 +84,21 @@ func (cks *CollectiveKeySwitchingProtocol) Start() error {
 
 func (cks *CollectiveKeySwitchingProtocol) Dispatch() error {
 
-	//start the key switching
+	//Wake up the nodes
+	log.Lvl1("Sending wake up message")
+	err := cks.SendToChildren(&Start{})
+	if err != nil{
+		log.ErrFatal(err, "Could not send wake up message ")
+	}
 
+	//start the key switching
+	d , _ := cks.Params.Ciphertext.MarshalBinary()
+	log.Lvl1("ORIGINAL CIPHER :" , d[0:25])
 	res, err := cks.CollectiveKeySwitching()
 	if err != nil {
 		return err
 	}
-	d, _ := res.MarshalBinary()
+	d, _ = res.MarshalBinary()
 	log.Lvl4(cks.ServerIdentity(), " : Resulting ciphertext - ", d[0:25])
 	//send it back when testing to check...
 

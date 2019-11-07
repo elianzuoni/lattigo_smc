@@ -1,10 +1,11 @@
-package protocols
+package test
 
 import (
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"testing"
 	"time"
@@ -16,7 +17,7 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 
 	//register the test protocol
 	if _,err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil{
-		log.Error("Could not start CollectiveKeyGeneratioTest : ", err)
+		log.Error("Could not start CollectiveKeyGenerationTest : ", err)
 		t.Fail()
 
 	}
@@ -32,7 +33,7 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 		t.Fatal("Couldn't create new node:", err)
 	}
 
-	ckgp := pi.(*CollectiveKeyGenerationProtocol)
+	ckgp := pi.(*protocols.CollectiveKeyGenerationProtocol)
 	//ckgp.Params = bfv.DefaultParams[0]
 	log.Lvl1("Starting ckgp")
 	err = ckgp.Start()
@@ -48,21 +49,17 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	CheckKeys(ckgp.List(), err, t)
 
 	log.Lvl1("Success")
-	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
-			Will be better once we ca have all the suites of protocol rolling out. We can know when to stop this protocol.
-	Ideally id like to call this vvv so it can all shutdown outside of the collectivekeygen
-	//local.CloseAll()
-	*/
+
 
 }
 
-func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (res onet.ProtocolInstance, e error) {
+func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	log.Lvl1("PING")
-	proto, err := NewCollectiveKeyGeneration(tni)
+	proto, err := protocols.NewCollectiveKeyGeneration(tni)
 	if err != nil{
 		return nil, err
 	}
-	instance := proto.(*CollectiveKeyGenerationProtocol)
+	instance := proto.(*protocols.CollectiveKeyGenerationProtocol)
 	instance.Params = bfv.DefaultParams[0]
 	return instance, nil
 }
@@ -103,7 +100,7 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 		t.Fatal("Couldn't create new node:", err)
 	}
 
-	ckgp := pi.(*CollectiveKeyGenerationProtocol)
+	ckgp := pi.(*protocols.CollectiveKeyGenerationProtocol)
 	ckgp.Params = bfv.DefaultParams[0]
 	log.Lvl1("Starting ckgp")
 	err = ckgp.Start()

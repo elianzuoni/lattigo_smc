@@ -1,4 +1,4 @@
-package protocols
+package test
 
 import (
 	"github.com/ldsec/lattigo/bfv"
@@ -7,10 +7,14 @@ import (
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"testing"
 	"time"
 )
+
+const BitDecomp = 64
+
 
 func TestNewRelinearizationKey(t *testing.T) {
 	//first generate a secret key and from shards and the resulting public key
@@ -77,7 +81,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	bfvCtx.ContextT().MulCoeffs(expected, expected, ExpectedCoeffs)
 	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
 	contextQ := bfvCtx.ContextQ()
-	bitLog := uint64((60 + (60 % bitDecomp)) / bitDecomp)
+	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
 
 	//Parameters ***************************
 	//Computation for the crp (a)
@@ -106,10 +110,10 @@ func TestNewRelinearizationKey(t *testing.T) {
 	}
 
 
-	RelinProtocol := pi.(*RelinearizationKeyProtocol)
+	RelinProtocol := pi.(*protocols.RelinearizationKeyProtocol)
 	RelinProtocol.Params = bfv.DefaultParams[0]
-	RelinProtocol.Sk = SK{"sk0"}
-	RelinProtocol.Crp = CRP{A:crp}
+	RelinProtocol.Sk = protocols.SK{"sk0"}
+	RelinProtocol.Crp = protocols.CRP{A: crp}
 	<- time.After(2*time.Second)
 
 	//Now we can start the protocol
@@ -125,11 +129,11 @@ func TestNewRelinearizationKey(t *testing.T) {
 	array := make([]bfv.EvaluationKey, nbnodes)
 	//check if the keys are the same for all parties
 	for i := 0 ; i < nbnodes; i++{
-		relkey := (<-RelinProtocol.ChannelEvalKey).EvaluationKey
+		relkey := new(bfv.EvaluationKey)
 		data, _ := relkey.MarshalBinary()
 		log.Lvl3("Key starting with : " , data[0:25])
 		log.Lvl3("Got one eval key...")
-		array[i] = relkey
+		array[i] = *relkey
 	}
 
 	err = utils.CompareEvalKeys(array)

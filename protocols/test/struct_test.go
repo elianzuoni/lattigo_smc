@@ -1,9 +1,10 @@
-package protocols
+package test
 
 import (
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
+	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"testing"
 )
@@ -20,16 +21,16 @@ func TestMarshallingSwitchingParameters(t *testing.T) {
 	}
 	//TODO check degree
 	cipher := bfvCtx.NewRandomCiphertext(4)
-	sp := SwitchingParameters{
-		Params:       bfv.DefaultParams[0],
-		SkInputHash:  "123456",
-		SkOutputHash: "hjkdsaufdsijfsoidajfoidscnmijdsahfiudsojfdsaihfiudsafdsij",
-		Ciphertext:   *cipher,
+	sp := protocols.SwitchingParameters{
+		Params:               bfv.DefaultParams[0],
+		SkInputHash:          "123456",
+		SkOutputHash:         "hjkdsaufdsijfsoidajfoidscnmijdsahfiudsojfdsaihfiudsafdsij",
+		Ciphertext: *cipher,
 	}
 
 	data, err := sp.MarshalBinary()
 
-	sp1 := new(SwitchingParameters)
+	sp1 := new(protocols.SwitchingParameters)
 	err = sp1.UnmarshalBinary(data)
 
 	if err != nil {

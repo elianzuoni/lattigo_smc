@@ -19,7 +19,7 @@ func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance,
 		TreeNodeInstance: n,
 	}
 
-	if e := p.RegisterChannels(&p.ChannelParams, &p.ChannelCKSShare, &p.ChannelCiphertext); e != nil {
+	if e := p.RegisterChannels(&p.ChannelParams, &p.ChannelCKSShare, &p.ChannelCiphertext,&p.ChannelStart); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 
@@ -34,13 +34,13 @@ input : skInput,skOuput - the key under what ct is encrypted and skOutput the ke
 */
 func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Ciphertext, error) {
 
-	cks.Params = (<-cks.ChannelParams).SwitchingParameters
-
-	err := cks.SendToChildren(&SwitchingParameters{cks.Params.Params, cks.Params.SkInputHash, cks.Params.SkOutputHash, cks.Params.Ciphertext})
-	if err != nil {
-		log.Lvl4("Error : ", err)
-		return &bfv.Ciphertext{}, err
-	}
+	//cks.Params = (<-cks.ChannelParams).SwitchingParameters
+	//
+	//err := cks.SendToChildren(&SwitchingParameters{cks.Params.Params, cks.Params.SkInputHash, cks.Params.SkOutputHash, cks.Params.Ciphertext})
+	//if err != nil {
+	//	log.Lvl4("Error : ", err)
+	//	return &bfv.Ciphertext{}, err
+	//}
 
 	bfvContext, err := bfv.NewBfvContextWithParam(&cks.Params.Params)
 	SkInput, err := utils.GetSecretKey(bfvContext, cks.Params.SkInputHash+cks.ServerIdentity().String())

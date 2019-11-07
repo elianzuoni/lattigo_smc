@@ -28,7 +28,7 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 		//todo maybe register some channels here cf unlynx/protocols/key_switching - for feedback
 	}
 
-	if e := p.RegisterChannels(&p.ChannelPublicKeyShares, &p.ChannelPublicKey,&p.ChanneStart); e != nil {
+	if e := p.RegisterChannels(&p.ChannelPublicKeyShares, &p.ChannelPublicKey,&p.ChannelStart); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 

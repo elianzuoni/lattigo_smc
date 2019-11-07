@@ -21,7 +21,7 @@ func NewRelinearizationKey(n *onet.TreeNodeInstance) (instance onet.ProtocolInst
 	return p, nil
 }
 
-const bitDecomp = 64
+const BitDecomp = 64
 func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, error){
 	//get the parameters..
 	log.Lvl1(rlp.ServerIdentity(), " : starting relin key ")
@@ -67,7 +67,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	}
 
 
-	rkg := dbfv.NewEkgProtocol(bfvCtx, bitDecomp)
+	rkg := dbfv.NewEkgProtocol(bfvCtx, BitDecomp)
 	u , _ := rkg.NewEphemeralKey(1/3.0)
 	sk , err := utils.GetSecretKey(bfvCtx,rlp.Sk.SecretKey + rlp.ServerIdentity().String())
 	if err != nil{

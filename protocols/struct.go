@@ -30,7 +30,7 @@ type CollectiveKeyGenerationProtocol struct {
 	ChannelPublicKeyShares chan StructPublicKeyShare
 	ChannelPublicKey            chan StructPublicKey
 	//Channel to get the wake up
-	ChanneStart chan StructStart
+	ChannelStart chan StructStart
 
 }
 
@@ -39,9 +39,14 @@ type CollectiveKeySwitchingProtocol struct {
 
 	Params SwitchingParameters
 
+
 	ChannelParams     chan StructSwitchParameters
 	ChannelCiphertext chan StructCiphertext
 	ChannelCKSShare   chan StructCKSShare
+
+	//Channel to wake up
+	ChannelStart chan StructStart
+
 }
 
 type PublicCollectiveKeySwitchingProtocol struct {

@@ -14,7 +14,7 @@ func TestSimulationCollectiveKeyGen(t *testing.T) {
 	//turn off test variable
 	protocols.TurnOffTest()
 
-	simul.Start("key_gen_config.toml")
+	simul.Start("runconfigs/key_gen_config.toml")
 
 	<-time.After(time.Second * 5)
 
