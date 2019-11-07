@@ -12,20 +12,28 @@ import (
 
 func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	nbnodes := 3
-	//log.SetDebugVisible(4)
-	log.Lvl4("Started to test key generation on a simulation with nodes amount : ", nbnodes)
+	log.SetDebugVisible(1)
+
+	//register the test protocol
+	if _,err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil{
+		log.Error("Could not start CollectiveKeyGeneratioTest : ", err)
+		t.Fail()
+
+	}
+
+	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
 
 	_, _, tree := local.GenTree(nbnodes, true)
 
-	pi, err := local.CreateProtocol("CollectiveKeyGeneration", tree)
+	pi, err := local.CreateProtocol("CollectiveKeyGenerationTest", tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
 
 	ckgp := pi.(*CollectiveKeyGenerationProtocol)
-	ckgp.Params = bfv.DefaultParams[0]
+	//ckgp.Params = bfv.DefaultParams[0]
 	log.Lvl1("Starting ckgp")
 	err = ckgp.Start()
 	if err != nil {
@@ -46,6 +54,17 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	//local.CloseAll()
 	*/
 
+}
+
+func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (res onet.ProtocolInstance, e error) {
+	log.Lvl1("PING")
+	proto, err := NewCollectiveKeyGeneration(tni)
+	if err != nil{
+		return nil, err
+	}
+	instance := proto.(*CollectiveKeyGenerationProtocol)
+	instance.Params = bfv.DefaultParams[0]
+	return instance, nil
 }
 
 func CheckKeys(tree []*onet.TreeNode, err error, t *testing.T) {

@@ -22,11 +22,16 @@ import (
 type CollectiveKeyGenerationProtocol struct {
 	*onet.TreeNodeInstance
 
+	//Parameters of the protocol
 	Params bfv.Parameters
 
-	ChannelParams          chan StructParameters
+
+	//Channel to send the public key shares or the key at the end.
 	ChannelPublicKeyShares chan StructPublicKeyShare
-	ChannelRing            chan StructRing
+	ChannelPublicKey            chan StructPublicKey
+	//Channel to get the wake up
+	ChanneStart chan StructStart
+
 }
 
 type CollectiveKeySwitchingProtocol struct {
@@ -54,6 +59,8 @@ type PublicCollectiveKeySwitchingProtocol struct {
 	ChannelSk         chan StructSk
 	ChannelCiphertext chan StructCiphertext
 	ChannelPCKS       chan StructPCKS
+
+
 }
 
 type RelinearizationKeyProtocol struct {
@@ -70,7 +77,7 @@ type RelinearizationKeyProtocol struct {
 	//These are used for testing.
 	//In real protocol use Node() from onet to propagate params
 	ChannelCrp chan StructCrp
-	//ChannelW chan StructRing
+	//ChannelW chan StructPublicKey
 	ChannelSk chan StructSk
 	ChannelParams chan StructParameters
 	ChannelEvalKey chan StructEvalKey
@@ -157,13 +164,18 @@ type StructPublicKeyShare struct {
 	dbfv.CKGShare
 }
 
-type StructRing struct {
-	*onet.TreeNode
-	ring.Poly
-}
 
 //Wrapper around crp
 type CRP struct{
 	A [][]*ring.Poly
+}
+
+
+//This message is used to wake up the children
+type Start struct{}
+
+type StructStart struct{
+	*onet.TreeNode
+	Start
 }
 
