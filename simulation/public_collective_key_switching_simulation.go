@@ -14,10 +14,23 @@ import (
 
 type PublicKeySwitchingSim struct {
 	onet.SimulationBFTree
+	bfv.Ciphertext
+	bfv.PublicKey
+	bfv.SecretKey
 }
 
+var CipherPublic *bfv.Ciphertext
+var PublicKey *bfv.PublicKey
+var SecretKey *bfv.SecretKey
+
 func init() {
-	onet.SimulationRegister("PublicCollectiveKeySwitching", NewSimulationPublicKeySwitching)
+	onet.SimulationRegister("CollectivePublicKeySwitching", NewSimulationPublicKeySwitching)
+	//Setting up params.
+	bfvCtx , _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	CipherPublic = bfvCtx.NewRandomCiphertext(1)
+	keygen := bfvCtx.NewKeyGenerator()
+	SecretKey = keygen.NewSecretKey()
+	PublicKey = keygen.NewPublicKey(SecretKey)
 }
 
 func NewSimulationPublicKeySwitching(config string) (onet.Simulation, error) {
@@ -27,7 +40,10 @@ func NewSimulationPublicKeySwitching(config string) (onet.Simulation, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	//Give the params.
+	sim.Ciphertext = *CipherPublic
+	sim.PublicKey = *PublicKey
+	sim.SecretKey = *SecretKey
 	return sim, nil
 }
 
@@ -49,7 +65,15 @@ func (s *PublicKeySwitchingSim) Node(config *onet.SimulationConfig) error {
 		log.Fatal("Error node not found")
 	}
 
+	//Inject parameters
 	log.Lvl4("Node setup")
+	if _, err := config.Server.ProtocolRegister("CollectivePublicKeySwitchingSimul",func(tni *onet.TreeNodeInstance)(onet.ProtocolInstance,error){
+		return NewPublicKeySwitchingSimul(tni,s)
+	});err != nil{
+		return errors.New("Error when registering Collective Key Switching instance " + err.Error())
+	}
+
+	log.Lvl4("Node setup ok")
 
 	return s.SimulationBFTree.Node(config)
 }
@@ -124,13 +148,13 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	log.Lvl1("Starting cksp")
 
-	pi, err := config.Overlay.StartProtocol("PublicCollectiveKeySwitching", config.Tree, onet.NilServiceID)
+	pi, err := config.Overlay.StartProtocol("CollectivePublicKeySwitching", config.Tree, onet.NilServiceID)
 	if err != nil {
 		log.Fatal("Couldn't create new node:", err)
 		return err
 	}
 
-	pcksp := pi.(*proto.PublicCollectiveKeySwitchingProtocol)
+	pcksp := pi.(*proto.CollectivePublicKeySwitchingProtocol)
 	pcksp.Params = bfv.DefaultParams[0]
 	pcksp.Sk = proto.SK{SecretKey: "sk0"}
 	pcksp.PublicKey = *publickey
@@ -183,5 +207,25 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	log.Lvl4("finished")
 	return nil
+
+}
+
+
+func NewPublicKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *PublicKeySwitchingSim) (onet.ProtocolInstance, error) {
+	//This part allows to injec the data to the node ~ we don't need the messy channels.
+	log.Lvl1("New pubkey switch simul")
+	protocol , err := proto.NewCollectivePublicKeySwitching(tni)
+
+	if err != nil{
+		return nil, err
+	}
+
+	//cast
+	keygen := protocol.(*proto.CollectivePublicKeySwitchingProtocol)
+	keygen.Params = bfv.DefaultParams[0]
+	keygen.Sk.SecretKey = "sk0"
+	keygen.Ciphertext = sim.Ciphertext
+	keygen.PublicKey = sim.PublicKey
+	return keygen, nil
 
 }

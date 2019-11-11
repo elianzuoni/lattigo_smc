@@ -11,7 +11,7 @@ import (
 func TestSimulationRelinearizationKeyGen(t *testing.T) {
 	log.SetDebugVisible(1)
 
-	simul.Start("relin_key_config.toml")
+	simul.Start("runconfigs/relin_key_config.toml")
 
 	<-time.After(time.Second * 5)
 

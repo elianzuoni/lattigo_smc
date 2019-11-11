@@ -17,7 +17,7 @@ func TurnOffTest(){
 
 func init() {
 	_, _ = onet.GlobalProtocolRegister("CollectiveKeySwitching", NewCollectiveKeySwitching)
-	_, _ = onet.GlobalProtocolRegister("PublicCollectiveKeySwitching", NewPublicCollectiveKeySwitching)
+	_, _ = onet.GlobalProtocolRegister("CollectivePublicKeySwitching", NewCollectivePublicKeySwitching)
 	_,_ = onet.GlobalProtocolRegister("RelinearizationKeyProtocol",NewRelinearizationKey)
 }
 
@@ -121,41 +121,30 @@ func (cks *CollectiveKeySwitchingProtocol) Shutdown() error {
 
 /********* PUBLIC KEY SWITCHING ONET HANDLERS ********************/
 
-func (pcks *PublicCollectiveKeySwitchingProtocol) Start() error {
+func (pcks *CollectivePublicKeySwitchingProtocol) Start() error {
 	log.Lvl1(pcks.ServerIdentity(), " starting public collective key switching with parameters : ", pcks.Params)
 
-	pcks.ChannelParams <- StructParameters{
-		TreeNode: pcks.TreeNode(),
-		Params:   pcks.Params,
-	}
-
-	pcks.ChannelCiphertext <- StructCiphertext{
-		TreeNode:   pcks.TreeNode(),
-		Ciphertext: pcks.Ciphertext,
-	}
-	pcks.ChannelPublicKey <- StructPublicKey{
-		TreeNode:  pcks.TreeNode(),
-		PublicKey: pcks.PublicKey,
-	}
-	pcks.ChannelSk <- StructSk{
-		TreeNode: pcks.TreeNode(),
-		SK:       pcks.Sk,
-	}
 
 	return nil
 
 }
 
-func (pcks *PublicCollectiveKeySwitchingProtocol) Dispatch() error {
+func (pcks *CollectivePublicKeySwitchingProtocol) Dispatch() error {
 
+	err := pcks.SendToChildren(&Start{})
+	if err != nil{
+		log.Error("Could not send start message  : ", err)
+		return err
+	}
 	log.Lvl1("Dispatching ! ")
-	res, err := pcks.PublicCollectiveKeySwitching()
+	res, err := pcks.CollectivePublicKeySwitching()
 
 	if err != nil {
 		log.Fatal("Error : ", err)
 	}
 
 	if Test() {
+		//If test send to root again so we can check at the test program
 		_ = pcks.SendTo(pcks.Root(), res)
 	}
 
@@ -167,7 +156,7 @@ func (pcks *PublicCollectiveKeySwitchingProtocol) Dispatch() error {
 
 }
 
-func (pcks *PublicCollectiveKeySwitchingProtocol) Shutdown() error {
+func (pcks *CollectivePublicKeySwitchingProtocol) Shutdown() error {
 	return pcks.TreeNodeInstance.Shutdown()
 }
 

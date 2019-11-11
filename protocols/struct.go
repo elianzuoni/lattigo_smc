@@ -49,7 +49,7 @@ type CollectiveKeySwitchingProtocol struct {
 
 }
 
-type PublicCollectiveKeySwitchingProtocol struct {
+type CollectivePublicKeySwitchingProtocol struct {
 	*onet.TreeNodeInstance
 
 	Params bfv.Parameters
@@ -58,14 +58,16 @@ type PublicCollectiveKeySwitchingProtocol struct {
 	Sk SK
 	bfv.Ciphertext
 
-	ChannelParams chan StructParameters
+	//public parameters
+	//ChannelParams chan StructParameters
+	//ChannelPublicKey  chan StructPublicKey
+	//ChannelSk         chan StructSk
+	//
 
-	ChannelPublicKey  chan StructPublicKey
-	ChannelSk         chan StructSk
 	ChannelCiphertext chan StructCiphertext
 	ChannelPCKS       chan StructPCKS
 
-
+	ChannelStart chan StructStart
 }
 
 type RelinearizationKeyProtocol struct {

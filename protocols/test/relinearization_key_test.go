@@ -129,11 +129,11 @@ func TestNewRelinearizationKey(t *testing.T) {
 	array := make([]bfv.EvaluationKey, nbnodes)
 	//check if the keys are the same for all parties
 	for i := 0 ; i < nbnodes; i++{
-		relkey := new(bfv.EvaluationKey)
+		relkey := (<-RelinProtocol.ChannelEvalKey).EvaluationKey
 		data, _ := relkey.MarshalBinary()
 		log.Lvl3("Key starting with : " , data[0:25])
 		log.Lvl3("Got one eval key...")
-		array[i] = *relkey
+		array[i] = relkey
 	}
 
 	err = utils.CompareEvalKeys(array)

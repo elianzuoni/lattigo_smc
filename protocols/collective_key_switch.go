@@ -34,14 +34,6 @@ input : skInput,skOuput - the key under what ct is encrypted and skOutput the ke
 */
 func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Ciphertext, error) {
 
-	//cks.Params = (<-cks.ChannelParams).SwitchingParameters
-	//
-	//err := cks.SendToChildren(&SwitchingParameters{cks.Params.Params, cks.Params.SkInputHash, cks.Params.SkOutputHash, cks.Params.Ciphertext})
-	//if err != nil {
-	//	log.Lvl4("Error : ", err)
-	//	return &bfv.Ciphertext{}, err
-	//}
-
 	bfvContext, err := bfv.NewBfvContextWithParam(&cks.Params.Params)
 	SkInput, err := utils.GetSecretKey(bfvContext, cks.Params.SkInputHash+cks.ServerIdentity().String())
 

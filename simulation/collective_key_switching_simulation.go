@@ -16,7 +16,6 @@ import (
 type KeySwitchingSim struct {
 	onet.SimulationBFTree
 	bfv.Ciphertext
-
 }
 var Cipher bfv.Ciphertext
 
@@ -184,11 +183,6 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 		log.Error(err)
 		return err
 	}
-
-
-
-
-
 	//check if all ciphers are ok
 	defer cksp.Done()
 
@@ -224,35 +218,3 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	return nil
 
 }
-
-
-
-/*
-
-
-
-	keygen := bfvCtx.NewKeyGenerator()
-	PkInput := keygen.NewPublicKey(SkInput)
-
-	ski, _ := SkInput.MarshalBinary()
-	log.Lvl4("At start ski  : ", ski[0:25])
-	sko, _ := SkOutput.MarshalBinary()
-	log.Lvl4("At start  sko  : ", sko[0:25])
-
-	PlainText := bfvCtx.NewPlaintext()
-	encoder, err := bfvCtx.NewBatchEncoder()
-	log.Print(PlainText.Degree())
-	expected := bfvCtx.NewRandomPlaintextCoeffs()
-
-	err = encoder.EncodeUint(expected, PlainText)
-	if err != nil {
-		log.Print("Could not encode plaintext : ", err)
-		return err
-	}
-
-	Encryptor, err := bfvCtx.NewEncryptorFromPk(PkInput)
-
-	CipherText, err := Encryptor.EncryptNew(PlainText)
-
-
-*/
