@@ -1,3 +1,13 @@
+// Collective key generation : the nodes collaborate to create a public key given their secret key shard.
+// This key should then be used to encrypt the plain texts
+// The protocol has the following steps :
+// 0. Set-up : generate ( or load ) secret key, generate a random p1
+// 1. Generate their partial key share
+// 2. Aggregate the partial key share from the children
+// 3. Send the result of aggregation to the parent ( note the leaf will just send the partial key share and the root nothing )
+// 4. The root generates the public key and sends it to its children
+// 5. Get the public key from the parents and forward to the children
+
 package protocols
 
 import (
@@ -10,6 +20,7 @@ import (
 	"lattigo-smc/utils"
 )
 
+//CollectiveKeyGenerationProtocolName name of protocol for onet
 const CollectiveKeyGenerationProtocolName = "CollectiveKeyGeneration"
 
 func init() {
@@ -22,6 +33,7 @@ func init() {
 
 }
 
+//NewCollectiveKeyGeneration is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
 func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	log.Lvl1("NewCollectiveKeyGen called")
 	p := &CollectiveKeyGenerationProtocol{
@@ -36,6 +48,7 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 	return p, nil
 }
 
+//CollectiveKeyGeneration runs the protocol. Returns the publickey and an error if there is any
 func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.PublicKey, error) {
 
 	//Set up the parameters - context and the crp
@@ -43,9 +56,13 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	if err != nil {
 		return bfv.PublicKey{}, fmt.Errorf("recieved invalid parameter set")
 	}
+
 	//todo have a different seed at each generation.
 	//todo ask what new crp is !
+	//Generate random ckg_1
 	crsGen, _ := dbfv.NewCRPGenerator([]byte{'l', 'a', 't', 't', 'i', 'g', 'o'}, bfvCtx.ContextQ())
+	ckg1 := crsGen.Clock()
+
 	ckg := dbfv.NewCKGProtocol(bfvCtx)
 	//get si
 	sk, err := utils.GetSecretKey(bfvCtx, ckgp.ServerIdentity().String())
@@ -53,13 +70,9 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 		return bfv.PublicKey{}, fmt.Errorf("error when loading the secret key: %s", err)
 	}
 
-	b, err := sk.MarshalBinary()
-	log.Lvl4(ckgp.ServerIdentity(), " my secret key : ", b)
-
 	//generate p0,i
 	partial := ckg.AllocateShares()
-	ckg_1 := crsGen.Clock()
-	ckg.GenShare(sk.Get(), ckg_1, partial)
+	ckg.GenShare(sk.Get(), ckg1, partial)
 	log.Lvl1(ckgp.ServerIdentity(), " generated secret key - waiting for aggregation")
 
 	//if parent get share from child and aggregate
@@ -67,7 +80,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 		for i := 0; i < len(ckgp.Children()); i++ {
 			log.Lvl4(ckgp.ServerIdentity(), "waiting..", i)
 			child := <-ckgp.ChannelPublicKeyShares
-			log.Lvl4("Got from child : ", child.CKGShare)
+			log.Lvl1(ckgp.ServerIdentity(), "Got from shared from child ")
 			ckg.AggregateShares(child.CKGShare, partial, partial)
 
 		}
@@ -85,9 +98,9 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 
 	pubkey := bfvCtx.NewPublicKey()
 	if ckgp.IsRoot() {
-		ckg.GenPublicKey(partial, ckg_1, pubkey) // if node is root, the combined key is the final collective key
+		ckg.GenPublicKey(partial, ckg1, pubkey) // if node is root, the combined key is the final collective key
 	} else {
-		coeffs := (<-ckgp.ChannelPublicKey)
+		coeffs := <-ckgp.ChannelPublicKey
 		pubkey.Set(coeffs.Get())
 	}
 

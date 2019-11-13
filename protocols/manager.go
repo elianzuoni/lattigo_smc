@@ -12,6 +12,8 @@ var test = true
 func Test() bool {
 	return test
 }
+
+//TurnOffTest used to turn off the test in a call. Can be used when testing
 func TurnOffTest() {
 	test = false
 }
@@ -23,12 +25,15 @@ func init() {
 }
 
 /*****************COLLECTIVE KEY GENERATION ONET HANDLERS *******************/
+
+//Start starts the protocol only at root
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 	log.Lvl1(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
 
 	return nil
 }
 
+//Dispatch is called at each node to then run the protocol
 func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
 	log.Lvl1(ckgp.ServerIdentity(), " Dispatching ; is root = ", ckgp.IsRoot())
@@ -40,37 +45,33 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 		log.ErrFatal(err, "Could not send wake up message ")
 	}
 
-	ckg_0, e := ckgp.CollectiveKeyGeneration()
+	PublicKey, e := ckgp.CollectiveKeyGeneration()
 	if e != nil {
 		return e
 	}
 
 	log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
-	xs := ckg_0.Get()
-	log.Lvl1(ckgp.ServerIdentity(), " Got key :", xs[0], " \n. ", xs[1])
 
 	//for the test - send all to root and in the test check that all keys are equals.
 
-	err = ckgp.SendTo(ckgp.Root(), ckg_0.Get()[0])
+	err = ckgp.SendTo(ckgp.Root(), PublicKey.Get()[0])
 
 	if err != nil {
 		log.Lvl4("Error in key sending to root : ", err)
 	}
 
 	log.Lvl1(ckgp.ServerIdentity(), " : im done")
-	ckgp.Done()
+	if Test() && !ckgp.IsRoot() {
+		ckgp.Done()
+
+	}
 
 	return nil
 }
 
-func (ckgp *CollectiveKeyGenerationProtocol) Shutdown() error {
-	//log.Lvl4(ckgp.ServerIdentity(), ": shutting down.")
-
-	return ckgp.TreeNodeInstance.Shutdown()
-}
-
 /** *****************KEY SWITCHING ONET HANDLERS ******************* **/
 
+//Start starts the protocol only at root
 func (cks *CollectiveKeySwitchingProtocol) Start() error {
 	log.Lvl4(cks.ServerIdentity(), "Starting collective key switching for key : ", cks.Params)
 	//find a way to take advantage of the unmarshalin
@@ -81,6 +82,7 @@ func (cks *CollectiveKeySwitchingProtocol) Start() error {
 
 }
 
+//Dispatch is called at each node to then run the protocol
 func (cks *CollectiveKeySwitchingProtocol) Dispatch() error {
 
 	//Wake up the nodes
@@ -112,14 +114,9 @@ func (cks *CollectiveKeySwitchingProtocol) Dispatch() error {
 
 }
 
-func (cks *CollectiveKeySwitchingProtocol) Shutdown() error {
-
-	return cks.TreeNodeInstance.Shutdown()
-
-}
-
 /********* PUBLIC KEY SWITCHING ONET HANDLERS ********************/
 
+//Start starts the protocol only at root
 func (pcks *CollectivePublicKeySwitchingProtocol) Start() error {
 	log.Lvl1(pcks.ServerIdentity(), " starting public collective key switching with parameters : ", pcks.Params)
 
@@ -127,6 +124,7 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Start() error {
 
 }
 
+//Dispatch is called at each node to then run the protocol
 func (pcks *CollectivePublicKeySwitchingProtocol) Dispatch() error {
 
 	err := pcks.SendToChildren(&Start{})
@@ -154,17 +152,20 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Dispatch() error {
 
 }
 
-func (pcks *CollectivePublicKeySwitchingProtocol) Shutdown() error {
-	return pcks.TreeNodeInstance.Shutdown()
-}
+//func (pcks *CollectivePublicKeySwitchingProtocol) Shutdown() error {
+//	return pcks.TreeNodeInstance.Shutdown()
+//}
 
 /*************RELIN KEY ONET HANDLERS***************/
 
+//Start starts the protocol only at root
 func (rlp *RelinearizationKeyProtocol) Start() error {
 	log.Lvl1(rlp.ServerIdentity(), " : starting relin key protocol")
 
 	return nil
 }
+
+//Dispatch is called at each node to then run the protocol
 func (rlp *RelinearizationKeyProtocol) Dispatch() error {
 	log.Lvl1(rlp.ServerIdentity(), " : Dispatching for relinearization key protocol! ")
 	err := rlp.SendToChildren(&Start{})

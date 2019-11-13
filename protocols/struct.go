@@ -1,3 +1,5 @@
+//Struct contains all the structure that are used to help with the protocols
+
 package protocols
 
 import (
@@ -7,171 +9,202 @@ import (
 	"go.dedis.ch/onet/v3"
 )
 
-//type KeyRing struct {
-//	//Ideally use maybe this in the future to have a single structure.. but maybe it will get too big ~ check later
-//	//everything needed for the keys.
-//	//*dbfv.CKG
-//	//*dbfv.EkgProtocol
-//	//*dbfv.PCKS
-//
-//	sk         *bfv.SecretKey
-//	rlkEphemSk *ring.Poly
-//	input      []uint64
-//}
-
+//CollectiveKeyGenerationProtocol structure encapsulating a key gen protocol for onet.
 type CollectiveKeyGenerationProtocol struct {
 	*onet.TreeNodeInstance
 
-	//Parameters of the protocol
+	//Params parameters of the protocol
 	Params bfv.Parameters
 
-	//Channel to send the public key shares or the key at the end.
+	//ChannelPublicKeyShares to send the public key shares
 	ChannelPublicKeyShares chan StructPublicKeyShare
-	ChannelPublicKey       chan StructPublicKey
-	//Channel to get the wake up
+	//ChannelPublicKey send the key at the end.
+	ChannelPublicKey chan StructPublicKey
+	//ChannelStart to get the wake up
 	ChannelStart chan StructStart
 }
 
+//CollectiveKeySwitchingProtocol struct for onet
 type CollectiveKeySwitchingProtocol struct {
 	*onet.TreeNodeInstance
 
+	//Params used for the key switching
 	Params SwitchingParameters
 
-	ChannelParams     chan StructSwitchParameters
+	//ChannelCiphertext to send the ciphertext in the end - for testing
 	ChannelCiphertext chan StructCiphertext
-	ChannelCKSShare   chan StructCKSShare
+	//ChannelCKSShare to forward the CKSS share
+	ChannelCKSShare chan StructCKSShare
 
-	//Channel to wake up
+	//ChannelStart to wake up
 	ChannelStart chan StructStart
 }
 
+//CollectivePublicKeySwitchingProtocol Structure for onet for the pcks
 type CollectivePublicKeySwitchingProtocol struct {
 	*onet.TreeNodeInstance
 
+	//Params bfv parameters.
 	Params bfv.Parameters
+
 	bfv.PublicKey
-	//TODO check if needed - maybe its always the same private key
+	//SK the secret key hash
 	Sk SK
+
 	bfv.Ciphertext
 
-	//public parameters
-	//ChannelParams chan StructParameters
-	//ChannelPublicKey  chan StructPublicKey
-	//ChannelSk         chan StructSk
-	//
-
+	//ChannelCiphertext to send the ciphertext in the end
 	ChannelCiphertext chan StructCiphertext
-	ChannelPCKS       chan StructPCKS
-
+	//ChannelPCKS to forward the shares.
+	ChannelPCKS chan StructPCKS
+	//ChannelStart to wake up
 	ChannelStart chan StructStart
 }
 
+//RelinearizationKeyProtocol handler for onet for RLK
 type RelinearizationKeyProtocol struct {
 	*onet.TreeNodeInstance
+	//Params the bfv parameters
 	Params bfv.Parameters
 	//Todo have better variable names once its coded.
+	//CRP the random ring used during the round 1
 	Crp CRP
-	//w ring.Poly
+	//SK the secret key of the party
 	Sk SK
-	//Channels to send the different parts of the key
-	ChannelRoundOne   chan StructRelinKeyRoundOne
-	ChannelRoundTwo   chan StructRelinKeyRoundTwo
+
+	//ChannelRoundOne to send the different parts of the key
+	ChannelRoundOne chan StructRelinKeyRoundOne
+	//ChannelRoundTwo to send the different parts of the key
+	ChannelRoundTwo chan StructRelinKeyRoundTwo
+	//ChannelRoundThree to send the different parts of the key
 	ChannelRoundThree chan StructRelinKeyRoundThree
 
-	//These are used for testing.
+	//ChannelEvalKey These are used for testing.
 	ChannelEvalKey chan StructEvalKey
 
 	//Chan to wake up nodes
 	ChannelStart chan StructStart
 }
 
-type StructEvalKey struct {
+/********MESSSAGE STRUCTURES ***/
+
+/**USED FOR ALL ***/
+
+//StructParameters handler for onet
+type StructParameters struct {
 	*onet.TreeNode
-	bfv.EvaluationKey
+	//Params parameters bfv..
+	Params bfv.Parameters
 }
 
-//channels to propagate parameters for RelinKeyProto
-type StructCrp struct {
+//StructStart onet handler
+type StructStart struct {
 	*onet.TreeNode
-	CRP
+	Start
 }
 
-type StructRelinKeyRoundOne struct {
-	*onet.TreeNode
-	dbfv.RKGShareRoundOne
-}
-type StructRelinKeyRoundTwo struct {
-	*onet.TreeNode
-	dbfv.RKGShareRoundTwo
-}
-type StructRelinKeyRoundThree struct {
-	*onet.TreeNode
-	dbfv.RKGShareRoundThree
-}
-type StructPCKS struct {
-	*onet.TreeNode
-	dbfv.PCKSShare
-}
+//Start This message is used to wake up the children
+type Start struct{}
 
+/***USED FOR KEY GEN ***/
+
+//StructPublicKey handler for onet
 type StructPublicKey struct {
 	*onet.TreeNode
 	bfv.PublicKey
 }
 
-type StructSk struct {
-	*onet.TreeNode
-	SK
-}
-
-type SK struct {
-	SecretKey string
-}
-type StructCKSShare struct {
-	*onet.TreeNode
-	dbfv.CKSShare
-}
-
-type SwitchingParameters struct {
-	Params bfv.Parameters
-	//also need skIn, skOut
-	SkInputHash  string
-	SkOutputHash string
-	bfv.Ciphertext
-}
-
-type StructSwitchParameters struct {
-	*onet.TreeNode
-	SwitchingParameters
-}
-
-type StructCiphertext struct {
-	*onet.TreeNode
-	bfv.Ciphertext
-}
-
-//type CollectiveKeyShare struct {
-//	dbfv.CKGShare
-//}
-
-type StructParameters struct {
-	*onet.TreeNode
-	Params bfv.Parameters
-}
-
+//StructPublicKeyShare handler for onet
 type StructPublicKeyShare struct {
 	*onet.TreeNode
 	dbfv.CKGShare
 }
 
-//Wrapper around crp
+/*****USED FOR BOTH CKS AND PCKS ***/
+
+//StructCiphertext handler for onet
+type StructCiphertext struct {
+	*onet.TreeNode
+	bfv.Ciphertext
+}
+
+//StructSk handler for onet
+type StructSk struct {
+	*onet.TreeNode
+	SK
+}
+
+//SK encapsulates a hash for a secretkey - useful if you want to retrieve or experiment
+type SK struct {
+	SecretKey string
+}
+
+/***USED FOR CKS **/
+
+//StructSwitchParameters handler for onet
+type StructSwitchParameters struct {
+	*onet.TreeNode
+	SwitchingParameters
+}
+
+//SwitchingParameters contains the public parameters for CKS
+type SwitchingParameters struct {
+	//Params parameters bfv
+	Params bfv.Parameters
+	//SkInputHash the hash of secret key under which ciphertext is *currently* encrypted
+	SkInputHash string
+	//SkOutputHash the hash of secretkey under which ciphertext will be encrypted *after* running CKS
+	SkOutputHash string
+	bfv.Ciphertext
+}
+
+//StructCKSShare handler for onet
+type StructCKSShare struct {
+	*onet.TreeNode
+	dbfv.CKSShare
+}
+
+/***USED FOR PCKS ***/
+
+//StructPCKS handler for onet
+type StructPCKS struct {
+	*onet.TreeNode
+	dbfv.PCKSShare
+}
+
+//***USED FOR RLK ****/
+
+//StructEvalKey handler for onet
+type StructEvalKey struct {
+	*onet.TreeNode
+	bfv.EvaluationKey
+}
+
+//StructCrp handler for onet
+type StructCrp struct {
+	*onet.TreeNode
+	CRP
+}
+
+//CRP Wrapper around crp
 type CRP struct {
 	A [][]*ring.Poly
 }
 
-//This message is used to wake up the children
-type Start struct{}
-
-type StructStart struct {
+//StructRelinKeyRoundOne handler for onet - used to send the share after round one
+type StructRelinKeyRoundOne struct {
 	*onet.TreeNode
-	Start
+	dbfv.RKGShareRoundOne
+}
+
+//StructRelinKeyRoundTwo handler for onet - used to send share after round two
+type StructRelinKeyRoundTwo struct {
+	*onet.TreeNode
+	dbfv.RKGShareRoundTwo
+}
+
+//StructRelinKeyRoundThree handler for onet - used to send share after round thre e
+type StructRelinKeyRoundThree struct {
+	*onet.TreeNode
+	dbfv.RKGShareRoundThree
 }

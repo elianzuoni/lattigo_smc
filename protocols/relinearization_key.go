@@ -1,3 +1,15 @@
+//Relinearization key protocol - used to generate a relinearization key that can be used to linearize ciphertexts after multiplication
+// 1. allocate shares and generate share for round 1
+// 2. Aggregate shares of round 1 from children
+// 3. Send aggregated shares to parent - root has total aggregation sends to children
+// 4. Get result of aggregations from parent - send to children
+// 5. Generate shares for round 2
+// 6. Aggregate shares of round 2 form children
+// 7. Send result to parent - root has total aggregation sends to children
+// 8. Get result of round 2 from parent
+// 9. Same as 5-6-7-8 for round 3 shares
+// 10. With shares of round 2 and 3 - generate the relinearization key.
+
 package protocols
 
 import (
@@ -9,6 +21,7 @@ import (
 	"lattigo-smc/utils"
 )
 
+//NewRelinearizationKey initializes a new protocol, registers the channels
 func NewRelinearizationKey(n *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
 	p := &RelinearizationKeyProtocol{
 		TreeNodeInstance: n,
@@ -21,8 +34,10 @@ func NewRelinearizationKey(n *onet.TreeNodeInstance) (instance onet.ProtocolInst
 	return p, nil
 }
 
+//BitDecomp - ???
 const BitDecomp = 64
 
+//RelinearizationKey runs the relinearization protocol returns the evaluation key ( relinearization key ) and error if there is any.
 func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, error) {
 	//get the parameters..
 	log.Lvl1(rlp.ServerIdentity(), " : starting relin key ")

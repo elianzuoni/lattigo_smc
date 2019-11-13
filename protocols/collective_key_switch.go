@@ -1,3 +1,13 @@
+// Collective key switching runs the collective key switching protocol
+// This allows to change the key under which a cipher is encrypted.
+// The nodes need to have shards of the secret key towards which the cipher is going to be encrypted
+// 0. Set-up get the parameters and the secret key shards
+// 1. Generate the collective key switching share (ckss) locally
+// 2. Aggregate the ckss from the children
+// 3. Send the ckss to the parent
+// 4. Root switches the key under which the cipher is encrypted and sends it to the children
+// 5. Get resulting ciphertext from parent and forward to children
+
 package protocols
 
 import (
@@ -9,17 +19,14 @@ import (
 	"lattigo-smc/utils"
 )
 
-//This file is for the collective key switching
-
-//initialize the key switching
-
+//NewCollectiveKeySwitching initializes a new collective key switching , registers the channels in onet
 func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
 	p := &CollectiveKeySwitchingProtocol{
 		TreeNodeInstance: n,
 	}
 
-	if e := p.RegisterChannels(&p.ChannelParams, &p.ChannelCKSShare, &p.ChannelCiphertext, &p.ChannelStart); e != nil {
+	if e := p.RegisterChannels(&p.ChannelCKSShare, &p.ChannelCiphertext, &p.ChannelStart); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 
@@ -28,34 +35,24 @@ func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance,
 
 //we use the same parameters as from the collective key generation
 
-/**
-input : skInput,skOuput - the key under what ct is encrypted and skOutput the key under what ct will be encrypted.
-
-*/
+//CollectiveKeySwitching runs the collective key switching protocol returns the ciphertext after switching its key and error if there is any
 func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Ciphertext, error) {
 
 	bfvContext, err := bfv.NewBfvContextWithParam(&cks.Params.Params)
+
 	SkInput, err := utils.GetSecretKey(bfvContext, cks.Params.SkInputHash+cks.ServerIdentity().String())
 
-	ski, _ := SkInput.MarshalBinary()
-	log.Lvl4(cks.ServerIdentity(), " ski  : ", ski[0:25], " h = ", cks.Params.SkInputHash)
 	SkOutput, err := utils.GetSecretKey(bfvContext, cks.Params.SkOutputHash+cks.ServerIdentity().String())
-	sko, _ := SkOutput.MarshalBinary()
-	log.Lvl4(cks.ServerIdentity(), " sko  : ", sko[0:25], " h = ", cks.Params.SkOutputHash)
 
 	if err != nil {
 		return &bfv.Ciphertext{}, err
 	}
 
-	key_switch := dbfv.NewCKSProtocol(bfvContext, cks.Params.Params.Sigma)
-	h := key_switch.AllocateShare()
+	keySwitch := dbfv.NewCKSProtocol(bfvContext, cks.Params.Params.Sigma)
+	h := keySwitch.AllocateShare()
 
-	key_switch.GenShare(SkInput.Get(), SkOutput.Get(), &cks.Params.Ciphertext, h)
+	keySwitch.GenShare(SkInput.Get(), SkOutput.Get(), &cks.Params.Ciphertext, h)
 
-	d, _ := cks.Params.Ciphertext.MarshalBinary()
-	log.Lvl4(cks.ServerIdentity(), " has cipher : ", d[0:25])
-
-	log.Lvl4(cks.ServerIdentity(), " : share value is : ", h.Coeffs[0][0:25])
 	if !cks.IsLeaf() {
 
 		for i := 0; i < len(cks.Children()); i++ {
@@ -64,29 +61,25 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Cipher
 
 			//aggregate
 			share := child.CKSShare
-			key_switch.AggregateShares(share, h, h)
+			keySwitch.AggregateShares(share, h, h)
 
 		}
 
 	}
 
 	//send to parent.
-	log.Lvl4(cks.ServerIdentity(), " : sending my h ")
-	//sending := ring.Poly{h.Coeffs}
 	err = cks.SendToParent(&h)
-	log.Lvl4(cks.ServerIdentity(), " : sent my h ")
-
 	if err != nil {
 		return nil, err
 	}
 
 	//propagate the cipher text.
 	//the root propagates the cipher text to everyone.
-	//this is not strict following of protocol
+
 	res := bfvContext.NewCiphertext(cks.Params.Ciphertext.Degree())
 	if cks.IsRoot() {
 
-		key_switch.KeySwitch(h, &cks.Params.Ciphertext, res)
+		keySwitch.KeySwitch(h, &cks.Params.Ciphertext, res)
 	} else {
 		log.Lvl4("Waiting on cipher text ")
 		val := <-cks.ChannelCiphertext
@@ -101,8 +94,6 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Cipher
 		log.Print("Error sending it to children")
 		return res, err
 	}
-	d, _ = res.MarshalBinary()
-	log.Lvl4(cks.ServerIdentity(), " has final cipher : ", d[0:25])
 
 	log.Lvl4(cks.ServerIdentity(), "Done with my job ")
 	return res, nil

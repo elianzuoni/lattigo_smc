@@ -37,6 +37,7 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	//ckgp.Params = bfv.DefaultParams[0]
 	log.Lvl1("Starting ckgp")
 	err = ckgp.Start()
+	defer ckgp.Done()
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
 	}

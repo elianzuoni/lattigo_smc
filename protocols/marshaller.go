@@ -1,3 +1,6 @@
+//Marshalling of structures - was used to send the parameters to the nodes
+// Keeping it in case it can be used later.
+
 package protocols
 
 import (
@@ -7,14 +10,15 @@ import (
 	"strings"
 )
 
+//MarshalBinary creates a data array from the switching parameters sp
 func (sp SwitchingParameters) MarshalBinary() (data []byte, err error) {
 	var buffer strings.Builder
 
 	data = make([]byte, 0)
 	param, err := sp.Params.MarshalBinary()
-	len_param := len(param)
-	data = append(data, byte(len_param))
-	buffer.WriteByte(byte(len_param))
+	lenParam := len(param)
+	data = append(data, byte(lenParam))
+	buffer.WriteByte(byte(lenParam))
 	buffer.Write(param)
 	//add the strings...
 	hashes := []byte(sp.SkInputHash + "," + sp.SkOutputHash)
@@ -30,16 +34,17 @@ func (sp SwitchingParameters) MarshalBinary() (data []byte, err error) {
 
 }
 
+//UnmarshalBinary loads the data into the switching parameters.
 func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 	ptr := data[0]
-	byte_param := data[1 : ptr+1]
-	err = sp.Params.UnmarshalBinary(byte_param)
+	byteParam := data[1 : ptr+1]
+	err = sp.Params.UnmarshalBinary(byteParam)
 
 	//then get the hashes..
 	ptr++
-	len_hashes := data[ptr]
-	hashes := data[ptr+1 : ptr+len_hashes+1]
-	ptr += len_hashes + 1
+	lenHashes := data[ptr]
+	hashes := data[ptr+1 : ptr+lenHashes+1]
+	ptr += lenHashes + 1
 	xs := strings.Split(string(hashes), ",")
 	if len(xs) != 2 {
 		return errors.New("Error on hashes")
@@ -61,6 +66,7 @@ func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 
 }
 
+//MarshalBinary creates a data array from the CRP
 func (crp *CRP) MarshalBinary() ([]byte, error) {
 	if len(crp.A) == 0 || len(crp.A[0]) == 0 {
 		return []byte{}, nil
@@ -85,6 +91,7 @@ func (crp *CRP) MarshalBinary() ([]byte, error) {
 	return data, nil
 }
 
+//UnmarshalBinary creates the crp object from the data array.
 func (crp *CRP) UnmarshalBinary(data []byte) error {
 	outerLen := data[0]
 	innerLen := data[1]

@@ -1,3 +1,11 @@
+//Collective public key switching allows to change the key under which a key is encrypted.
+// The node needs to only know the public key of the resulting cipher text.
+// 1. Allocate the shares and generate i t
+// 2. Aggregate the shares from the children
+// 3. Forward them to the parent
+// 4. Root performs the key switching and sends the resulting cipher text to its children
+// 5. get the result from parents and forward it to the children.
+
 package protocols
 
 import (
@@ -9,8 +17,9 @@ import (
 	"lattigo-smc/utils"
 )
 
-const ProtocolName = "CollectivePublicKeySwitching"
+//const ProtocolName = "CollectivePublicKeySwitching"
 
+//NewCollectivePublicKeySwitching initialize a new protocol, register the channels for onet.
 func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
 	p := &CollectivePublicKeySwitchingProtocol{
@@ -24,6 +33,7 @@ func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 	return p, nil
 }
 
+//CollectivePublicKeySwitching runs the protocol , returns the ciphertext after key switching and error if there is any.
 func (pcks *CollectivePublicKeySwitchingProtocol) CollectivePublicKeySwitching() (*bfv.Ciphertext, error) {
 
 	bfvCtx, _ := bfv.NewBfvContextWithParam(&pcks.Params)
@@ -55,7 +65,7 @@ func (pcks *CollectivePublicKeySwitchingProtocol) CollectivePublicKeySwitching()
 	if pcks.IsRoot() {
 		protocol.KeySwitch(share, &pcks.Ciphertext, cipher)
 	} else {
-		res := (<-pcks.ChannelCiphertext)
+		res := <-pcks.ChannelCiphertext
 		cipher = &res.Ciphertext
 	}
 
