@@ -77,13 +77,12 @@ type RelinearizationKeyProtocol struct {
 	ChannelRoundOne   chan StructRelinKeyRoundOne
 	ChannelRoundTwo   chan StructRelinKeyRoundTwo
 	ChannelRoundThree chan StructRelinKeyRoundThree
+
 	//These are used for testing.
-	//In real protocol use Node() from onet to propagate params
-	ChannelCrp chan StructCrp
-	//ChannelW chan StructPublicKey
-	ChannelSk      chan StructSk
-	ChannelParams  chan StructParameters
 	ChannelEvalKey chan StructEvalKey
+
+	//Chan to wake up nodes
+	ChannelStart chan StructStart
 }
 
 type StructEvalKey struct {

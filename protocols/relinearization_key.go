@@ -14,7 +14,7 @@ func NewRelinearizationKey(n *onet.TreeNodeInstance) (instance onet.ProtocolInst
 		TreeNodeInstance: n,
 	}
 
-	if e := p.RegisterChannels(&p.ChannelParams, &p.ChannelSk, &p.ChannelCrp, &p.ChannelRoundOne, &p.ChannelRoundTwo, &p.ChannelRoundThree, &p.ChannelEvalKey); e != nil {
+	if e := p.RegisterChannels(&p.ChannelStart, &p.ChannelRoundOne, &p.ChannelRoundTwo, &p.ChannelRoundThree, &p.ChannelEvalKey); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 
@@ -26,38 +26,6 @@ const BitDecomp = 64
 func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, error) {
 	//get the parameters..
 	log.Lvl1(rlp.ServerIdentity(), " : starting relin key ")
-	if !rlp.IsRoot() {
-		rlp.Sk = (<-rlp.ChannelSk).SK
-		log.Lvl3("Got sk from parent")
-		rlp.Crp = (<-rlp.ChannelCrp).CRP
-		log.Lvl3("Got a from parent")
-		//rlp.w = (<-rlp.ChannelW).Poly
-		rlp.Params = (<-rlp.ChannelParams).Params
-		log.Lvl3("Got paramas from parent")
-		log.Lvl3("Got all parameters from parent")
-	}
-
-	//propagate to children
-	err := rlp.SendToChildren(&rlp.Sk)
-	if err != nil {
-		log.Error("Could not send secret key ", err)
-		return *new(bfv.EvaluationKey), err
-	}
-	err = rlp.SendToChildren(&rlp.Crp)
-	if err != nil {
-		log.Error("Could not send vector a ", err)
-		return *new(bfv.EvaluationKey), err
-	}
-	//err = rlp.SendToChildren(rlp.w)
-	//if err != nil{
-	//	log.Error("Could not send vector w " , err)
-	//	return *new(bfv.EvaluationKey) , err
-	//}
-	err = rlp.SendToChildren(&rlp.Params)
-	if err != nil {
-		log.Error("Could not send params ", err)
-		return *new(bfv.EvaluationKey), err
-	}
 
 	//can start protocol now.
 	bfvCtx, err := bfv.NewBfvContextWithParam(&rlp.Params)
@@ -73,8 +41,9 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 		log.Error("Could not generate secret key : ", err)
 		return *new(bfv.EvaluationKey), err
 	}
-
+	//Allocation
 	r1, r2, r3 := rkg.AllocateShares()
+	//Round 1
 	rkg.GenShareRoundOne(u, sk.Get(), rlp.Crp.A, r1)
 	//aggregate the shares.
 	if !rlp.IsLeaf() {
@@ -98,7 +67,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	}
 	log.Lvl3(rlp.ServerIdentity().String(), ": round 1 share finished")
 
-	//now we do r2
+	//now we do round 2
 	rkg.GenShareRoundTwo(r1, sk.Get(), rlp.Crp.A, r2)
 	if !rlp.IsLeaf() {
 		for _ = range rlp.Children() {
@@ -144,7 +113,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	}
 
 	//now we can generate key.
-	log.Lvl3(rlp.ServerIdentity(), "Generating the relin key ! ")
+	log.Lvl3(rlp.ServerIdentity(), ": generating the relin key ! ")
 	//since all parties should have r2 and r3 dont need to send it.
 	evalKey := rkg.AllocateEvaluationKey(*bfvCtx)
 	rkg.GenRelinearizationKey(r2, r3, evalKey)

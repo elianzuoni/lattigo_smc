@@ -18,12 +18,18 @@ import (
 
 type RelinearizationKeySimulation struct {
 	onet.SimulationBFTree
+	proto.CRP
 }
 
 const BitDecomp = 64
 
+var CRP proto.CRP
+
+const SkHash = "sk0"
+
 func init() {
 	onet.SimulationRegister("RelinearizationKeyGeneration", NewRelinearizationKeyGeneration)
+
 }
 
 func NewRelinearizationKeyGeneration(config string) (onet.Simulation, error) {
@@ -34,40 +40,106 @@ func NewRelinearizationKeyGeneration(config string) (onet.Simulation, error) {
 		return nil, err
 	}
 
+	sim.CRP = CRP
+
 	return sim, nil
 }
 
 func (s *RelinearizationKeySimulation) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//setup following the config file.
-	log.Lvl4("Setting up the simulations")
+	log.Lvl1("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
 	if err != nil {
 		return nil, err
 	}
+
+	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	if err != nil {
+		log.Error("Could not start bfv context :", err)
+	}
+	//todo generate the CRP
+	contextQ := bfvCtx.ContextQ()
+	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
+	nbnodes := sc.Tree.Size()
+	crpGenerators := make([]*dbfv.CRPGenerator, nbnodes)
+	for i := 0; i < nbnodes; i++ {
+		crpGenerators[i], err = dbfv.NewCRPGenerator(nil, contextQ)
+		if err != nil {
+			log.Error(err)
+			return nil, err
+		}
+		crpGenerators[i].Seed([]byte{})
+	}
+	crp := make([][]*ring.Poly, len(contextQ.Modulus))
+	for j := 0; j < len(contextQ.Modulus); j++ {
+		crp[j] = make([]*ring.Poly, bitLog)
+		for u := uint64(0); u < bitLog; u++ {
+			crp[j][u] = crpGenerators[0].Clock()
+		}
+	}
+	CRP.A = crp
+
 	return sc, nil
 }
 
 func (s *RelinearizationKeySimulation) Node(config *onet.SimulationConfig) error {
-	//todo inject parameters here !
 	idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
 	if idx < 0 {
 		log.Fatal("Error node not found")
 	}
 
-	log.Lvl4("Node setup")
+	log.Lvl1("Node setup")
+	if _, err := config.Server.ProtocolRegister("RelinearizationKeyProtocolSimul", func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
+		return NewRelinearizationKeySimul(tni, s)
+	}); err != nil {
+		log.ErrFatal(err, "Error could not inject parameters")
+		return err
+	}
 
 	return s.SimulationBFTree.Node(config)
 }
 
+func NewRelinearizationKeySimul(tni *onet.TreeNodeInstance, simulation *RelinearizationKeySimulation) (onet.ProtocolInstance, error) {
+	protocol, err := proto.NewRelinearizationKey(tni)
+	if err != nil {
+		return nil, err
+	}
+	relinkey := protocol.(*proto.RelinearizationKeyProtocol)
+	relinkey.Params = bfv.DefaultParams[0]
+	relinkey.Crp = CRP
+	relinkey.Sk.SecretKey = SkHash
+	return relinkey, nil
+}
+
 func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
-	SKHash := "sk0"
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
 
 	round := monitor.NewTimeMeasure("round")
+
+	log.Lvl1("CRP :", CRP.A)
+
+	pi, err := config.Overlay.CreateProtocol("RelinearizationKeyProtocolSimul", config.Tree, onet.NilServiceID)
+	if err != nil {
+		log.Error(err)
+		return err
+	}
+
+	RelinProtocol := pi.(*proto.RelinearizationKeyProtocol)
+
+	//Now we can start the protocol
+	err = RelinProtocol.Start()
+	defer RelinProtocol.Done()
+	if err != nil {
+		log.Error("Could not start relinearization protocol : ", err)
+		return err
+	}
+
+	<-time.After(3 * time.Second)
+	log.Lvl1("Collecting the relinearization keys")
 
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	if err != nil {
@@ -78,7 +150,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	tmp0 := bfvCtx.ContextQ().NewPoly()
 	for i < size {
 		si := config.Tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(bfvCtx, SKHash+si)
+		sk0, err := utils.GetSecretKey(bfvCtx, SkHash+si)
 		if err != nil {
 			log.Error("error : ", err)
 			return err
@@ -123,51 +195,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	ExpectedCoeffs := bfvCtx.ContextT().NewPoly()
 	bfvCtx.ContextT().MulCoeffs(expected, expected, ExpectedCoeffs)
 	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
-	contextQ := bfvCtx.ContextQ()
-	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
 
-	//Parameters ***************************
-	//Computation for the crp (a)
-	crpGenerators := make([]*dbfv.CRPGenerator, size)
-	for i := 0; i < size; i++ {
-		crpGenerators[i], err = dbfv.NewCRPGenerator(nil, contextQ)
-		if err != nil {
-			log.Error(err)
-			return err
-		}
-		crpGenerators[i].Seed([]byte{})
-	}
-	crp := make([][]*ring.Poly, len(contextQ.Modulus))
-	for j := 0; j < len(contextQ.Modulus); j++ {
-		crp[j] = make([]*ring.Poly, bitLog)
-		for u := uint64(0); u < bitLog; u++ {
-			crp[j][u] = crpGenerators[0].Clock()
-		}
-	}
-
-	//The parameters are sk,crp,bfvParams
-	pi, err := config.Overlay.CreateProtocol("RelinearizationKeyProtocol", config.Tree, onet.NilServiceID)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-
-	RelinProtocol := pi.(*proto.RelinearizationKeyProtocol)
-	RelinProtocol.Params = bfv.DefaultParams[0]
-	RelinProtocol.Sk = proto.SK{"sk0"}
-	RelinProtocol.Crp = proto.CRP{A: crp}
-	<-time.After(2 * time.Second)
-
-	//Now we can start the protocol
-	err = RelinProtocol.Start()
-	defer RelinProtocol.Done()
-	if err != nil {
-		log.Error("Could not start relinearization protocol : ", err)
-		return err
-	}
-
-	<-time.After(3 * time.Second)
-	log.Lvl1("Collecting the relinearization keys")
 	array := make([]bfv.EvaluationKey, size)
 	//check if the keys are the same for all parties
 	for i := 0; i < size; i++ {
@@ -200,7 +228,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
 		return err
 	}
-	log.Lvl1("Relinearization done.")
+	log.Lvl1("Relinearization Successful :)")
 
 	round.Record()
 

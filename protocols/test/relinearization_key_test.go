@@ -18,19 +18,73 @@ const BitDecomp = 64
 func TestNewRelinearizationKey(t *testing.T) {
 	//first generate a secret key and from shards and the resulting public key
 	nbnodes := 3
-	log.SetDebugVisible(1)
+	log.SetDebugVisible(3)
 	log.Lvl1("Started to test relinearization protocol with nodes amount : ", nbnodes)
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
-	defer local.CloseAll()
-
-	_, _, tree := local.GenTree(nbnodes, true)
 	SKHash := "sk0"
+
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	if err != nil {
-		log.Print("Could not load bfv ctx ", err)
+		log.Error(err)
 		t.Fail()
-		return
 	}
+
+	contextQ := bfvCtx.ContextQ()
+	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
+	crpGenerators := make([]*dbfv.CRPGenerator, nbnodes)
+	for i := 0; i < nbnodes; i++ {
+		crpGenerators[i], err = dbfv.NewCRPGenerator(nil, contextQ)
+		if err != nil {
+			t.Error(err)
+			t.Fail()
+		}
+		crpGenerators[i].Seed([]byte{})
+	}
+	crp := make([][]*ring.Poly, len(contextQ.Modulus))
+	for j := 0; j < len(contextQ.Modulus); j++ {
+		crp[j] = make([]*ring.Poly, bitLog)
+		for u := uint64(0); u < bitLog; u++ {
+			crp[j][u] = crpGenerators[0].Clock()
+		}
+	}
+	log.Lvl1("Setup ok - Starting protocols")
+	if _, err = onet.GlobalProtocolRegister("RelinearizationKeyTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+		protocol, err := protocols.NewRelinearizationKey(tni)
+		if err != nil {
+			return nil, err
+		}
+		instance := protocol.(*protocols.RelinearizationKeyProtocol)
+		instance.Params = bfv.DefaultParams[0]
+		instance.Sk.SecretKey = SKHash
+		instance.Crp.A = crp
+		return instance, nil
+	}); err != nil {
+		log.Error("Could not start Relin key protocol : ", err)
+		t.Fail()
+	}
+
+	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
+	defer local.CloseAll()
+	_, _, tree := local.GenTree(nbnodes, true)
+
+	//The parameters are sk,crp,bfvParams
+	pi, err := local.CreateProtocol("RelinearizationKeyTest", tree)
+	if err != nil {
+		t.Fatal("Couldn't create new node:", err)
+	}
+
+	RelinProtocol := pi.(*protocols.RelinearizationKeyProtocol)
+
+	//Now we can start the protocol
+	err = RelinProtocol.Start()
+	defer RelinProtocol.Done()
+	if err != nil {
+		log.Error("Could not start relinearization protocol : ", err)
+		t.Fail()
+	}
+
+	<-time.After(3 * time.Second)
+	log.Lvl1("Collecting the relinearization keys")
+
 	i := 0
 	tmp0 := bfvCtx.ContextQ().NewPoly()
 	for i < nbnodes {
@@ -55,6 +109,10 @@ func TestNewRelinearizationKey(t *testing.T) {
 
 	PlainText := bfvCtx.NewPlaintext()
 	encoder, err := bfvCtx.NewBatchEncoder()
+	if err != nil {
+		log.Error("Error could not start encoder : ", err)
+		t.Fail()
+	}
 	expected := bfvCtx.ContextT().NewUniformPoly()
 
 	err = encoder.EncodeUint(expected.Coeffs[0], PlainText)
@@ -77,50 +135,10 @@ func TestNewRelinearizationKey(t *testing.T) {
 	ExpectedCoeffs := bfvCtx.ContextT().NewPoly()
 	bfvCtx.ContextT().MulCoeffs(expected, expected, ExpectedCoeffs)
 	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
-	contextQ := bfvCtx.ContextQ()
-	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
 
 	//Parameters ***************************
 	//Computation for the crp (a)
-	crpGenerators := make([]*dbfv.CRPGenerator, nbnodes)
-	for i := 0; i < nbnodes; i++ {
-		crpGenerators[i], err = dbfv.NewCRPGenerator(nil, contextQ)
-		if err != nil {
-			t.Error(err)
-			t.Fail()
-		}
-		crpGenerators[i].Seed([]byte{})
-	}
-	crp := make([][]*ring.Poly, len(contextQ.Modulus))
-	for j := 0; j < len(contextQ.Modulus); j++ {
-		crp[j] = make([]*ring.Poly, bitLog)
-		for u := uint64(0); u < bitLog; u++ {
-			crp[j][u] = crpGenerators[0].Clock()
-		}
-	}
 
-	//The parameters are sk,crp,bfvParams
-	pi, err := local.CreateProtocol("RelinearizationKeyProtocol", tree)
-	if err != nil {
-		t.Fatal("Couldn't create new node:", err)
-	}
-
-	RelinProtocol := pi.(*protocols.RelinearizationKeyProtocol)
-	RelinProtocol.Params = bfv.DefaultParams[0]
-	RelinProtocol.Sk = protocols.SK{"sk0"}
-	RelinProtocol.Crp = protocols.CRP{A: crp}
-	<-time.After(2 * time.Second)
-
-	//Now we can start the protocol
-	err = RelinProtocol.Start()
-	defer RelinProtocol.Done()
-	if err != nil {
-		log.Error("Could not start relinearization protocol : ", err)
-		t.Fail()
-	}
-
-	//<- time.After(3*time.Second)
-	log.Lvl1("Collecting the relinearization keys")
 	array := make([]bfv.EvaluationKey, nbnodes)
 	//check if the keys are the same for all parties
 	for i := 0; i < nbnodes; i++ {
@@ -153,6 +171,6 @@ func TestNewRelinearizationKey(t *testing.T) {
 		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
 		t.Fail()
 	}
-	log.Lvl1("Relinearization done.")
+	log.Lvl1("Relinearization OK")
 
 }

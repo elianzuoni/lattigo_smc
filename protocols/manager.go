@@ -162,39 +162,25 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Shutdown() error {
 
 func (rlp *RelinearizationKeyProtocol) Start() error {
 	log.Lvl1(rlp.ServerIdentity(), " : starting relin key protocol")
-	//sending the parameters
-	//if Test(){
-	//
-	//	rlp.ChannelSk <- StructSk{
-	//		TreeNode: rlp.TreeNode(),
-	//		SK:       rlp.Sk,
-	//	}
-	//	rlp.ChannelParams <- StructParameters{
-	//		TreeNode: rlp.TreeNode(),
-	//		Params:   rlp.Params,
-	//	}
-	//	log.Lvl1("Going in A ")
-	//	//rlp.ChannelCrp <- StructCrp{
-	//	//	TreeNode: rlp.TreeNode(),
-	//	//	CRP:        rlp.crp,
-	//	//}
-	//	log.Lvl1("Got out of A ")
-	//}
-	log.Lvl1("Done with startup ")
 
 	return nil
 }
 func (rlp *RelinearizationKeyProtocol) Dispatch() error {
 	log.Lvl1(rlp.ServerIdentity(), " : Dispatching for relinearization key protocol! ")
+	err := rlp.SendToChildren(&Start{})
+	if err != nil {
+		log.Error("Error when sending start up message : ", err)
+		return err
+	}
 	res, err := rlp.RelinearizationKey()
+	if err != nil {
+		log.Error("Error in RLProtocol :  ", err)
+		return err
+	}
 
 	//small check.
 	data, _ := res.MarshalBinary()
 	log.Lvl1(rlp.ServerIdentity(), " : got key starting with : ", data[0:25])
-
-	if err != nil {
-		log.Fatal("Error : ", err)
-	}
 
 	if Test() {
 		_ = rlp.SendTo(rlp.Root(), &res)
