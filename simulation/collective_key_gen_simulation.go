@@ -52,9 +52,9 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 	//	log.Fatal("Error node not found")
 	//}
 
-	if _, err := config.Server.ProtocolRegister("CollectiveKeyGenerationSimul",func(tni *onet.TreeNodeInstance)(onet.ProtocolInstance,error){
-		return NewKeyGenerationSimul(tni,s)
-	});err != nil{
+	if _, err := config.Server.ProtocolRegister("CollectiveKeyGenerationSimul", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+		return NewKeyGenerationSimul(tni, s)
+	}); err != nil {
 		return errors.New("Error when registering CollectiveKeyGeneration instance " + err.Error())
 	}
 	log.Lvl1("Node setup OK")
@@ -65,9 +65,9 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (onet.ProtocolInstance, error) {
 	//This part allows to injec the data to the node ~ we don't need the messy channels.
 	log.Lvl1("NewKeygen simul")
-	protocol , err := proto.NewCollectiveKeyGeneration(tni)
+	protocol, err := proto.NewCollectiveKeyGeneration(tni)
 
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 
@@ -82,11 +82,9 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 	log.Lvl1("Run")
 	size := config.Tree.Size()
 
-
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
 
 	round := monitor.NewTimeMeasure("round")
-
 
 	pi, err := config.Overlay.CreateProtocol("CollectiveKeyGenerationSimul", config.Tree, onet.NilServiceID)
 	if err != nil {
@@ -95,12 +93,12 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 
 	ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
 	log.Lvl1("Starting Collective Key Generation simulation")
-	if err = ckgp.Start(); err != nil{
+	if err = ckgp.Start(); err != nil {
 		return err
 	}
 
 	log.Lvl1("Waiting on protocol to finish...")
-	<-time.After(time.Second*2)
+	<-time.After(time.Second * 2)
 	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.\n\tNow comparing all polynomials.")
 
 	//check if we have all the same polys ckg_0
@@ -114,16 +112,6 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 	return nil
 
 }
-
-
-
-
-
-
-
-
-
-
 
 /*****************UTILITY FOR VERIFYING KEYS *****/
 func CheckKeys(ckgp *proto.CollectiveKeyGenerationProtocol, err error) {

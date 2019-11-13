@@ -22,10 +22,10 @@ func TestMarshallingSwitchingParameters(t *testing.T) {
 	//TODO check degree
 	cipher := bfvCtx.NewRandomCiphertext(4)
 	sp := protocols.SwitchingParameters{
-		Params:               bfv.DefaultParams[0],
-		SkInputHash:          "123456",
-		SkOutputHash:         "hjkdsaufdsijfsoidajfoidscnmijdsahfiudsojfdsaihfiudsafdsij",
-		Ciphertext: *cipher,
+		Params:       bfv.DefaultParams[0],
+		SkInputHash:  "123456",
+		SkOutputHash: "hjkdsaufdsijfsoidajfoidscnmijdsahfiudsojfdsaihfiudsafdsij",
+		Ciphertext:   *cipher,
 	}
 
 	data, err := sp.MarshalBinary()
@@ -34,7 +34,7 @@ func TestMarshallingSwitchingParameters(t *testing.T) {
 	err = sp1.UnmarshalBinary(data)
 
 	if err != nil {
-		log.Error("Error in unmarshalling : " , err )
+		log.Error("Error in unmarshalling : ", err)
 		t.Fail()
 	}
 
@@ -77,7 +77,6 @@ func TestCiphertextMarshal(t *testing.T) {
 
 }
 
-
-func TestCRPMarshal(t *testing.T){
+func TestCRPMarshal(t *testing.T) {
 
 }

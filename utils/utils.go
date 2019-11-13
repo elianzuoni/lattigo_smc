@@ -175,18 +175,16 @@ func Equalslice(a, b []uint64) bool {
 	return true
 }
 
-
-
 func CompareEvalKeys(keys []bfv.EvaluationKey) error {
-	for _,k1 := range keys{
-		for _, k2 := range keys{
+	for _, k1 := range keys {
+		for _, k2 := range keys {
 
-			err := CompareArray(k1.Get()[0].Get(),k2.Get()[0].Get())
-			if err != nil{
+			err := CompareArray(k1.Get()[0].Get(), k2.Get()[0].Get())
+			if err != nil {
 				return err
 			}
-			err = CompareArray(k1.Get()[1].Get(),k2.Get()[1].Get())
-			if err != nil{
+			err = CompareArray(k1.Get()[1].Get(), k2.Get()[1].Get())
+			if err != nil {
 				return err
 			}
 
@@ -196,20 +194,20 @@ func CompareEvalKeys(keys []bfv.EvaluationKey) error {
 	return nil
 }
 
-func CompareArray(key [][][2]*ring.Poly, key2 [][][2]*ring.Poly) error  {
-	if len(key) != len(key2) || len(key[0]) != len(key2[0]){
+func CompareArray(key [][][2]*ring.Poly, key2 [][][2]*ring.Poly) error {
+	if len(key) != len(key2) || len(key[0]) != len(key2[0]) {
 		return errors.New("Non matching length of switching keys")
 	}
-	for i, _ := range key{
-		for j , _ := range key[i]{
-			err := ComparePolys(*key[i][j][0],*key2[i][j][0])
-			if err != nil{
+	for i, _ := range key {
+		for j, _ := range key[i] {
+			err := ComparePolys(*key[i][j][0], *key2[i][j][0])
+			if err != nil {
 
-				return errors.New("Switching key do not match on index : "+strconv.Itoa(i)+strconv.Itoa(j)+"0")
+				return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + strconv.Itoa(j) + "0")
 			}
-			err = ComparePolys(*key[i][j][1],*key2[i][j][1])
-			if err != nil{
-				return errors.New("Switching key do not match on index : "+strconv.Itoa(i)+strconv.Itoa(j)+"1")
+			err = ComparePolys(*key[i][j][1], *key2[i][j][1])
+			if err != nil {
+				return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + strconv.Itoa(j) + "1")
 			}
 
 		}

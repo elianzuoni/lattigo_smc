@@ -16,7 +16,7 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	log.SetDebugVisible(1)
 
 	//register the test protocol
-	if _,err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil{
+	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil {
 		log.Error("Could not start CollectiveKeyGenerationTest : ", err)
 		t.Fail()
 
@@ -50,13 +50,12 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 
 	log.Lvl1("Success")
 
-
 }
 
 func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	log.Lvl1("PING")
 	proto, err := protocols.NewCollectiveKeyGeneration(tni)
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 	instance := proto.(*protocols.CollectiveKeyGenerationProtocol)

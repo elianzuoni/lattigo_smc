@@ -10,6 +10,7 @@ import (
 )
 
 const ProtocolName = "CollectivePublicKeySwitching"
+
 func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
 	p := &CollectivePublicKeySwitchingProtocol{
@@ -24,7 +25,6 @@ func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 }
 
 func (pcks *CollectivePublicKeySwitchingProtocol) CollectivePublicKeySwitching() (*bfv.Ciphertext, error) {
-
 
 	bfvCtx, _ := bfv.NewBfvContextWithParam(&pcks.Params)
 	protocol := dbfv.NewPCKSProtocol(bfvCtx, pcks.Params.Sigma)

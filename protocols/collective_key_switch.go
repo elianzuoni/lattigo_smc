@@ -19,7 +19,7 @@ func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance,
 		TreeNodeInstance: n,
 	}
 
-	if e := p.RegisterChannels(&p.ChannelParams, &p.ChannelCKSShare, &p.ChannelCiphertext,&p.ChannelStart); e != nil {
+	if e := p.RegisterChannels(&p.ChannelParams, &p.ChannelCKSShare, &p.ChannelCiphertext, &p.ChannelStart); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 

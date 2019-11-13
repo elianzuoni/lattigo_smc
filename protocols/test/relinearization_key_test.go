@@ -15,7 +15,6 @@ import (
 
 const BitDecomp = 64
 
-
 func TestNewRelinearizationKey(t *testing.T) {
 	//first generate a secret key and from shards and the resulting public key
 	nbnodes := 3
@@ -51,7 +50,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	Sk := new(bfv.SecretKey)
 	Sk.Set(tmp0)
 	Pk := bfvCtx.NewKeyGenerator().NewPublicKey(Sk)
-	encryptor_pk,_ := bfvCtx.NewEncryptorFromPk(Pk)
+	encryptor_pk, _ := bfvCtx.NewEncryptorFromPk(Pk)
 	//encrypt some cipher text...
 
 	PlainText := bfvCtx.NewPlaintext()
@@ -64,8 +63,6 @@ func TestNewRelinearizationKey(t *testing.T) {
 		t.Fail()
 	}
 
-
-
 	CipherText, err := encryptor_pk.EncryptNew(PlainText)
 
 	if err != nil {
@@ -75,7 +72,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	//multiply it !
 	evaluator := bfvCtx.NewEvaluator()
 
-	MulCiphertext ,_ := evaluator.MulNew(CipherText,CipherText)
+	MulCiphertext, _ := evaluator.MulNew(CipherText, CipherText)
 	//we want to relinearize MulCiphertexts
 	ExpectedCoeffs := bfvCtx.ContextT().NewPoly()
 	bfvCtx.ContextT().MulCoeffs(expected, expected, ExpectedCoeffs)
@@ -102,25 +99,23 @@ func TestNewRelinearizationKey(t *testing.T) {
 		}
 	}
 
-
 	//The parameters are sk,crp,bfvParams
 	pi, err := local.CreateProtocol("RelinearizationKeyProtocol", tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
 
-
 	RelinProtocol := pi.(*protocols.RelinearizationKeyProtocol)
 	RelinProtocol.Params = bfv.DefaultParams[0]
 	RelinProtocol.Sk = protocols.SK{"sk0"}
 	RelinProtocol.Crp = protocols.CRP{A: crp}
-	<- time.After(2*time.Second)
+	<-time.After(2 * time.Second)
 
 	//Now we can start the protocol
 	err = RelinProtocol.Start()
 	defer RelinProtocol.Done()
-	if err != nil{
-		log.Error("Could not start relinearization protocol : " , err )
+	if err != nil {
+		log.Error("Could not start relinearization protocol : ", err)
 		t.Fail()
 	}
 
@@ -128,37 +123,36 @@ func TestNewRelinearizationKey(t *testing.T) {
 	log.Lvl1("Collecting the relinearization keys")
 	array := make([]bfv.EvaluationKey, nbnodes)
 	//check if the keys are the same for all parties
-	for i := 0 ; i < nbnodes; i++{
+	for i := 0; i < nbnodes; i++ {
 		relkey := (<-RelinProtocol.ChannelEvalKey).EvaluationKey
 		data, _ := relkey.MarshalBinary()
-		log.Lvl3("Key starting with : " , data[0:25])
+		log.Lvl3("Key starting with : ", data[0:25])
 		log.Lvl3("Got one eval key...")
 		array[i] = relkey
 	}
 
 	err = utils.CompareEvalKeys(array)
-	if err != nil{
-		log.Error("Different relinearization keys : ", err )
+	if err != nil {
+		log.Error("Different relinearization keys : ", err)
 		t.Fail()
 		return
 	}
 	log.Lvl1("Check : all peers have the same key ")
 	rlk := array[0]
-	ResCipher , err := evaluator.RelinearizeNew(MulCiphertext,&rlk)
-	if err != nil{
+	ResCipher, err := evaluator.RelinearizeNew(MulCiphertext, &rlk)
+	if err != nil {
 		log.Error("Could not relinearize the cipher text : ", err)
 		t.Fail()
 	}
 
 	//decrypt the cipher
-	decryptor,_ := bfvCtx.NewDecryptor(Sk)
+	decryptor, _ := bfvCtx.NewDecryptor(Sk)
 	resDecrypted := decryptor.DecryptNew(ResCipher)
 	resDecoded := encoder.DecodeUint(resDecrypted)
-	if ! utils.Equalslice(ExpectedCoeffs.Coeffs[0],resDecoded){
+	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
 		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
 		t.Fail()
 	}
 	log.Lvl1("Relinearization done.")
 
 }
-

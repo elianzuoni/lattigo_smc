@@ -27,11 +27,11 @@ func TestCollectiveSwitching(t *testing.T) {
 	CipherText := bfvCtx.NewRandomCiphertext(1)
 	log.Lvl1("Set up done - Starting protocols")
 	//register the test protocol
-	if _,err := onet.GlobalProtocolRegister("CollectiveKeySwitchingTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+	if _, err := onet.GlobalProtocolRegister("CollectiveKeySwitchingTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 		//Use a local function so we can use ciphertext !
 		log.Lvl1("CKS test protocol")
 		proto, err := protocols.NewCollectiveKeySwitching(tni)
-		if err != nil{
+		if err != nil {
 			return nil, err
 		}
 
@@ -44,7 +44,7 @@ func TestCollectiveSwitching(t *testing.T) {
 		}
 		return instance, nil
 
-	}); err != nil{
+	}); err != nil {
 		log.Error("Could not start CollectiveKeySwitchingTest : ", err)
 		t.Fail()
 
@@ -74,13 +74,12 @@ func TestCollectiveSwitching(t *testing.T) {
 
 	//From here check that Original ciphertext decrypted under SkInput === Resulting ciphertext decrypted under SkOutput
 
-
 	tmp0 := bfvCtx.ContextQ().NewPoly()
 	tmp1 := bfvCtx.ContextQ().NewPoly()
 	for _, server := range local.Overlays {
 
 		si := server.ServerIdentity().String()
-		log.Lvl1("name : " , si )
+		log.Lvl1("name : ", si)
 
 		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
 		if err != nil {
@@ -101,16 +100,13 @@ func TestCollectiveSwitching(t *testing.T) {
 	SkOutput.Set(tmp1)
 
 	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil{
+	if err != nil {
 		log.Error("Could not start encoder : ", err)
 		t.Fail()
 	}
 
-
-
-
 	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
-	if err != nil{
+	if err != nil {
 		log.Error(err)
 		t.Fail()
 	}
@@ -119,7 +115,7 @@ func TestCollectiveSwitching(t *testing.T) {
 	expected := encoder.DecodeUint(ReferencePlaintext)
 
 	DecryptorOutput, err := bfvCtx.NewDecryptor(SkOutput)
-	if err != nil{
+	if err != nil {
 		log.Error(err)
 		t.Fail()
 	}

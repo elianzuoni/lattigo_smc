@@ -17,12 +17,13 @@ type KeySwitchingSim struct {
 	onet.SimulationBFTree
 	bfv.Ciphertext
 }
+
 var Cipher bfv.Ciphertext
 
 func init() {
 	onet.SimulationRegister("CollectiveKeySwitching", NewSimulationKeySwitching)
 	//todo find cleaner way
-	bfvCtx  , _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	bfvCtx, _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	Cipher = *bfvCtx.NewRandomCiphertext(1)
 
 }
@@ -36,9 +37,6 @@ func NewSimulationKeySwitching(config string) (onet.Simulation, error) {
 
 	sim.Ciphertext = Cipher
 
-
-
-
 	log.Lvl1("OK")
 
 	return sim, nil
@@ -50,8 +48,6 @@ func (s *KeySwitchingSim) Setup(dir string, hosts []string) (*onet.SimulationCon
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
-
-
 
 	if err != nil {
 		return nil, err
@@ -68,23 +64,21 @@ func (s *KeySwitchingSim) Node(config *onet.SimulationConfig) error {
 	}
 
 	//Inject the parameters.
-	if _, err := config.Server.ProtocolRegister("CollectiveKeySwitchingSimul",func(tni *onet.TreeNodeInstance)(onet.ProtocolInstance,error){
-		return NewKeySwitchingSimul(tni,s)
-	});err != nil{
+	if _, err := config.Server.ProtocolRegister("CollectiveKeySwitchingSimul", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+		return NewKeySwitchingSimul(tni, s)
+	}); err != nil {
 		return errors.New("Error when registering Collective Key Switching instance " + err.Error())
 	}
 	log.Lvl1("Node setup OK")
-
-
 
 	return s.SimulationBFTree.Node(config)
 }
 
 func NewKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (onet.ProtocolInstance, error) {
 	log.Lvl1("NewKeySwitch simul")
-	protocol , err := proto.NewCollectiveKeySwitching(tni)
+	protocol, err := proto.NewCollectiveKeySwitching(tni)
 
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 
@@ -94,7 +88,7 @@ func NewKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (one
 		Params:       bfv.DefaultParams[0],
 		SkInputHash:  "sk0",
 		SkOutputHash: "sk1",
-		Ciphertext:  sim.Ciphertext, //todo How to inject the cipher text...
+		Ciphertext:   sim.Ciphertext, //todo How to inject the cipher text...
 	}
 
 	return colkeyswitch, nil
@@ -107,13 +101,6 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	round := monitor.NewTimeMeasure("round")
 
-	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-	if err != nil {
-		log.Print("Could not load bfv ctx ", err)
-		return err
-	}
-
-
 	//TODO what is the service ID ?
 	pi, err := config.Overlay.CreateProtocol("CollectiveKeySwitchingSimul", config.Tree, onet.NilServiceID)
 	if err != nil {
@@ -122,16 +109,18 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	cksp := pi.(*proto.CollectiveKeySwitchingProtocol)
 
-
 	log.Lvl4("Starting collective key switching protocol")
 	err = cksp.Start()
 
 	log.Lvl4("Collective key switch done for  ", len(cksp.Roster().List), " nodes.\n\tNow comparing verifying ciphers.")
 	<-time.After(5 * time.Second)
 
-
 	//Now we can setup our keys..
-
+	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	if err != nil {
+		log.Print("Could not load bfv ctx ", err)
+		return err
+	}
 	i := 0
 	tmp0 := bfvCtx.ContextQ().NewPoly()
 	tmp1 := bfvCtx.ContextQ().NewPoly()
@@ -156,18 +145,14 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	SkInput.Set(tmp0)
 	SkOutput.Set(tmp1)
 
-
 	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil{
+	if err != nil {
 		log.Error("Could not start encoder : ", err)
 		return err
 	}
 
-
-
-
 	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
-	if err != nil{
+	if err != nil {
 		log.Error(err)
 		return err
 	}
@@ -175,11 +160,11 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	//expected
 	ReferencePlaintext := DecryptorInput.DecryptNew(&s.Ciphertext)
 	d, _ := s.Ciphertext.MarshalBinary()
-	log.Lvl1("REFERENCE CIPHER " , d[0:25])
+	log.Lvl1("REFERENCE CIPHER ", d[0:25])
 	expected := encoder.DecodeUint(ReferencePlaintext)
 
 	DecryptorOutput, err := bfvCtx.NewDecryptor(SkOutput)
-	if err != nil{
+	if err != nil {
 		log.Error(err)
 		return err
 	}
@@ -207,7 +192,6 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	}
 	cksp.Done()
 	log.Lvl1("Got all matches on ciphers.")
-
 
 	round.Record()
 	if err != nil {

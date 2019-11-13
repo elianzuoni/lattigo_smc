@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
@@ -26,7 +27,7 @@ var SecretKey *bfv.SecretKey
 func init() {
 	onet.SimulationRegister("CollectivePublicKeySwitching", NewSimulationPublicKeySwitching)
 	//Setting up params.
-	bfvCtx , _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	bfvCtx, _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	CipherPublic = bfvCtx.NewRandomCiphertext(1)
 	keygen := bfvCtx.NewKeyGenerator()
 	SecretKey = keygen.NewSecretKey()
@@ -67,9 +68,9 @@ func (s *PublicKeySwitchingSim) Node(config *onet.SimulationConfig) error {
 
 	//Inject parameters
 	log.Lvl4("Node setup")
-	if _, err := config.Server.ProtocolRegister("CollectivePublicKeySwitchingSimul",func(tni *onet.TreeNodeInstance)(onet.ProtocolInstance,error){
-		return NewPublicKeySwitchingSimul(tni,s)
-	});err != nil{
+	if _, err := config.Server.ProtocolRegister("CollectivePublicKeySwitchingSimul", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+		return NewPublicKeySwitchingSimul(tni, s)
+	}); err != nil {
 		return errors.New("Error when registering Collective Key Switching instance " + err.Error())
 	}
 
@@ -85,103 +86,76 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	round := monitor.NewTimeMeasure("round")
 
-	log.SetDebugVisible(4)
-	log.Lvl1("Started to test collective key switching locally with nodes amount : ", size)
 	//local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	//defer local.CloseAll()
 
-	tree := config.Tree
+	log.Lvl1("Starting Public collective key switching simul")
 
-	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-	if err != nil {
-		log.Print("Could not load bfv ctx ", err)
-		return err
-	}
-	i := 0
-	tmp0 := bfvCtx.ContextQ().NewPoly()
-	for i < size {
-		si := tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
-		if err != nil {
-			log.Print("error : ", err)
-		}
-
-		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
-
-		i++
-	}
-	SkInput := new(bfv.SecretKey)
-	SkInput.Set(tmp0)
-	keygen := bfvCtx.NewKeyGenerator()
-	SkOutput := keygen.NewSecretKey()
-	publickey := keygen.NewPublicKey(SkOutput)
-
-	//keygen := bfvCtx.NewKeyGenerator()
-	//PkInput  := keygen.NewPublicKey(SkInput)
-
-	ski, err := SkInput.MarshalBinary()
-	log.Lvl4("At start ski  : ", ski[0:25])
-
-	if err != nil {
-		log.Print("Could not load secret keys : ", err)
-		return err
-	}
-
-	PlainText := bfvCtx.NewPlaintext()
-	encoder, err := bfvCtx.NewBatchEncoder()
-	expected := bfvCtx.NewRandomPlaintextCoeffs()
-
-	err = encoder.EncodeUint(expected, PlainText)
-	if err != nil {
-		log.Print("Could not encode plaintext : ", err)
-		return err
-	}
-
-	Encryptor, err := bfvCtx.NewEncryptorFromSk(SkInput)
-
-	CipherText, err := Encryptor.EncryptNew(PlainText)
-
-	if err != nil {
-		log.Print("error in encryption : ", err)
-		return err
-	}
-
-	log.Lvl1("Starting cksp")
-
-	pi, err := config.Overlay.StartProtocol("CollectivePublicKeySwitching", config.Tree, onet.NilServiceID)
+	pi, err := config.Overlay.CreateProtocol("CollectivePublicKeySwitchingSimul", config.Tree, onet.NilServiceID)
 	if err != nil {
 		log.Fatal("Couldn't create new node:", err)
 		return err
 	}
 
 	pcksp := pi.(*proto.CollectivePublicKeySwitchingProtocol)
-	pcksp.Params = bfv.DefaultParams[0]
-	pcksp.Sk = proto.SK{SecretKey: "sk0"}
-	pcksp.PublicKey = *publickey
-	pcksp.Ciphertext = *CipherText
-
-	//err = pcksp.Start()
-	//if err != nil {
-	//	return err
-	//}
+	err = pcksp.Start()
+	if err != nil {
+		log.Error(err)
+		return err
+	}
 
 	<-time.After(5 * time.Second)
 
 	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
+	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
+	bfvCtx, _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	nbnodes := config.Tree.Size()
+	i := 0
+	tmp0 := bfvCtx.ContextQ().NewPoly()
+	for i < nbnodes {
+		si := config.Tree.Roster.List[i].String()
+		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
+		if err != nil {
+			fmt.Print("error : ", err)
+		}
 
-	Decryptor, err := bfvCtx.NewDecryptor(SkOutput)
+		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
+
+		i++
+	}
+
+	SkInput := new(bfv.SecretKey)
+	SkInput.Set(tmp0)
+
+	DecryptorOutput, err := bfvCtx.NewDecryptor(SecretKey)
 	if err != nil {
-		log.Error("Could not load decryptor : ", err)
+		log.Error("Error on decryptor : ", err)
 		return err
 	}
+
+	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
+	if err != nil {
+		log.Error("Error on decryptor : ", err)
+		return err
+	}
+
+	encoder, err := bfvCtx.NewBatchEncoder()
+	if err != nil {
+		log.Error("Could not start batch encoder : ", err)
+		return err
+	}
+
+	//Get expected result.
+	decrypted := DecryptorInput.DecryptNew(CipherPublic)
+	expected := encoder.DecodeUint(decrypted)
+
 	i = 0
-	defer pcksp.Done()
-	for i < size {
+	for i < nbnodes {
 		newCipher := (<-pcksp.ChannelCiphertext).Ciphertext
 		d, _ := newCipher.MarshalBinary()
-		log.Lvl1("Got cipher : ", d[0:25])
+		log.Lvl4("Got cipher : ", d[0:25])
 		res := bfvCtx.NewPlaintext()
-		Decryptor.Decrypt(&newCipher, res)
+		DecryptorOutput.Decrypt(&newCipher, res)
 
 		log.Lvl1("Comparing a cipher..")
 		decoded := encoder.DecodeUint(res)
@@ -189,20 +163,17 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 		if !ok {
 			log.Print("Plaintext do not match ")
-
-			//pcksp.Done()
-			return errors.New("Non matching plain text ")
+			pcksp.Done()
+			return errors.New("Plaintext do not match")
 
 		}
 		i++
 	}
-
-	//pcksp.Done()
+	pcksp.Done()
 	log.Lvl1("Got all matches on ciphers.")
 	//check if the resulting cipher text decrypted with SkOutput works
 
 	log.Lvl1("Success")
-
 	round.Record()
 
 	log.Lvl4("finished")
@@ -210,13 +181,12 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 }
 
-
 func NewPublicKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *PublicKeySwitchingSim) (onet.ProtocolInstance, error) {
 	//This part allows to injec the data to the node ~ we don't need the messy channels.
 	log.Lvl1("New pubkey switch simul")
-	protocol , err := proto.NewCollectivePublicKeySwitching(tni)
+	protocol, err := proto.NewCollectivePublicKeySwitching(tni)
 
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
 

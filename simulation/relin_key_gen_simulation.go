@@ -20,7 +20,6 @@ type RelinearizationKeySimulation struct {
 	onet.SimulationBFTree
 }
 
-
 const BitDecomp = 64
 
 func init() {
@@ -70,8 +69,6 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 
 	round := monitor.NewTimeMeasure("round")
 
-
-
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	if err != nil {
 		log.Print("Could not load bfv ctx ", err)
@@ -92,16 +89,15 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 		i++
 	}
 
-
 	Sk := new(bfv.SecretKey)
 	Sk.Set(tmp0)
 	Pk := bfvCtx.NewKeyGenerator().NewPublicKey(Sk)
-	encryptor_pk,_ := bfvCtx.NewEncryptorFromPk(Pk)
+	encryptor_pk, _ := bfvCtx.NewEncryptorFromPk(Pk)
 	//encrypt some cipher text...
 
 	PlainText := bfvCtx.NewPlaintext()
 	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil{
+	if err != nil {
 		log.Error(err)
 		return err
 	}
@@ -113,8 +109,6 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 		return err
 	}
 
-
-
 	CipherText, err := encryptor_pk.EncryptNew(PlainText)
 
 	if err != nil {
@@ -124,7 +118,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	//multiply it !
 	evaluator := bfvCtx.NewEvaluator()
 
-	MulCiphertext ,_ := evaluator.MulNew(CipherText,CipherText)
+	MulCiphertext, _ := evaluator.MulNew(CipherText, CipherText)
 	//we want to relinearize MulCiphertexts
 	ExpectedCoeffs := bfvCtx.ContextT().NewPoly()
 	bfvCtx.ContextT().MulCoeffs(expected, expected, ExpectedCoeffs)
@@ -151,69 +145,64 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 		}
 	}
 
-
 	//The parameters are sk,crp,bfvParams
-	pi, err := config.Overlay.CreateProtocol("RelinearizationKeyProtocol", config.Tree,onet.NilServiceID)
+	pi, err := config.Overlay.CreateProtocol("RelinearizationKeyProtocol", config.Tree, onet.NilServiceID)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 
-
 	RelinProtocol := pi.(*proto.RelinearizationKeyProtocol)
 	RelinProtocol.Params = bfv.DefaultParams[0]
 	RelinProtocol.Sk = proto.SK{"sk0"}
-	RelinProtocol.Crp = proto.CRP{A:crp}
-	<- time.After(2*time.Second)
+	RelinProtocol.Crp = proto.CRP{A: crp}
+	<-time.After(2 * time.Second)
 
 	//Now we can start the protocol
 	err = RelinProtocol.Start()
 	defer RelinProtocol.Done()
-	if err != nil{
-		log.Error("Could not start relinearization protocol : " , err )
+	if err != nil {
+		log.Error("Could not start relinearization protocol : ", err)
 		return err
 	}
 
-	<- time.After(3*time.Second)
+	<-time.After(3 * time.Second)
 	log.Lvl1("Collecting the relinearization keys")
 	array := make([]bfv.EvaluationKey, size)
 	//check if the keys are the same for all parties
-	for i := 0 ; i < size; i++{
+	for i := 0; i < size; i++ {
 		relkey := (<-RelinProtocol.ChannelEvalKey).EvaluationKey
 		data, _ := relkey.MarshalBinary()
-		log.Lvl3("Key starting with : " , data[0:25])
+		log.Lvl3("Key starting with : ", data[0:25])
 		log.Lvl3("Got one eval key...")
 		array[i] = relkey
 	}
 
 	err = utils.CompareEvalKeys(array)
-	if err != nil{
-		log.Error("Different relinearization keys : ", err )
+	if err != nil {
+		log.Error("Different relinearization keys : ", err)
 
 		return err
 	}
 	log.Lvl1("Check : all peers have the same key ")
 	rlk := array[0]
-	ResCipher , err := evaluator.RelinearizeNew(MulCiphertext,&rlk)
-	if err != nil{
+	ResCipher, err := evaluator.RelinearizeNew(MulCiphertext, &rlk)
+	if err != nil {
 		log.Error("Could not relinearize the cipher text : ", err)
 		return err
 	}
 
 	//decrypt the cipher
-	decryptor,_ := bfvCtx.NewDecryptor(Sk)
+	decryptor, _ := bfvCtx.NewDecryptor(Sk)
 	resDecrypted := decryptor.DecryptNew(ResCipher)
 	resDecoded := encoder.DecodeUint(resDecrypted)
-	if ! utils.Equalslice(ExpectedCoeffs.Coeffs[0],resDecoded){
+	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
 		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
 		return err
 	}
 	log.Lvl1("Relinearization done.")
 
-
-
 	round.Record()
-
 
 	log.Lvl1("finished")
 	return nil

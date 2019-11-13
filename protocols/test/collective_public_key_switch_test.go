@@ -19,7 +19,6 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 	log.SetDebugVisible(1)
 	log.Lvl1("Started to test collective key switching locally with nodes amount : ", nbnodes)
 
-
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	if err != nil {
 		log.Print("Could not load bfv ctx ", err)
@@ -29,15 +28,14 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 	SkOutput := bfvCtx.NewKeyGenerator().NewSecretKey()
 	publickey := bfvCtx.NewKeyGenerator().NewPublicKey(SkOutput)
 
-
 	CipherText := bfvCtx.NewRandomCiphertext(1)
 
 	//Inject the parameters for each node
-	if _,err := onet.GlobalProtocolRegister("CollectivePublicKeySwitchingTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+	if _, err := onet.GlobalProtocolRegister("CollectivePublicKeySwitchingTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 		//Use a local function so we can use ciphertext !
 		log.Lvl1("PCKS test protocol")
 		proto, err := protocols.NewCollectivePublicKeySwitching(tni)
-		if err != nil{
+		if err != nil {
 			return nil, err
 		}
 
@@ -48,7 +46,7 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 		instance.Sk.SecretKey = "sk0"
 		return instance, nil
 
-	}); err != nil{
+	}); err != nil {
 		log.Error("Could not start CollectiveKeySwitchingTest : ", err)
 		t.Fail()
 
@@ -94,32 +92,27 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
 
-
-
-
 	DecryptorOutput, err := bfvCtx.NewDecryptor(SkOutput)
-	if err != nil{
-		log.Error("Error on decryptor : " , err)
+	if err != nil {
+		log.Error("Error on decryptor : ", err)
 		t.Fail()
 	}
 
 	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
-	if err != nil{
-		log.Error("Error on decryptor : " , err)
+	if err != nil {
+		log.Error("Error on decryptor : ", err)
 		t.Fail()
 	}
 
 	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil{
-		log.Error("Could not start batch encoder : " , err)
+	if err != nil {
+		log.Error("Could not start batch encoder : ", err)
 		t.Fail()
 	}
-
 
 	//Get expected result.
 	decrypted := DecryptorInput.DecryptNew(CipherText)
 	expected := encoder.DecodeUint(decrypted)
-
 
 	i = 0
 	for i < nbnodes {
@@ -152,7 +145,6 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 
 }
 
-
 //func NewPublicCollectiveKeySwitchingTest(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 //	log.Lvl1("PING")
 //	proto, err := protocols.NewCollectivePublicKeySwitching(tni)
@@ -163,8 +155,6 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 //	instance.Params = bfv.DefaultParams[0]
 //	return instance, nil
 //}
-
-
 
 /*
 

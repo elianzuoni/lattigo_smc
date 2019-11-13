@@ -25,13 +25,11 @@ type CollectiveKeyGenerationProtocol struct {
 	//Parameters of the protocol
 	Params bfv.Parameters
 
-
 	//Channel to send the public key shares or the key at the end.
 	ChannelPublicKeyShares chan StructPublicKeyShare
-	ChannelPublicKey            chan StructPublicKey
+	ChannelPublicKey       chan StructPublicKey
 	//Channel to get the wake up
 	ChannelStart chan StructStart
-
 }
 
 type CollectiveKeySwitchingProtocol struct {
@@ -39,14 +37,12 @@ type CollectiveKeySwitchingProtocol struct {
 
 	Params SwitchingParameters
 
-
 	ChannelParams     chan StructSwitchParameters
 	ChannelCiphertext chan StructCiphertext
 	ChannelCKSShare   chan StructCKSShare
 
 	//Channel to wake up
 	ChannelStart chan StructStart
-
 }
 
 type CollectivePublicKeySwitchingProtocol struct {
@@ -78,40 +74,38 @@ type RelinearizationKeyProtocol struct {
 	//w ring.Poly
 	Sk SK
 	//Channels to send the different parts of the key
-	ChannelRoundOne chan StructRelinKeyRoundOne
-	ChannelRoundTwo chan StructRelinKeyRoundTwo
+	ChannelRoundOne   chan StructRelinKeyRoundOne
+	ChannelRoundTwo   chan StructRelinKeyRoundTwo
 	ChannelRoundThree chan StructRelinKeyRoundThree
 	//These are used for testing.
 	//In real protocol use Node() from onet to propagate params
 	ChannelCrp chan StructCrp
 	//ChannelW chan StructPublicKey
-	ChannelSk chan StructSk
-	ChannelParams chan StructParameters
+	ChannelSk      chan StructSk
+	ChannelParams  chan StructParameters
 	ChannelEvalKey chan StructEvalKey
-
 }
 
-type StructEvalKey struct{
+type StructEvalKey struct {
 	*onet.TreeNode
 	bfv.EvaluationKey
 }
 
 //channels to propagate parameters for RelinKeyProto
-type StructCrp struct{
+type StructCrp struct {
 	*onet.TreeNode
 	CRP
 }
 
-
-type StructRelinKeyRoundOne struct{
+type StructRelinKeyRoundOne struct {
 	*onet.TreeNode
 	dbfv.RKGShareRoundOne
 }
-type StructRelinKeyRoundTwo struct{
+type StructRelinKeyRoundTwo struct {
 	*onet.TreeNode
 	dbfv.RKGShareRoundTwo
 }
-type StructRelinKeyRoundThree struct{
+type StructRelinKeyRoundThree struct {
 	*onet.TreeNode
 	dbfv.RKGShareRoundThree
 }
@@ -146,7 +140,6 @@ type SwitchingParameters struct {
 	bfv.Ciphertext
 }
 
-
 type StructSwitchParameters struct {
 	*onet.TreeNode
 	SwitchingParameters
@@ -171,18 +164,15 @@ type StructPublicKeyShare struct {
 	dbfv.CKGShare
 }
 
-
 //Wrapper around crp
-type CRP struct{
+type CRP struct {
 	A [][]*ring.Poly
 }
-
 
 //This message is used to wake up the children
 type Start struct{}
 
-type StructStart struct{
+type StructStart struct {
 	*onet.TreeNode
 	Start
 }
-

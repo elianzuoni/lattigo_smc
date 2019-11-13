@@ -6,22 +6,21 @@ import (
 )
 
 var test = true
+
 //Test has a variable test used when you want to test so the protocols sends the result back to the root so you
 //can compare the value computed.
 func Test() bool {
 	return test
 }
-func TurnOffTest(){
+func TurnOffTest() {
 	test = false
 }
 
 func init() {
 	_, _ = onet.GlobalProtocolRegister("CollectiveKeySwitching", NewCollectiveKeySwitching)
 	_, _ = onet.GlobalProtocolRegister("CollectivePublicKeySwitching", NewCollectivePublicKeySwitching)
-	_,_ = onet.GlobalProtocolRegister("RelinearizationKeyProtocol",NewRelinearizationKey)
+	_, _ = onet.GlobalProtocolRegister("RelinearizationKeyProtocol", NewRelinearizationKey)
 }
-
-
 
 /*****************COLLECTIVE KEY GENERATION ONET HANDLERS *******************/
 func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
@@ -32,12 +31,12 @@ func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 
 func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
-	log.Lvl1(ckgp.ServerIdentity() , " Dispatching ; is root = ", ckgp.IsRoot())
+	log.Lvl1(ckgp.ServerIdentity(), " Dispatching ; is root = ", ckgp.IsRoot())
 
 	//When running a simulation we need to send a wake up message to the children so all nodes can run!
 	log.Lvl1("Sending wake up message")
 	err := ckgp.SendToChildren(&Start{})
-	if err != nil{
+	if err != nil {
 		log.ErrFatal(err, "Could not send wake up message ")
 	}
 
@@ -87,13 +86,13 @@ func (cks *CollectiveKeySwitchingProtocol) Dispatch() error {
 	//Wake up the nodes
 	log.Lvl1("Sending wake up message")
 	err := cks.SendToChildren(&Start{})
-	if err != nil{
+	if err != nil {
 		log.ErrFatal(err, "Could not send wake up message ")
 	}
 
 	//start the key switching
-	d , _ := cks.Params.Ciphertext.MarshalBinary()
-	log.Lvl1("ORIGINAL CIPHER :" , d[0:25])
+	d, _ := cks.Params.Ciphertext.MarshalBinary()
+	log.Lvl1("ORIGINAL CIPHER :", d[0:25])
 	res, err := cks.CollectiveKeySwitching()
 	if err != nil {
 		return err
@@ -124,7 +123,6 @@ func (cks *CollectiveKeySwitchingProtocol) Shutdown() error {
 func (pcks *CollectivePublicKeySwitchingProtocol) Start() error {
 	log.Lvl1(pcks.ServerIdentity(), " starting public collective key switching with parameters : ", pcks.Params)
 
-
 	return nil
 
 }
@@ -132,7 +130,7 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Start() error {
 func (pcks *CollectivePublicKeySwitchingProtocol) Dispatch() error {
 
 	err := pcks.SendToChildren(&Start{})
-	if err != nil{
+	if err != nil {
 		log.Error("Could not send start message  : ", err)
 		return err
 	}
@@ -160,11 +158,10 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Shutdown() error {
 	return pcks.TreeNodeInstance.Shutdown()
 }
 
-
 /*************RELIN KEY ONET HANDLERS***************/
 
-func (rlp *RelinearizationKeyProtocol) Start()error{
-	log.Lvl1(rlp.ServerIdentity() , " : starting relin key protocol")
+func (rlp *RelinearizationKeyProtocol) Start() error {
+	log.Lvl1(rlp.ServerIdentity(), " : starting relin key protocol")
 	//sending the parameters
 	//if Test(){
 	//
@@ -187,13 +184,13 @@ func (rlp *RelinearizationKeyProtocol) Start()error{
 
 	return nil
 }
-func (rlp *RelinearizationKeyProtocol) Dispatch()error{
-	log.Lvl1(rlp.ServerIdentity() , " : Dispatching for relinearization key protocol! ")
+func (rlp *RelinearizationKeyProtocol) Dispatch() error {
+	log.Lvl1(rlp.ServerIdentity(), " : Dispatching for relinearization key protocol! ")
 	res, err := rlp.RelinearizationKey()
 
 	//small check.
 	data, _ := res.MarshalBinary()
-	log.Lvl1(rlp.ServerIdentity(), " : got key starting with : " , data[0:25])
+	log.Lvl1(rlp.ServerIdentity(), " : got key starting with : ", data[0:25])
 
 	if err != nil {
 		log.Fatal("Error : ", err)
@@ -206,7 +203,6 @@ func (rlp *RelinearizationKeyProtocol) Dispatch()error{
 	if !rlp.IsRoot() && Test() {
 		rlp.Done()
 	}
-	log.Lvl1(rlp.ServerIdentity() ," : exiting dispatch ")
+	log.Lvl1(rlp.ServerIdentity(), " : exiting dispatch ")
 	return nil
 }
-
