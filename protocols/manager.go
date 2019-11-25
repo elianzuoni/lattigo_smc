@@ -65,6 +65,8 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 		ckgp.Done()
 
 	}
+	//tell the lock we are done.
+	ckgp.Cond.Broadcast()
 
 	return nil
 }

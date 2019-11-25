@@ -53,7 +53,7 @@ func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext, seed string) error {
 //Load a secret key. Will fail if the key does not exist.
 func LoadSecretKey(ctx *bfv.BfvContext, seed string) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	sk = ctx.NewKeyGenerator().NewSecretKey()
+	sk = new(bfv.SecretKey)
 
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
@@ -102,7 +102,7 @@ func SavePublicKey(pk *bfv.PublicKey, ctx *bfv.BfvContext, seed string) error {
 //Load public key
 func LoadPublicKey(ctx *bfv.BfvContext, seed string) (pk *bfv.PublicKey, err error) {
 	var data []byte
-	pk = ctx.NewPublicKey()
+	pk = new(bfv.PublicKey)
 
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
@@ -194,23 +194,21 @@ func CompareEvalKeys(keys []bfv.EvaluationKey) error {
 	return nil
 }
 
-func CompareArray(key [][][2]*ring.Poly, key2 [][][2]*ring.Poly) error {
-	if len(key) != len(key2) || len(key[0]) != len(key2[0]) {
+func CompareArray(key [][2]*ring.Poly, key2 [][2]*ring.Poly) error {
+	if len(key) != len(key2) {
 		return errors.New("Non matching length of switching keys")
 	}
 	for i, _ := range key {
-		for j, _ := range key[i] {
-			err := ComparePolys(*key[i][j][0], *key2[i][j][0])
-			if err != nil {
+		err := ComparePolys(*key[i][0], *key2[i][0])
+		if err != nil {
 
-				return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + strconv.Itoa(j) + "0")
-			}
-			err = ComparePolys(*key[i][j][1], *key2[i][j][1])
-			if err != nil {
-				return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + strconv.Itoa(j) + "1")
-			}
-
+			return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + "0")
 		}
+		err = ComparePolys(*key[i][1], *key2[i][1])
+		if err != nil {
+			return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + "1")
+		}
+
 	}
 	return nil
 

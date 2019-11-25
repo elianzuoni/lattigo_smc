@@ -13,7 +13,7 @@ import (
 
 func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	nbnodes := 3
-	log.SetDebugVisible(1)
+	log.SetDebugVisible(4)
 
 	//register the test protocol
 	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil {

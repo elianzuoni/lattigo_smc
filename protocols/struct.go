@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
+	"sync"
 )
 
 //CollectiveKeyGenerationProtocol structure encapsulating a key gen protocol for onet.
@@ -22,6 +23,15 @@ type CollectiveKeyGenerationProtocol struct {
 	ChannelPublicKey chan StructPublicKey
 	//ChannelStart to get the wake up
 	ChannelStart chan StructStart
+	//sync.Cond to make sure the protocols don't move too fast.
+	*sync.Cond
+}
+
+//Wait waits until the protocol has completed.
+func (ckgp *CollectiveKeyGenerationProtocol) Wait() {
+	ckgp.Cond.L.Lock()
+	ckgp.Cond.Wait()
+	ckgp.Cond.L.Unlock()
 }
 
 //CollectiveKeySwitchingProtocol struct for onet
@@ -188,7 +198,7 @@ type StructCrp struct {
 
 //CRP Wrapper around crp
 type CRP struct {
-	A [][]*ring.Poly
+	A []*ring.Poly
 }
 
 //StructRelinKeyRoundOne handler for onet - used to send the share after round one

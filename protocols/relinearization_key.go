@@ -49,8 +49,8 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 		return *new(bfv.EvaluationKey), err
 	}
 
-	rkg := dbfv.NewEkgProtocol(bfvCtx, BitDecomp)
-	u, _ := rkg.NewEphemeralKey(1 / 3.0)
+	rkg := dbfv.NewEkgProtocol(bfvCtx)
+	u := rkg.NewEphemeralKey(1 / 3.0)
 	sk, err := utils.GetSecretKey(bfvCtx, rlp.Sk.SecretKey+rlp.ServerIdentity().String())
 	if err != nil {
 		log.Error("Could not generate secret key : ", err)
@@ -130,7 +130,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	//now we can generate key.
 	log.Lvl3(rlp.ServerIdentity(), ": generating the relin key ! ")
 	//since all parties should have r2 and r3 dont need to send it.
-	evalKey := rkg.AllocateEvaluationKey(*bfvCtx)
+	evalKey := bfvCtx.NewRelinKeyEmpty(2)
 	rkg.GenRelinearizationKey(r2, r3, evalKey)
 
 	return *evalKey, nil

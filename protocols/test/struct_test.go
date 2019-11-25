@@ -13,8 +13,8 @@ import (
 func TestMarshallingSwitchingParameters(t *testing.T) {
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
 	PlainText := bfvCtx.NewPlaintext()
-	encoder, err := bfvCtx.NewBatchEncoder()
-	err = encoder.EncodeUint(bfvCtx.NewRandomPlaintextCoeffs(), PlainText)
+	encoder := bfvCtx.NewEncoder()
+	encoder.EncodeUint(bfvCtx.NewRandomPlaintextCoeffs(), PlainText)
 	if err != nil {
 		log.Print("Could not encode plaintext : ", err)
 		t.Fail()

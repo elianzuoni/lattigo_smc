@@ -15,7 +15,7 @@ func TestCollectiveSwitching(t *testing.T) {
 	//to do this we need to have some keys already.
 	//for this we can set up with the collective key generation
 	const nbnodes = 3
-	log.SetDebugVisible(1)
+	log.SetDebugVisible(4)
 
 	log.Lvl1("Setting up context and plaintext/ciphertext of reference")
 	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
@@ -74,8 +74,8 @@ func TestCollectiveSwitching(t *testing.T) {
 
 	//From here check that Original ciphertext decrypted under SkInput === Resulting ciphertext decrypted under SkOutput
 
-	tmp0 := bfvCtx.ContextQ().NewPoly()
-	tmp1 := bfvCtx.ContextQ().NewPoly()
+	tmp0 := bfvCtx.ContextKeys().NewPoly()
+	tmp1 := bfvCtx.ContextKeys().NewPoly()
 	for _, server := range local.Overlays {
 
 		si := server.ServerIdentity().String()
@@ -90,8 +90,8 @@ func TestCollectiveSwitching(t *testing.T) {
 			log.Error("err : ", err)
 		}
 
-		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
-		bfvCtx.ContextQ().Add(tmp1, sk1.Get(), tmp1)
+		bfvCtx.ContextKeys().Add(tmp0, sk0.Get(), tmp0)
+		bfvCtx.ContextKeys().Add(tmp1, sk1.Get(), tmp1)
 
 	}
 	SkInput := new(bfv.SecretKey)
@@ -99,13 +99,13 @@ func TestCollectiveSwitching(t *testing.T) {
 	SkInput.Set(tmp0)
 	SkOutput.Set(tmp1)
 
-	encoder, err := bfvCtx.NewBatchEncoder()
+	encoder := bfvCtx.NewEncoder()
 	if err != nil {
 		log.Error("Could not start encoder : ", err)
 		t.Fail()
 	}
 
-	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
+	DecryptorInput := bfvCtx.NewDecryptor(SkInput)
 	if err != nil {
 		log.Error(err)
 		t.Fail()
@@ -114,7 +114,7 @@ func TestCollectiveSwitching(t *testing.T) {
 	ReferencePlaintext := DecryptorInput.DecryptNew(CipherText)
 	expected := encoder.DecodeUint(ReferencePlaintext)
 
-	DecryptorOutput, err := bfvCtx.NewDecryptor(SkOutput)
+	DecryptorOutput := bfvCtx.NewDecryptor(SkOutput)
 	if err != nil {
 		log.Error(err)
 		t.Fail()

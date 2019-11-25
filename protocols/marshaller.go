@@ -68,24 +68,22 @@ func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 
 //MarshalBinary creates a data array from the CRP
 func (crp *CRP) MarshalBinary() ([]byte, error) {
-	if len(crp.A) == 0 || len(crp.A[0]) == 0 {
+	if len(crp.A) == 0 {
 		return []byte{}, nil
 	}
 	//compute the total data length.
-	ringLen := crp.A[0][0].GetDataLen(true)
-	length := uint64(len(crp.A)*len(crp.A[0])) * ringLen
+	ringLen := crp.A[0].GetDataLen(true)
+	length := uint64(len(crp.A)) * ringLen
 	data := make([]byte, length+2)
 	data[0] = uint8(len(crp.A))
-	data[1] = uint8(len(crp.A[0]))
-	ptr := uint64(2)
+	ptr := uint64(1)
 	for _, xs := range crp.A {
-		for _, x := range xs {
-			cnt, err := x.WriteTo(data[ptr : ptr+ringLen])
-			if err != nil {
-				return []byte{}, errors.New("Could not write the crp")
-			}
-			ptr += cnt
+		cnt, err := xs.WriteTo(data[ptr : ptr+ringLen])
+		if err != nil {
+			return []byte{}, errors.New("Could not write the crp")
 		}
+		ptr += cnt
+
 	}
 
 	return data, nil
@@ -94,28 +92,24 @@ func (crp *CRP) MarshalBinary() ([]byte, error) {
 //UnmarshalBinary creates the crp object from the data array.
 func (crp *CRP) UnmarshalBinary(data []byte) error {
 	outerLen := data[0]
-	innerLen := data[1]
-	lenRing := uint64((len(data) - 2) / int(outerLen) / int(innerLen))
+	lenRing := uint64((len(data) - 1) / int(outerLen))
 	//allocate if necessary.
 	if crp.A == nil {
-		crp.A = make([][]*ring.Poly, outerLen)
-		for i := 0; i < int(outerLen); i++ {
-			crp.A[i] = make([]*ring.Poly, innerLen)
-		}
+		crp.A = make([]*ring.Poly, outerLen)
+
 	}
 
 	ptr := uint64(2)
 
 	for i := 0; i < int(outerLen); i++ {
-		for j := 0; j < int(innerLen); j++ {
-			crp.A[i][j] = new(ring.Poly)
-			err := crp.A[i][j].UnmarshalBinary(data[ptr : ptr+lenRing])
-			if err != nil {
-				return err
-			}
-
-			ptr += lenRing
+		crp.A[i] = new(ring.Poly)
+		err := crp.A[i].UnmarshalBinary(data[ptr : ptr+lenRing])
+		if err != nil {
+			return err
 		}
+
+		ptr += lenRing
+
 	}
 
 	return nil

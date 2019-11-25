@@ -92,19 +92,19 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
 
-	DecryptorOutput, err := bfvCtx.NewDecryptor(SkOutput)
+	DecryptorOutput := bfvCtx.NewDecryptor(SkOutput)
 	if err != nil {
 		log.Error("Error on decryptor : ", err)
 		t.Fail()
 	}
 
-	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
+	DecryptorInput := bfvCtx.NewDecryptor(SkInput)
 	if err != nil {
 		log.Error("Error on decryptor : ", err)
 		t.Fail()
 	}
 
-	encoder, err := bfvCtx.NewBatchEncoder()
+	encoder := bfvCtx.NewEncoder()
 	if err != nil {
 		log.Error("Could not start batch encoder : ", err)
 		t.Fail()

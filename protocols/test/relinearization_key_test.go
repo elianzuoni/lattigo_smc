@@ -2,7 +2,6 @@ package test
 
 import (
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
@@ -29,22 +28,19 @@ func TestNewRelinearizationKey(t *testing.T) {
 	}
 
 	contextQ := bfvCtx.ContextQ()
-	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
-	crpGenerators := make([]*dbfv.CRPGenerator, nbnodes)
+	crpGenerators := make([]*ring.CRPGenerator, nbnodes)
 	for i := 0; i < nbnodes; i++ {
-		crpGenerators[i], err = dbfv.NewCRPGenerator(nil, contextQ)
+		crpGenerators[i] = ring.NewCRPGenerator(nil, bfvCtx.ContextKeys())
 		if err != nil {
 			t.Error(err)
 			t.Fail()
 		}
 		crpGenerators[i].Seed([]byte{})
 	}
-	crp := make([][]*ring.Poly, len(contextQ.Modulus))
+	crp := make([]*ring.Poly, len(contextQ.Modulus))
 	for j := 0; j < len(contextQ.Modulus); j++ {
-		crp[j] = make([]*ring.Poly, bitLog)
-		for u := uint64(0); u < bitLog; u++ {
-			crp[j][u] = crpGenerators[0].Clock()
-		}
+		crp[j] = crpGenerators[0].Clock()
+
 	}
 	log.Lvl1("Setup ok - Starting protocols")
 	if _, err = onet.GlobalProtocolRegister("RelinearizationKeyTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
@@ -86,7 +82,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	log.Lvl1("Collecting the relinearization keys")
 
 	i := 0
-	tmp0 := bfvCtx.ContextQ().NewPoly()
+	tmp0 := bfvCtx.ContextKeys().NewPoly()
 	for i < nbnodes {
 		si := tree.Roster.List[i].String()
 		sk0, err := utils.GetSecretKey(bfvCtx, SKHash+si)
@@ -96,7 +92,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 			return
 		}
 
-		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
+		bfvCtx.ContextKeys().Add(tmp0, sk0.Get(), tmp0)
 
 		i++
 	}
@@ -104,24 +100,24 @@ func TestNewRelinearizationKey(t *testing.T) {
 	Sk := new(bfv.SecretKey)
 	Sk.Set(tmp0)
 	Pk := bfvCtx.NewKeyGenerator().NewPublicKey(Sk)
-	encryptor_pk, _ := bfvCtx.NewEncryptorFromPk(Pk)
+	encryptor_pk := bfvCtx.NewEncryptorFromPk(Pk)
 	//encrypt some cipher text...
 
 	PlainText := bfvCtx.NewPlaintext()
-	encoder, err := bfvCtx.NewBatchEncoder()
+	encoder := bfvCtx.NewEncoder()
 	if err != nil {
 		log.Error("Error could not start encoder : ", err)
 		t.Fail()
 	}
 	expected := bfvCtx.ContextT().NewUniformPoly()
 
-	err = encoder.EncodeUint(expected.Coeffs[0], PlainText)
+	encoder.EncodeUint(expected.Coeffs[0], PlainText)
 	if err != nil {
 		log.Print("Could not encode plaintext : ", err)
 		t.Fail()
 	}
 
-	CipherText, err := encryptor_pk.EncryptNew(PlainText)
+	CipherText := encryptor_pk.EncryptNew(PlainText)
 
 	if err != nil {
 		log.Print("error in encryption : ", err)
@@ -130,7 +126,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	//multiply it !
 	evaluator := bfvCtx.NewEvaluator()
 
-	MulCiphertext, _ := evaluator.MulNew(CipherText, CipherText)
+	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
 	//we want to relinearize MulCiphertexts
 	ExpectedCoeffs := bfvCtx.ContextT().NewPoly()
 	bfvCtx.ContextT().MulCoeffs(expected, expected, ExpectedCoeffs)
@@ -164,7 +160,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	}
 
 	//decrypt the cipher
-	decryptor, _ := bfvCtx.NewDecryptor(Sk)
+	decryptor := bfvCtx.NewDecryptor(Sk)
 	resDecrypted := decryptor.DecryptNew(ResCipher)
 	resDecoded := encoder.DecodeUint(resDecrypted)
 	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
