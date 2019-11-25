@@ -94,14 +94,61 @@ func (s *Service) Process(msg *network.Envelope) {
 	//Processor interface used to recognize messages between servers
 }
 
-//Query handlers queries can be : Multiply, Add, query for response,
+//Query handlers queries can be : Multiply, Add, store
+
+type StoreQuery struct {
+	data []byte
+	//maybe more is needed.
+}
+
+func (s *Service) HandleStoreQuery(storeQuery *StoreQuery) (network.Message, error) {
+	log.Lvl1(s.ServerIdentity(), ": got a query to store data")
+
+	return nil, nil
+}
+
+func (s *Service) HandleSumQuery() (network.Message, error) {
+	return nil, nil
+}
+
+func (s *Service) HandleMultiplyQuery() (network.Message, error) {
+	return nil, nil
+}
 
 //Protocol handlers
 
 func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
-	return nil, nil
+	err := tn.SetConfig(conf)
+	if err != nil {
+		return nil, err
+	}
+	var protocol onet.ProtocolInstance
+	switch tn.ProtocolName() {
+	case protocols.CollectiveKeyGenerationProtocolName:
+		log.Lvl1(s.ServerIdentity(), ": New protocol ckgp")
+		protocol, err = protocols.NewCollectiveKeyGeneration(tn)
+		if err != nil {
+			return nil, err
+		}
+		keygen := protocol.(*protocols.CollectiveKeyGenerationProtocol)
+		keygen.Params = bfv.DefaultParams[0]
+		if tn.IsRoot() {
+
+		}
+	case protocols.CollectiveKeySwitchingProtocolName:
+		log.Lvl1(s.ServerIdentity(), ": New protocol cksp")
+
+	case protocols.CollectivePublicKeySwitchingProtocolName:
+		log.Lvl1(s.ServerIdentity(), ": New protocol cpksp")
+
+	case protocols.RelinearizationKeyProtocolName:
+		log.Lvl1(s.ServerIdentity(), ": New protocol rlkp")
+
+	}
+	return protocol, nil
 }
 
 func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
+
 	return nil, nil
 }

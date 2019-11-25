@@ -17,7 +17,7 @@ import (
 	"lattigo-smc/utils"
 )
 
-//const ProtocolName = "CollectivePublicKeySwitching"
+const CollectivePublicKeySwitchingProtocolName = "CollectivePublicKeySwitching"
 
 //NewCollectivePublicKeySwitching initialize a new protocol, register the channels for onet.
 func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {

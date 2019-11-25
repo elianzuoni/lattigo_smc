@@ -19,6 +19,8 @@ import (
 	"lattigo-smc/utils"
 )
 
+const CollectiveKeySwitchingProtocolName = "CollectiveKeySwitching"
+
 //NewCollectiveKeySwitching initializes a new collective key switching , registers the channels in onet
 func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 

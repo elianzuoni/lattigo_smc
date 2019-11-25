@@ -19,9 +19,9 @@ func TurnOffTest() {
 }
 
 func init() {
-	_, _ = onet.GlobalProtocolRegister("CollectiveKeySwitching", NewCollectiveKeySwitching)
-	_, _ = onet.GlobalProtocolRegister("CollectivePublicKeySwitching", NewCollectivePublicKeySwitching)
-	_, _ = onet.GlobalProtocolRegister("RelinearizationKeyProtocol", NewRelinearizationKey)
+	_, _ = onet.GlobalProtocolRegister(CollectiveKeySwitchingProtocolName, NewCollectiveKeySwitching)
+	_, _ = onet.GlobalProtocolRegister(CollectivePublicKeySwitchingProtocolName, NewCollectivePublicKeySwitching)
+	_, _ = onet.GlobalProtocolRegister(RelinearizationKeyProtocolName, NewRelinearizationKey)
 }
 
 /*****************COLLECTIVE KEY GENERATION ONET HANDLERS *******************/

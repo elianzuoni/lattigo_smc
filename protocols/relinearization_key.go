@@ -21,6 +21,8 @@ import (
 	"lattigo-smc/utils"
 )
 
+const RelinearizationKeyProtocolName = "RelinearizationKeyProtocol"
+
 //NewRelinearizationKey initializes a new protocol, registers the channels
 func NewRelinearizationKey(n *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
 	p := &RelinearizationKeyProtocol{

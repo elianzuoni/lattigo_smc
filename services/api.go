@@ -6,24 +6,32 @@ import (
 	"go.dedis.ch/onet/v3/network"
 )
 
-type Client struct{
+type Client struct {
 	*onet.Client
-	clientID string
+	clientID   string
 	entryPoint *network.ServerIdentity
 
 	//
 }
 
-
 func NewLattigoSMCClient(entryPoint *network.ServerIdentity, clientID string) *Client {
 	client := &Client{
-		Client : onet.NewClient(suites.MustFind("Ed25519"),ServiceName),
-		clientID:clientID,
-		entryPoint:entryPoint,
+		Client:     onet.NewClient(suites.MustFind("Ed25519"), ServiceName),
+		clientID:   clientID,
+		entryPoint: entryPoint,
 	}
 
 	return client
 }
 
+func (c *Client) SendSumQuery() {
 
-func (c *Client)
+}
+
+func (c *Client) SendWriteQuery() {
+
+}
+
+func (c *Client) SendMultiplyQuery() {
+
+}

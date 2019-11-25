@@ -23,7 +23,17 @@ func main() {
 	debugFlags := []cli.Flag{
 		cli.IntFlag{Usage: "logging-level : 1 to 5", Name: "debug,d", Value: 1},
 	}
-	clientFlags := []cli.Flag{}
+	clientFlags := []cli.Flag{
+		cli.StringFlag{
+			Name:  "write, w",
+			Usage: "Store the data on the root",
+			Value: "",
+		},
+		cli.BoolFlag{Name: "sum ,s", Usage: "Get sum of all data on the server"},
+		cli.BoolFlag{Name: "multiply ,m", Usage: "Get product of all data on the server"},
+		//todo see how we could do something like that.... maybe if the server has a trained vector
+		cli.BoolFlag{Name: "predict, p", Usage: "Predict a value based on the data in the server"},
+	}
 	serverFlags := []cli.Flag{
 		cli.StringFlag{
 			Name:  "config, c",
@@ -37,6 +47,7 @@ func main() {
 			Name:    "run",
 			Aliases: []string{"r"},
 			Usage:   "Run Lattigo-smc client",
+			Action:  runLattigo,
 			Flags:   clientFlags,
 		},
 
@@ -57,6 +68,7 @@ func main() {
 					Aliases: []string{"s"},
 					Action: func(ctx *cli.Context) error {
 						log.Lvl1("Setting up lattigo server")
+						//This is the setup of onet. We do not need to do anything here.
 						app.InteractiveConfig(suites.MustFind("Ed25519"), Name)
 						return nil
 					},
