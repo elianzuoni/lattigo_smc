@@ -69,7 +69,7 @@ func main() {
 					Action: func(ctx *cli.Context) error {
 						log.Lvl1("Setting up lattigo server")
 						//This is the setup of onet. We do not need to do anything here.
-						app.InteractiveConfig(suites.MustFind("Ed25519"), Name)
+						app.InteractiveConfig(utils.SUITE, Name)
 						return nil
 					},
 				},

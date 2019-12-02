@@ -23,7 +23,7 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	}
 
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
+	local := onet.NewLocalTest(utils.SUITE)
 	defer local.CloseAll()
 
 	_, _, tree := local.GenTree(nbnodes, true)
@@ -90,7 +90,7 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 
 	nbnodes := 3
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
-	local := onet.NewTCPTest(suites.MustFind("Ed25519"))
+	local := onet.NewTCPTest(utils.SUITE)
 	defer local.CloseAll()
 
 	_, _, tree := local.GenTree(nbnodes, true)

@@ -86,7 +86,7 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	round := monitor.NewTimeMeasure("round")
 
-	//local := onet.NewLocalTest(suites.MustFind("Ed25519"))
+	//local := onet.NewLocalTest(utils.SUITE)
 	//defer local.CloseAll()
 
 	log.Lvl1("Starting Public collective key switching simul")
@@ -127,23 +127,11 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
 
-	DecryptorOutput, err := bfvCtx.NewDecryptor(SecretKey)
-	if err != nil {
-		log.Error("Error on decryptor : ", err)
-		return err
-	}
+	DecryptorOutput := bfvCtx.NewDecryptor(SecretKey)
 
-	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
-	if err != nil {
-		log.Error("Error on decryptor : ", err)
-		return err
-	}
+	DecryptorInput := bfvCtx.NewDecryptor(SkInput)
 
-	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil {
-		log.Error("Could not start batch encoder : ", err)
-		return err
-	}
+	encoder := bfvCtx.NewEncoder()
 
 	//Get expected result.
 	decrypted := DecryptorInput.DecryptNew(CipherPublic)

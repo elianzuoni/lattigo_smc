@@ -52,7 +52,7 @@ func TestCollectiveSwitching(t *testing.T) {
 
 	//can start protocol
 	log.Lvl1("Started to test collective key switching locally with nodes amount : ", nbnodes)
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
+	local := onet.NewLocalTest(utils.SUITE)
 	defer local.CloseAll()
 	_, _, tree := local.GenTree(nbnodes, true)
 	pi, err := local.CreateProtocol("CollectiveKeySwitchingTest", tree)

@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
+	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
@@ -10,6 +11,26 @@ import (
 )
 
 const ServiceName = "LattigoSMC"
+
+type ServiceState struct {
+	QueryID QueryID
+}
+
+type ServiceResult struct {
+	Data []byte
+	//the restuls of a query encrypted with elgamal.
+	K kyber.Point
+	C kyber.Point
+}
+
+//The query for the result.
+type QueryResult struct {
+	QueryID *QueryID
+	public  kyber.Point
+}
+
+//ID of query. Should be unique
+type QueryID string
 
 //Service is the service of lattigoSMC - allows to compute the different HE operations
 type Service struct {
@@ -19,6 +40,20 @@ type Service struct {
 	bfv.Ciphertext
 	bfv.PublicKey
 	bfv.SecretKey
+	bfv.EvaluationKey
+}
+
+//QueryData contains the information server side for the query.
+type QueryData struct {
+	QueryID      QueryID
+	Roster       onet.Roster
+	ClientPubKey kyber.Point
+	Source       *network.ServerIdentity
+
+	//what is in the query
+	sum      bool
+	multiply bool
+	data     []byte
 }
 
 type SetupRequest struct {
@@ -34,7 +69,14 @@ type Query struct {
 
 //MsgTypes different messages that can be used for the service.
 type MsgTypes struct {
+	msgQueryData     network.MessageTypeID
+	msgSetupRequest  network.MessageTypeID
+	msgQuery         network.MessageTypeID
+	msgSumQuery      network.MessageTypeID
+	msgMultiplyQuery network.MessageTypeID
 }
+
+var msgTypes = MsgTypes{}
 
 func init() {
 	_, err := onet.RegisterNewService(ServiceName, NewLattigoSMCService)
@@ -43,12 +85,39 @@ func init() {
 		panic(err)
 	}
 
+	//Register the messages
+	log.Lvl1("Registering messages")
+	msgTypes.msgQuery = network.RegisterMessage(&Query{})
+	msgTypes.msgQueryData = network.RegisterMessage(&QueryData{})
+	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
+	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{})
+	msgTypes.msgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{})
+
 }
 
 func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
+	log.Lvl1(c.ServerIdentity(), "Starting lattigo smc service")
 	newLattigo := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
 	}
+	//registering the handlers
+	if err := newLattigo.RegisterHandler(newLattigo.HandleQueryData); err != nil {
+		return nil, errors.New("Wrong handler 1:" + err.Error())
+	}
+	if err := newLattigo.RegisterHandler(newLattigo.HandleSumQuery); err != nil {
+		return nil, errors.New("Wrong handler 2:" + err.Error())
+	}
+	if err := newLattigo.RegisterHandler(newLattigo.HandleMultiplyQuery); err != nil {
+		return nil, errors.New("Wrong handler 3:" + err.Error())
+	}
+	if err := newLattigo.RegisterHandler(newLattigo.HandleStoreQuery); err != nil {
+		return nil, errors.New("Wrong handler 4:" + err.Error())
+	}
+
+	c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
+	c.RegisterProcessor(newLattigo, msgTypes.msgQuery)
+	c.RegisterProcessor(newLattigo, msgTypes.msgSetupRequest)
+
 	return newLattigo, nil
 }
 
@@ -78,8 +147,9 @@ func (s *Service) Setup(request *SetupRequest) (*bfv.PublicKey, *bfv.EvaluationK
 
 	//todo here inject parameters.
 	err = ckgp.Start()
+	ckgp.Params = bfv.DefaultParams[0]
 	if err != nil {
-		log.ErrFatal(err, "COuld not start collective key generation protocol")
+		log.ErrFatal(err, "Could not start collective key generation protocol")
 
 	}
 	//we should wait until the above is done.
@@ -91,7 +161,9 @@ func (s *Service) Setup(request *SetupRequest) (*bfv.PublicKey, *bfv.EvaluationK
 }
 
 func (s *Service) Process(msg *network.Envelope) {
-	//Processor interface used to recognize messages between servers
+	//Processor interface used to recognize messages between server
+	//idea is to make an if else and send it to the appropriate handler.
+
 }
 
 //Query handlers queries can be : Multiply, Add, store
@@ -107,11 +179,19 @@ func (s *Service) HandleStoreQuery(storeQuery *StoreQuery) (network.Message, err
 	return nil, nil
 }
 
-func (s *Service) HandleSumQuery() (network.Message, error) {
+type SumQuery struct {
+	amt uint32
+}
+
+func (s *Service) HandleSumQuery(sumQuery *SumQuery) (network.Message, error) {
 	return nil, nil
 }
 
-func (s *Service) HandleMultiplyQuery() (network.Message, error) {
+type MultiplyQuery struct {
+	amt uint32
+}
+
+func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, error) {
 	return nil, nil
 }
 
@@ -150,5 +230,12 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 
 func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
 
+	return nil, nil
+}
+
+//------------HANDLES-QUERIES ---------------
+//HandleQueryData is called by the service when the client makes a request to write some data.
+func (s *Service) HandleQueryData(query *QueryData) (network.Message, error) {
+	log.Lvl1(s.ServerIdentity(), " received query data ")
 	return nil, nil
 }

@@ -6,6 +6,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/app"
 	"go.dedis.ch/onet/v3/log"
+	"lattigo-smc/services"
 	"os"
 )
 
@@ -19,10 +20,11 @@ func runLattigo(c *cli.Context) {
 	write := c.Bool("write")
 	//setup the group toml for servers...
 
-	roster, err := parseGroupToml(groupToml)
+	_, err := parseGroupToml(groupToml)
 	if err != nil {
 		log.ErrFatal(err, "Could not parse group toml file :", groupToml)
 	}
+
 	if sum {
 
 		log.Lvl1("Query to sum all values on the root")
@@ -57,7 +59,16 @@ func parseGroupToml(s string) (*onet.Roster, error) {
 	return group.Roster, nil
 }
 
-func writeQuery(data string) error {
+func writeQuery(el *onet.Roster, data string) error {
+	entryPoint := el.List[0] //todo why is it [0] not something else ?
+	client := services.NewLattigoSMCClient(entryPoint, "0")
+
+	queryID, err := client.SendWriteQuery(el, services.QueryID(""), "")
+	if err != nil {
+		return err
+	}
+	result, err := client.GetWriteResult(queryID)
+
 	return nil
 }
 

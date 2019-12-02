@@ -58,7 +58,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 		t.Fail()
 	}
 
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
+	local := onet.NewLocalTest(utils.SUITE)
 	defer local.CloseAll()
 	_, _, tree := local.GenTree(nbnodes, true)
 
