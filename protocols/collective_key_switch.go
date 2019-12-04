@@ -38,17 +38,16 @@ func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance,
 //CollectiveKeySwitching runs the collective key switching protocol returns the ciphertext after switching its key and error if there is any
 func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Ciphertext, error) {
 
-	bfvContext, err := bfv.NewBfvContextWithParam(&cks.Params.Params)
+	params := cks.Params.Params
+	SkInput, err := utils.GetSecretKey(&params, cks.Params.SkInputHash+cks.ServerIdentity().String())
 
-	SkInput, err := utils.GetSecretKey(bfvContext, cks.Params.SkInputHash+cks.ServerIdentity().String())
-
-	SkOutput, err := utils.GetSecretKey(bfvContext, cks.Params.SkOutputHash+cks.ServerIdentity().String())
+	SkOutput, err := utils.GetSecretKey(&params, cks.Params.SkOutputHash+cks.ServerIdentity().String())
 
 	if err != nil {
 		return &bfv.Ciphertext{}, err
 	}
 
-	keySwitch := dbfv.NewCKSProtocol(bfvContext, cks.Params.Params.Sigma)
+	keySwitch := dbfv.NewCKSProtocol(&params, cks.Params.Params.Sigma)
 	h := keySwitch.AllocateShare()
 
 	keySwitch.GenShare(SkInput.Get(), SkOutput.Get(), &cks.Params.Ciphertext, h)
@@ -76,7 +75,7 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Cipher
 	//propagate the cipher text.
 	//the root propagates the cipher text to everyone.
 
-	res := bfvContext.NewCiphertext(cks.Params.Ciphertext.Degree())
+	res := bfv.NewCiphertext(&params, cks.Params.Ciphertext.Degree())
 	if cks.IsRoot() {
 
 		keySwitch.KeySwitch(h, &cks.Params.Ciphertext, res)

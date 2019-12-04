@@ -52,20 +52,17 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.PublicKey, error) {
 
 	//Set up the parameters - context and the crp
-	bfvCtx, err := bfv.NewBfvContextWithParam(&ckgp.Params)
-	if err != nil {
-		return bfv.PublicKey{}, fmt.Errorf("recieved invalid parameter set")
-	}
+	params := ckgp.Params
 
 	//todo have a different seed at each generation.
-	//todo ask what new crp is !
 	//Generate random ckg_1
-	crsGen, _ := dbfv.NewCRPGenerator([]byte{'l', 'a', 't', 't', 'i', 'g', 'o'}, bfvCtx.ContextQ())
-	ckg1 := crsGen.Clock()
+	crsGen := dbfv.NewCRPGenerator(&params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	ckg1 := params.NewPolyQP()
+	crsGen.Clock(ckg1)
 
-	ckg := dbfv.NewCKGProtocol(bfvCtx)
+	ckg := dbfv.NewCKGProtocol(&params)
 	//get si
-	sk, err := utils.GetSecretKey(bfvCtx, ckgp.ServerIdentity().String())
+	sk, err := utils.GetSecretKey(&params, ckgp.ServerIdentity().String())
 	if err != nil {
 		return bfv.PublicKey{}, fmt.Errorf("error when loading the secret key: %s", err)
 	}
@@ -96,7 +93,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 
 	log.Lvl4(ckgp.ServerIdentity(), "Sent partial")
 
-	pubkey := bfvCtx.NewPublicKey()
+	pubkey := bfv.NewPublicKey(&params)
 	if ckgp.IsRoot() {
 		ckg.GenPublicKey(partial, ckg1, pubkey) // if node is root, the combined key is the final collective key
 	} else {
@@ -112,7 +109,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	log.Lvl4(ckgp.ServerIdentity(), "sent PublicKey : ", pubkey)
 
 	//save the key in the a public file.
-	err = utils.SavePublicKey(pubkey, bfvCtx, ckgp.ServerIdentity().String())
+	err = utils.SavePublicKey(pubkey, ckgp.ServerIdentity().String())
 	if err != nil {
 		return *pubkey, err
 	}

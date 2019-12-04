@@ -36,11 +36,11 @@ func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 //CollectivePublicKeySwitching runs the protocol , returns the ciphertext after key switching and error if there is any.
 func (pcks *CollectivePublicKeySwitchingProtocol) CollectivePublicKeySwitching() (*bfv.Ciphertext, error) {
 
-	bfvCtx, _ := bfv.NewBfvContextWithParam(&pcks.Params)
-	protocol := dbfv.NewPCKSProtocol(bfvCtx, pcks.Params.Sigma)
+	params := pcks.Params
+	protocol := dbfv.NewPCKSProtocol(&params, pcks.Params.Sigma)
 	//Round 1
 	share := protocol.AllocateShares()
-	SecretKey, err := utils.GetSecretKey(bfvCtx, pcks.Sk.SecretKey+pcks.ServerIdentity().String())
+	SecretKey, err := utils.GetSecretKey(&params, pcks.Sk.SecretKey+pcks.ServerIdentity().String())
 	if err != nil {
 		log.Error("Error on loading secret key : ", err)
 	}
@@ -61,7 +61,7 @@ func (pcks *CollectivePublicKeySwitchingProtocol) CollectivePublicKeySwitching()
 	}
 
 	//check if its the root then aggregate else wait on the parent.
-	cipher := bfvCtx.NewCiphertext(pcks.Ciphertext.Degree())
+	cipher := bfv.NewCiphertext(&params, pcks.Ciphertext.Degree())
 	if pcks.IsRoot() {
 		protocol.KeySwitch(share, &pcks.Ciphertext, cipher)
 	} else {

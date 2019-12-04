@@ -60,18 +60,18 @@ func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolIn
 		return nil, err
 	}
 	instance := proto.(*protocols.CollectiveKeyGenerationProtocol)
-	instance.Params = bfv.DefaultParams[0]
+	instance.Params = *bfv.DefaultParams[0]
 	return instance, nil
 }
 
 func CheckKeys(tree []*onet.TreeNode, err error, t *testing.T) {
 	keys := make([]bfv.PublicKey, len(tree))
-	ctx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	params := bfv.DefaultParams[0]
 	for i := 0; i < len(tree); i++ {
 		//get the keys.
 		seed := (tree)[i].ServerIdentity.String()
 
-		key, _ := utils.LoadPublicKey(ctx, seed)
+		key, _ := utils.LoadPublicKey(params, seed)
 		keys[i] = *key
 	}
 	for _, k1 := range keys {
@@ -101,7 +101,7 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 	}
 
 	ckgp := pi.(*protocols.CollectiveKeyGenerationProtocol)
-	ckgp.Params = bfv.DefaultParams[0]
+	ckgp.Params = *bfv.DefaultParams[0]
 	log.Lvl1("Starting ckgp")
 	err = ckgp.Start()
 	if err != nil {

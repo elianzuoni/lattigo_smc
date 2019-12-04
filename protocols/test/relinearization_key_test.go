@@ -22,38 +22,35 @@ func TestNewRelinearizationKey(t *testing.T) {
 	log.Lvl1("Started to test relinearization protocol with nodes amount : ", nbnodes)
 	SKHash := "sk0"
 
-	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-	if err != nil {
-		log.Error(err)
-		t.Fail()
-	}
+	params := bfv.DefaultParams[0]
 
-	contextQ := bfvCtx.ContextQ()
+	ctxQ, _ := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
+
 	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
-	crpGenerators := make([]*dbfv.CRPGenerator, nbnodes)
+	crpGenerators := make([]*ring.CRPGenerator, nbnodes)
 	for i := 0; i < nbnodes; i++ {
-		crpGenerators[i], err = dbfv.NewCRPGenerator(nil, contextQ)
-		if err != nil {
-			t.Error(err)
-			t.Fail()
-		}
+		crpGenerators[i] = dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+
 		crpGenerators[i].Seed([]byte{})
 	}
-	crp := make([][]*ring.Poly, len(contextQ.Modulus))
-	for j := 0; j < len(contextQ.Modulus); j++ {
+
+	crp := make([][]*ring.Poly, len(ctxQ.Modulus))
+	for j := 0; j < len(ctxQ.Modulus); j++ {
 		crp[j] = make([]*ring.Poly, bitLog)
 		for u := uint64(0); u < bitLog; u++ {
-			crp[j][u] = crpGenerators[0].Clock()
+			crp[j][u] = new(ring.Poly)
+			crpGenerators[0].Clock(crp[j][u])
 		}
 	}
+
 	log.Lvl1("Setup ok - Starting protocols")
-	if _, err = onet.GlobalProtocolRegister("RelinearizationKeyTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+	if _, err := onet.GlobalProtocolRegister("RelinearizationKeyTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 		protocol, err := protocols.NewRelinearizationKey(tni)
 		if err != nil {
 			return nil, err
 		}
 		instance := protocol.(*protocols.RelinearizationKeyProtocol)
-		instance.Params = bfv.DefaultParams[0]
+		instance.Params = *bfv.DefaultParams[0]
 		instance.Sk.SecretKey = SKHash
 		instance.Crp.A = crp
 		return instance, nil
@@ -86,54 +83,44 @@ func TestNewRelinearizationKey(t *testing.T) {
 	log.Lvl1("Collecting the relinearization keys")
 
 	i := 0
-	tmp0 := bfvCtx.ContextQ().NewPoly()
+	tmp0 := params.NewPolyQ()
 	for i < nbnodes {
 		si := tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(bfvCtx, SKHash+si)
+		sk0, err := utils.GetSecretKey(params, SKHash+si)
 		if err != nil {
 			log.Error("error : ", err)
 			t.Fail()
 			return
 		}
 
-		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
+		ctxQ.Add(tmp0, sk0.Get(), tmp0)
 
 		i++
 	}
 
 	Sk := new(bfv.SecretKey)
 	Sk.Set(tmp0)
-	Pk := bfvCtx.NewKeyGenerator().NewPublicKey(Sk)
-	encryptor_pk, _ := bfvCtx.NewEncryptorFromPk(Pk)
+	Pk := bfv.NewKeyGenerator(params).NewPublicKey(Sk)
+	encryptor_pk := bfv.NewEncryptorFromPk(params, Pk)
 	//encrypt some cipher text...
 
-	PlainText := bfvCtx.NewPlaintext()
-	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil {
-		log.Error("Error could not start encoder : ", err)
-		t.Fail()
-	}
-	expected := bfvCtx.ContextT().NewUniformPoly()
+	PlainText := bfv.NewPlaintext(params)
+	encoder := bfv.NewEncoder(params)
 
-	err = encoder.EncodeUint(expected.Coeffs[0], PlainText)
-	if err != nil {
-		log.Print("Could not encode plaintext : ", err)
-		t.Fail()
-	}
+	expected := params.NewPolyQP()
 
-	CipherText, err := encryptor_pk.EncryptNew(PlainText)
+	encoder.EncodeUint(expected.Coeffs[0], PlainText)
 
-	if err != nil {
-		log.Print("error in encryption : ", err)
-		t.Fail()
-	}
+	CipherText := encryptor_pk.EncryptNew(PlainText)
+
 	//multiply it !
-	evaluator := bfvCtx.NewEvaluator()
+	evaluator := bfv.NewEvaluator(params)
 
-	MulCiphertext, _ := evaluator.MulNew(CipherText, CipherText)
+	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
 	//we want to relinearize MulCiphertexts
-	ExpectedCoeffs := bfvCtx.ContextT().NewPoly()
-	bfvCtx.ContextT().MulCoeffs(expected, expected, ExpectedCoeffs)
+	ExpectedCoeffs := params.NewPolyQP() // todo is QP == T ???
+	ctx, _ := ring.NewContextWithParams(params.LogN, params.Moduli.QiMul)
+	ctx.MulCoeffs(expected, expected, ExpectedCoeffs)
 	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
 
 	//Parameters ***************************
@@ -157,14 +144,10 @@ func TestNewRelinearizationKey(t *testing.T) {
 	}
 	log.Lvl1("Check : all peers have the same key ")
 	rlk := array[0]
-	ResCipher, err := evaluator.RelinearizeNew(MulCiphertext, &rlk)
-	if err != nil {
-		log.Error("Could not relinearize the cipher text : ", err)
-		t.Fail()
-	}
+	ResCipher := evaluator.RelinearizeNew(MulCiphertext, &rlk)
 
 	//decrypt the cipher
-	decryptor, _ := bfvCtx.NewDecryptor(Sk)
+	decryptor := bfv.NewDecryptor(params, Sk)
 	resDecrypted := decryptor.DecryptNew(ResCipher)
 	resDecoded := encoder.DecodeUint(resDecrypted)
 	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {

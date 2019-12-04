@@ -12,25 +12,8 @@ import (
 	"strconv"
 )
 
-//Print generate a new key pair and print it
-func PrintNewKeyPair() {
-	params := bfv.DefaultParams[0]
-	ctx, err := bfv.NewBfvContextWithParam(&params)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	kg := ctx.NewKeyGenerator()
-	//TODO p = 0.3 here
-	sk := kg.NewSecretKey()
-	if err != nil {
-		fmt.Printf("Error : %v \n", err)
-	}
-	fmt.Println(sk.MarshalBinary())
-}
-
 //Save the given secret key with a seed that will be hashed
-func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext, seed string) error {
+func SaveSecretKey(sk *bfv.SecretKey, seed string) error {
 	data, err := sk.MarshalBinary()
 
 	if err != nil {
@@ -51,9 +34,9 @@ func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext, seed string) error {
 }
 
 //Load a secret key. Will fail if the key does not exist.
-func LoadSecretKey(ctx *bfv.BfvContext, seed string) (sk *bfv.SecretKey, err error) {
+func LoadSecretKey(params bfv.Parameters, seed string) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	sk = ctx.NewKeyGenerator().NewSecretKey()
+	sk = bfv.NewSecretKey(&params)
 
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
@@ -68,18 +51,17 @@ func LoadSecretKey(ctx *bfv.BfvContext, seed string) (sk *bfv.SecretKey, err err
 }
 
 //Will try to load the secret key, else will generate a new one.
-func GetSecretKey(ctx *bfv.BfvContext, seed string) (sk *bfv.SecretKey, err error) {
-	if sk, err = LoadSecretKey(ctx, seed); sk != nil {
+func GetSecretKey(ctx *bfv.Parameters, seed string) (sk *bfv.SecretKey, err error) {
+	if sk, err = LoadSecretKey(*ctx, seed); sk != nil {
 		return
 	}
+	sk = bfv.NewSecretKey(ctx)
 
-	sk = ctx.NewKeyGenerator().NewSecretKey()
-
-	return sk, SaveSecretKey(sk, ctx, seed)
+	return sk, SaveSecretKey(sk, seed)
 }
 
 //Save the public key so it can be loaded afterwards.
-func SavePublicKey(pk *bfv.PublicKey, ctx *bfv.BfvContext, seed string) error {
+func SavePublicKey(pk *bfv.PublicKey, seed string) error {
 	data, err := pk.MarshalBinary()
 
 	if err != nil {
@@ -100,9 +82,10 @@ func SavePublicKey(pk *bfv.PublicKey, ctx *bfv.BfvContext, seed string) error {
 }
 
 //Load public key
-func LoadPublicKey(ctx *bfv.BfvContext, seed string) (pk *bfv.PublicKey, err error) {
+func LoadPublicKey(ctx *bfv.Parameters, seed string) (pk *bfv.PublicKey, err error) {
 	var data []byte
-	pk = ctx.NewPublicKey()
+
+	pk = bfv.NewPublicKey(ctx)
 
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
@@ -178,14 +161,13 @@ func Equalslice(a, b []uint64) bool {
 func CompareEvalKeys(keys []bfv.EvaluationKey) error {
 	for _, k1 := range keys {
 		for _, k2 := range keys {
-
-			err := CompareArray(k1.Get()[0].Get(), k2.Get()[0].Get())
-			if err != nil {
-				return err
-			}
-			err = CompareArray(k1.Get()[1].Get(), k2.Get()[1].Get())
-			if err != nil {
-				return err
+			for _, e1 := range k1.Get() {
+				for _, e2 := range k2.Get() {
+					err := CompareArray(e1.Get(), e2.Get())
+					if err != nil {
+						return err
+					}
+				}
 			}
 
 		}
@@ -194,24 +176,23 @@ func CompareEvalKeys(keys []bfv.EvaluationKey) error {
 	return nil
 }
 
-func CompareArray(key [][][2]*ring.Poly, key2 [][][2]*ring.Poly) error {
-	if len(key) != len(key2) || len(key[0]) != len(key2[0]) {
+func CompareArray(key [][2]*ring.Poly, key2 [][2]*ring.Poly) error {
+	if len(key) != len(key2) {
 		return errors.New("Non matching length of switching keys")
 	}
 	for i, _ := range key {
-		for j, _ := range key[i] {
-			err := ComparePolys(*key[i][j][0], *key2[i][j][0])
-			if err != nil {
+		err := ComparePolys(*key[i][0], *key2[i][0])
+		if err != nil {
 
-				return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + strconv.Itoa(j) + "0")
-			}
-			err = ComparePolys(*key[i][j][1], *key2[i][j][1])
-			if err != nil {
-				return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + strconv.Itoa(j) + "1")
-			}
-
+			return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + "0")
 		}
+		err = ComparePolys(*key[i][1], *key2[i][1])
+		if err != nil {
+			return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + "1")
+		}
+
 	}
+
 	return nil
 
 }

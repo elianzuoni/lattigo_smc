@@ -3,13 +3,13 @@ package test
 import (
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"testing"
-	"time"
 )
 
 func TestCollectivePublicKeySwitching(t *testing.T) {
@@ -19,16 +19,12 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 	log.SetDebugVisible(1)
 	log.Lvl1("Started to test collective key switching locally with nodes amount : ", nbnodes)
 
-	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-	if err != nil {
-		log.Print("Could not load bfv ctx ", err)
-		t.Fail()
-	}
+	params := bfv.DefaultParams[0]
 
-	SkOutput := bfvCtx.NewKeyGenerator().NewSecretKey()
-	publickey := bfvCtx.NewKeyGenerator().NewPublicKey(SkOutput)
+	SkOutput := bfv.NewKeyGenerator(params).NewSecretKey()
+	publickey := bfv.NewKeyGenerator(params).NewPublicKey(SkOutput)
 
-	CipherText := bfvCtx.NewRandomCiphertext(1)
+	CipherText := bfv.NewCiphertextRandom(params, 1)
 
 	//Inject the parameters for each node
 	if _, err := onet.GlobalProtocolRegister("CollectivePublicKeySwitchingTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
@@ -40,7 +36,7 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 		}
 
 		instance := proto.(*protocols.CollectivePublicKeySwitchingProtocol)
-		instance.Params = bfv.DefaultParams[0]
+		instance.Params = *bfv.DefaultParams[0]
 		instance.PublicKey = *publickey
 		instance.Ciphertext = *CipherText
 		instance.Sk.SecretKey = "sk0"
@@ -71,20 +67,22 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 		t.Fatal("Could not start the tree : ", err)
 	}
 
-	<-time.After(2 * time.Second)
-
 	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
 
 	i := 0
-	tmp0 := bfvCtx.ContextQ().NewPoly()
+	tmp0 := params.NewPolyQ()
+	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for i < nbnodes {
 		si := tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
+		sk0, err := utils.GetSecretKey(params, "sk0"+si)
 		if err != nil {
 			fmt.Print("error : ", err)
 		}
 
-		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
+		ctx.Add(tmp0, sk0.Get(), tmp0)
 
 		i++
 	}
@@ -92,23 +90,11 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
 
-	DecryptorOutput, err := bfvCtx.NewDecryptor(SkOutput)
-	if err != nil {
-		log.Error("Error on decryptor : ", err)
-		t.Fail()
-	}
+	DecryptorOutput := bfv.NewDecryptor(params, SkOutput)
 
-	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
-	if err != nil {
-		log.Error("Error on decryptor : ", err)
-		t.Fail()
-	}
+	DecryptorInput := bfv.NewDecryptor(params, SkInput)
 
-	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil {
-		log.Error("Could not start batch encoder : ", err)
-		t.Fail()
-	}
+	encoder := bfv.NewEncoder(params)
 
 	//Get expected result.
 	decrypted := DecryptorInput.DecryptNew(CipherText)
@@ -119,10 +105,10 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 		newCipher := (<-pcksp.ChannelCiphertext).Ciphertext
 		d, _ := newCipher.MarshalBinary()
 		log.Lvl4("Got cipher : ", d[0:25])
-		res := bfvCtx.NewPlaintext()
+		res := bfv.NewPlaintext(params)
 		DecryptorOutput.Decrypt(&newCipher, res)
 
-		log.Lvl1("Comparing a cipher..")
+		log.Lvl2("Comparing a cipher..")
 		decoded := encoder.DecodeUint(res)
 		ok := utils.Equalslice(decoded, expected)
 
