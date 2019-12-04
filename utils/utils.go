@@ -12,23 +12,6 @@ import (
 	"strconv"
 )
 
-//Print generate a new key pair and print it
-func PrintNewKeyPair() {
-	params := bfv.DefaultParams[0]
-	ctx, err := bfv.NewBfvContextWithParam(&params)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	kg := ctx.NewKeyGenerator()
-	//TODO p = 0.3 here
-	sk := kg.NewSecretKey()
-	if err != nil {
-		fmt.Printf("Error : %v \n", err)
-	}
-	fmt.Println(sk.MarshalBinary())
-}
-
 //Save the given secret key with a seed that will be hashed
 func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext, seed string) error {
 	data, err := sk.MarshalBinary()
@@ -51,7 +34,7 @@ func SaveSecretKey(sk *bfv.SecretKey, ctx *bfv.BfvContext, seed string) error {
 }
 
 //Load a secret key. Will fail if the key does not exist.
-func LoadSecretKey(ctx *bfv.BfvContext, seed string) (sk *bfv.SecretKey, err error) {
+func LoadSecretKey(seed string) (sk *bfv.SecretKey, err error) {
 	var data []byte
 	sk = new(bfv.SecretKey)
 
@@ -69,7 +52,7 @@ func LoadSecretKey(ctx *bfv.BfvContext, seed string) (sk *bfv.SecretKey, err err
 
 //Will try to load the secret key, else will generate a new one.
 func GetSecretKey(ctx *bfv.BfvContext, seed string) (sk *bfv.SecretKey, err error) {
-	if sk, err = LoadSecretKey(ctx, seed); sk != nil {
+	if sk, err = LoadSecretKey(seed); sk != nil {
 		return
 	}
 
@@ -79,7 +62,7 @@ func GetSecretKey(ctx *bfv.BfvContext, seed string) (sk *bfv.SecretKey, err erro
 }
 
 //Save the public key so it can be loaded afterwards.
-func SavePublicKey(pk *bfv.PublicKey, ctx *bfv.BfvContext, seed string) error {
+func SavePublicKey(pk *bfv.PublicKey, seed string) error {
 	data, err := pk.MarshalBinary()
 
 	if err != nil {

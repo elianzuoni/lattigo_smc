@@ -36,7 +36,7 @@ func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 //CollectivePublicKeySwitching runs the protocol , returns the ciphertext after key switching and error if there is any.
 func (pcks *CollectivePublicKeySwitchingProtocol) CollectivePublicKeySwitching() (*bfv.Ciphertext, error) {
 
-	bfvCtx, _ := bfv.NewBfvContextWithParam(&pcks.Params)
+	bfvCtx := bfv.NewBfvContextWithParam(&pcks.Params)
 	protocol := dbfv.NewPCKSProtocol(bfvCtx, pcks.Params.Sigma)
 	//Round 1
 	share := protocol.AllocateShares()

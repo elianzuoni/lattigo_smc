@@ -19,6 +19,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/utils"
+	"sync"
 )
 
 //CollectiveKeyGenerationProtocolName name of protocol for onet
@@ -39,6 +40,7 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 	log.Lvl1("NewCollectiveKeyGen called")
 	p := &CollectiveKeyGenerationProtocol{
 		TreeNodeInstance: n,
+		Cond:             sync.NewCond(&sync.Mutex{}),
 		//todo maybe register some channels here cf unlynx/protocols/key_switching - for feedback
 	}
 
@@ -53,10 +55,7 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.PublicKey, error) {
 
 	//Set up the parameters - context and the crp
-	bfvCtx, err := bfv.NewBfvContextWithParam(&ckgp.Params)
-	if err != nil {
-		return bfv.PublicKey{}, fmt.Errorf("recieved invalid parameter set")
-	}
+	bfvCtx := bfv.NewBfvContextWithParam(&ckgp.Params)
 
 	//todo have a different seed at each generation.
 	//todo ask what new crp is !
@@ -113,7 +112,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) CollectiveKeyGeneration() (bfv.Publ
 	log.Lvl4(ckgp.ServerIdentity(), "sent PublicKey : ", pubkey)
 
 	//save the key in the a public file.
-	err = utils.SavePublicKey(pubkey, bfvCtx, ckgp.ServerIdentity().String())
+	err = utils.SavePublicKey(pubkey, ckgp.ServerIdentity().String())
 	if err != nil {
 		return *pubkey, err
 	}

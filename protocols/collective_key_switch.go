@@ -40,7 +40,7 @@ func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance,
 //CollectiveKeySwitching runs the collective key switching protocol returns the ciphertext after switching its key and error if there is any
 func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Ciphertext, error) {
 
-	bfvContext, err := bfv.NewBfvContextWithParam(&cks.Params.Params)
+	bfvContext := bfv.NewBfvContextWithParam(&cks.Params.Params)
 
 	SkInput, err := utils.GetSecretKey(bfvContext, cks.Params.SkInputHash+cks.ServerIdentity().String())
 

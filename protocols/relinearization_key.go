@@ -45,11 +45,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	log.Lvl1(rlp.ServerIdentity(), " : starting relin key ")
 
 	//can start protocol now.
-	bfvCtx, err := bfv.NewBfvContextWithParam(&rlp.Params)
-	if err != nil {
-		log.Error("Could not start bfv context : ", err)
-		return *new(bfv.EvaluationKey), err
-	}
+	bfvCtx := bfv.NewBfvContextWithParam(&rlp.Params)
 
 	rkg := dbfv.NewEkgProtocol(bfvCtx)
 	u := rkg.NewEphemeralKey(1 / 3.0)

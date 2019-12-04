@@ -76,4 +76,14 @@ func (c *API) GetWriteResult(id *QueryID) ([]byte, error) {
 func (c *API) SendSetupQuery(entities *onet.Roster, generateEvaluationKey bool) error {
 	log.Lvl1(c, "Sending a setup query to the roster")
 
+	setupQuery := SetupRequest{*entities, generateEvaluationKey}
+	resp := SetupReply{}
+	err := c.SendProtobuf(c.entryPoint, &setupQuery, &resp)
+	if err != nil {
+		return err
+	}
+
+	log.Lvl1(c, " sent a setup request")
+	return nil
+
 }

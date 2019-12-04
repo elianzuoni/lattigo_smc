@@ -54,18 +54,20 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
 	//for the test - send all to root and in the test check that all keys are equals.
 
-	err = ckgp.SendTo(ckgp.Root(), PublicKey.Get()[0])
-
-	if err != nil {
-		log.Lvl4("Error in key sending to root : ", err)
-	}
-
 	log.Lvl1(ckgp.ServerIdentity(), " : im done")
 	if Test() && !ckgp.IsRoot() {
+		err = ckgp.SendTo(ckgp.Root(), PublicKey.Get()[0])
+
+		if err != nil {
+			log.Lvl4("Error in key sending to root : ", err)
+		}
+
 		ckgp.Done()
 
 	}
+
 	//tell the lock we are done.
+	ckgp.ChannelPublicKey <- StructPublicKey{ckgp.TreeNode(), PublicKey}
 	ckgp.Cond.Broadcast()
 
 	return nil
