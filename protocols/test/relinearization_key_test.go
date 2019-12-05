@@ -2,7 +2,6 @@ package test
 
 import (
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
@@ -10,7 +9,6 @@ import (
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"testing"
-	"time"
 )
 
 const BitDecomp = 64
@@ -24,23 +22,12 @@ func TestNewRelinearizationKey(t *testing.T) {
 
 	params := bfv.DefaultParams[0]
 
-	ctxQ, _ := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
-
-	bitLog := uint64((60 + (60 % BitDecomp)) / BitDecomp)
-	crpGenerators := make([]*ring.CRPGenerator, nbnodes)
-	for i := 0; i < nbnodes; i++ {
-		crpGenerators[i] = dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
-
-		crpGenerators[i].Seed([]byte{})
-	}
-
-	crp := make([][]*ring.Poly, len(ctxQ.Modulus))
-	for j := 0; j < len(ctxQ.Modulus); j++ {
-		crp[j] = make([]*ring.Poly, bitLog)
-		for u := uint64(0); u < bitLog; u++ {
-			crp[j][u] = new(ring.Poly)
-			crpGenerators[0].Clock(crp[j][u])
-		}
+	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
+	crpGenerator := ring.NewCRPGenerator(nil, ctxPQ)
+	modulus := params.Moduli.Qi
+	crp := make([]*ring.Poly, len(modulus))
+	for j := 0; j < len(modulus); j++ {
+		crp[j] = crpGenerator.ClockNew()
 	}
 
 	log.Lvl1("Setup ok - Starting protocols")
@@ -78,12 +65,11 @@ func TestNewRelinearizationKey(t *testing.T) {
 		log.Error("Could not start relinearization protocol : ", err)
 		t.Fail()
 	}
-
-	<-time.After(3 * time.Second)
 	log.Lvl1("Collecting the relinearization keys")
 
 	i := 0
-	tmp0 := params.NewPolyQ()
+	tmp0 := params.NewPolyQP()
+
 	for i < nbnodes {
 		si := tree.Roster.List[i].String()
 		sk0, err := utils.GetSecretKey(params, SKHash+si)
@@ -93,7 +79,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 			return
 		}
 
-		ctxQ.Add(tmp0, sk0.Get(), tmp0)
+		ctxPQ.Add(tmp0, sk0.Get(), tmp0)
 
 		i++
 	}
@@ -118,9 +104,8 @@ func TestNewRelinearizationKey(t *testing.T) {
 
 	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
 	//we want to relinearize MulCiphertexts
-	ExpectedCoeffs := params.NewPolyQP() // todo is QP == T ???
-	ctx, _ := ring.NewContextWithParams(params.LogN, params.Moduli.QiMul)
-	ctx.MulCoeffs(expected, expected, ExpectedCoeffs)
+	ExpectedCoeffs := params.NewPolyQP()
+	ctxPQ.MulCoeffs(expected, expected, ExpectedCoeffs)
 	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
 
 	//Parameters ***************************

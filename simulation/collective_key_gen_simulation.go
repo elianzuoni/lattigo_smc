@@ -73,7 +73,7 @@ func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (o
 
 	//cast
 	colkeygen := protocol.(*proto.CollectiveKeyGenerationProtocol)
-	colkeygen.Params = bfv.DefaultParams[0]
+	colkeygen.Params = *bfv.DefaultParams[0]
 	return colkeygen, nil
 
 }
@@ -116,7 +116,7 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 /*****************UTILITY FOR VERIFYING KEYS *****/
 func CheckKeys(ckgp *proto.CollectiveKeyGenerationProtocol, err error) {
 	keys := make([]bfv.PublicKey, len(ckgp.Roster().List))
-	ctx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	ctx := bfv.DefaultParams[0]
 	for i := 0; i < len(ckgp.Roster().List); i++ {
 		//get the keys.
 		seed := (*ckgp.List()[i].ServerIdentity).String()

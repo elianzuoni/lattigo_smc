@@ -130,18 +130,3 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 	//repeat n times
 
 }
-
-//func NewPublicCollectiveKeySwitchingTest(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-//	log.Lvl1("PING")
-//	proto, err := protocols.NewCollectivePublicKeySwitching(tni)
-//	if err != nil{
-//		return nil, err
-//	}
-//	instance := proto.(*protocols.CollectiveKeyGenerationProtocol)
-//	instance.Params = bfv.DefaultParams[0]
-//	return instance, nil
-//}
-
-/*
-
- */

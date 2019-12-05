@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
@@ -23,9 +24,8 @@ var Cipher bfv.Ciphertext
 func init() {
 	onet.SimulationRegister("CollectiveKeySwitching", NewSimulationKeySwitching)
 	//todo find cleaner way
-	bfvCtx, _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-	Cipher = *bfvCtx.NewRandomCiphertext(1)
-
+	params := bfv.DefaultParams[0]
+	Cipher = *bfv.NewCiphertextRandom(params, 1)
 }
 
 func NewSimulationKeySwitching(config string) (onet.Simulation, error) {
@@ -37,7 +37,7 @@ func NewSimulationKeySwitching(config string) (onet.Simulation, error) {
 
 	sim.Ciphertext = Cipher
 
-	log.Lvl1("OK")
+	log.Lvl1("New Key Switch instance : OK")
 
 	return sim, nil
 }
@@ -85,7 +85,7 @@ func NewKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (one
 	//cast
 	colkeyswitch := protocol.(*proto.CollectiveKeySwitchingProtocol)
 	colkeyswitch.Params = proto.SwitchingParameters{
-		Params:       bfv.DefaultParams[0],
+		Params:       *bfv.DefaultParams[0],
 		SkInputHash:  "sk0",
 		SkOutputHash: "sk1",
 		Ciphertext:   sim.Ciphertext, //todo How to inject the cipher text...
@@ -116,27 +116,28 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	<-time.After(5 * time.Second)
 
 	//Now we can setup our keys..
-	bfvCtx, err := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
+	params := bfv.DefaultParams[0]
+
+	i := 0
+	tmp0 := params.NewPolyQ()
+	tmp1 := params.NewPolyQ()
+	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
 	if err != nil {
-		log.Print("Could not load bfv ctx ", err)
 		return err
 	}
-	i := 0
-	tmp0 := bfvCtx.ContextQ().NewPoly()
-	tmp1 := bfvCtx.ContextQ().NewPoly()
 	for i < size {
 		si := config.Tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
+		sk0, err := utils.GetSecretKey(params, "sk0"+si)
 		if err != nil {
 			fmt.Print("error : ", err)
 		}
-		sk1, err := utils.GetSecretKey(bfvCtx, "sk1"+si)
+		sk1, err := utils.GetSecretKey(params, "sk1"+si)
 		if err != nil {
 			fmt.Print("err : ", err)
 		}
 
-		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
-		bfvCtx.ContextQ().Add(tmp1, sk1.Get(), tmp1)
+		ctx.Add(tmp0, sk0.Get(), tmp0)
+		ctx.Add(tmp1, sk1.Get(), tmp1)
 
 		i++
 	}
@@ -145,29 +146,16 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	SkInput.Set(tmp0)
 	SkOutput.Set(tmp1)
 
-	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil {
-		log.Error("Could not start encoder : ", err)
-		return err
-	}
+	encoder := bfv.NewEncoder(params)
 
-	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
+	DecryptorInput := bfv.NewDecryptor(params, SkInput)
 
 	//expected
 	ReferencePlaintext := DecryptorInput.DecryptNew(&s.Ciphertext)
-	d, _ := s.Ciphertext.MarshalBinary()
-	log.Lvl1("REFERENCE CIPHER ", d[0:25])
 	expected := encoder.DecodeUint(ReferencePlaintext)
 
-	DecryptorOutput, err := bfvCtx.NewDecryptor(SkOutput)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
+	DecryptorOutput := bfv.NewDecryptor(params, SkOutput)
+	log.Lvl1("test is downloading the ciphertext..")
 	//check if all ciphers are ok
 	defer cksp.Done()
 
@@ -176,7 +164,7 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 		newCipher := (<-cksp.ChannelCiphertext).Ciphertext
 		d, _ := newCipher.MarshalBinary()
 		log.Lvl4("Got cipher : ", d[0:25])
-		res := bfvCtx.NewPlaintext()
+		res := bfv.NewPlaintext(params)
 		DecryptorOutput.Decrypt(&newCipher, res)
 
 		log.Lvl1("Comparing a cipher..")
@@ -184,8 +172,9 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 		ok := utils.Equalslice(decoded, expected)
 
 		if !ok {
+			log.Print("Plaintext do not match ")
 			cksp.Done()
-			return errors.New("Plaintext do not match")
+			return errors.New("plaintexts do not match")
 
 		}
 		i++
@@ -194,9 +183,6 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	log.Lvl1("Got all matches on ciphers.")
 
 	round.Record()
-	if err != nil {
-		log.Fatal("Could not start the tree : ", err)
-	}
 
 	log.Lvl4("finished")
 	return nil

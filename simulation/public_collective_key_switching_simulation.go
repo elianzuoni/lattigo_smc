@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
@@ -27,9 +28,9 @@ var SecretKey *bfv.SecretKey
 func init() {
 	onet.SimulationRegister("CollectivePublicKeySwitching", NewSimulationPublicKeySwitching)
 	//Setting up params.
-	bfvCtx, _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-	CipherPublic = bfvCtx.NewRandomCiphertext(1)
-	keygen := bfvCtx.NewKeyGenerator()
+	params := (bfv.DefaultParams[0])
+	CipherPublic = bfv.NewCiphertextRandom(params, 1)
+	keygen := bfv.NewKeyGenerator(params)
 	SecretKey = keygen.NewSecretKey()
 	PublicKey = keygen.NewPublicKey(SecretKey)
 }
@@ -107,19 +108,21 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	<-time.After(5 * time.Second)
 
 	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
-	log.Lvl1("Public Collective key switching done. Now comparing the cipher texts. ")
-	bfvCtx, _ := bfv.NewBfvContextWithParam(&bfv.DefaultParams[0])
-	nbnodes := config.Tree.Size()
 	i := 0
-	tmp0 := bfvCtx.ContextQ().NewPoly()
-	for i < nbnodes {
-		si := config.Tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(bfvCtx, "sk0"+si)
+	params := bfv.DefaultParams[0]
+	tmp0 := params.NewPolyQ()
+	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
+	if err != nil {
+		return err
+	}
+	for i < size {
+		si := config.Roster.List[i].String()
+		sk0, err := utils.GetSecretKey(params, "sk0"+si)
 		if err != nil {
 			fmt.Print("error : ", err)
 		}
 
-		bfvCtx.ContextQ().Add(tmp0, sk0.Get(), tmp0)
+		ctx.Add(tmp0, sk0.Get(), tmp0)
 
 		i++
 	}
@@ -127,34 +130,22 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
 
-	DecryptorOutput, err := bfvCtx.NewDecryptor(SecretKey)
-	if err != nil {
-		log.Error("Error on decryptor : ", err)
-		return err
-	}
+	DecryptorOutput := bfv.NewDecryptor(params, SecretKey)
 
-	DecryptorInput, err := bfvCtx.NewDecryptor(SkInput)
-	if err != nil {
-		log.Error("Error on decryptor : ", err)
-		return err
-	}
+	DecryptorInput := bfv.NewDecryptor(params, SkInput)
 
-	encoder, err := bfvCtx.NewBatchEncoder()
-	if err != nil {
-		log.Error("Could not start batch encoder : ", err)
-		return err
-	}
+	encoder := bfv.NewEncoder(params)
 
 	//Get expected result.
 	decrypted := DecryptorInput.DecryptNew(CipherPublic)
 	expected := encoder.DecodeUint(decrypted)
 
 	i = 0
-	for i < nbnodes {
+	for i < size {
 		newCipher := (<-pcksp.ChannelCiphertext).Ciphertext
 		d, _ := newCipher.MarshalBinary()
 		log.Lvl4("Got cipher : ", d[0:25])
-		res := bfvCtx.NewPlaintext()
+		res := bfv.NewPlaintext(params)
 		DecryptorOutput.Decrypt(&newCipher, res)
 
 		log.Lvl1("Comparing a cipher..")
@@ -192,7 +183,7 @@ func NewPublicKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *PublicKeySwitch
 
 	//cast
 	keygen := protocol.(*proto.CollectivePublicKeySwitchingProtocol)
-	keygen.Params = bfv.DefaultParams[0]
+	keygen.Params = *bfv.DefaultParams[0]
 	keygen.Sk.SecretKey = "sk0"
 	keygen.Ciphertext = sim.Ciphertext
 	keygen.PublicKey = sim.PublicKey

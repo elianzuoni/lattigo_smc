@@ -181,7 +181,7 @@ func (rlp *RelinearizationKeyProtocol) Dispatch() error {
 
 	//small check.
 	data, _ := res.MarshalBinary()
-	log.Lvl1(rlp.ServerIdentity(), " : got key starting with : ", data[0:25])
+	log.Lvl4(rlp.ServerIdentity(), " : got key starting with : ", data[0:25])
 
 	if Test() {
 		_ = rlp.SendTo(rlp.Root(), &res)
@@ -190,6 +190,6 @@ func (rlp *RelinearizationKeyProtocol) Dispatch() error {
 	if !rlp.IsRoot() && Test() {
 		rlp.Done()
 	}
-	log.Lvl1(rlp.ServerIdentity(), " : exiting dispatch ")
+	log.Lvl3(rlp.ServerIdentity(), " : exiting dispatch ")
 	return nil
 }

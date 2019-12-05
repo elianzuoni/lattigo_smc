@@ -188,7 +188,7 @@ type StructCrp struct {
 
 //CRP Wrapper around crp
 type CRP struct {
-	A [][]*ring.Poly
+	A []*ring.Poly
 }
 
 //StructRelinKeyRoundOne handler for onet - used to send the share after round one
