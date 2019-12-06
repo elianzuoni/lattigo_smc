@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
+	"sync"
 )
 
 //CollectiveKeyGenerationProtocol structure encapsulating a key gen protocol for onet.
@@ -15,6 +16,11 @@ type CollectiveKeyGenerationProtocol struct {
 
 	//Params parameters of the protocol
 	Params bfv.Parameters
+	//Secret key of the protocol
+	Sk bfv.SecretKey
+	//Public key generated in the protocol
+	Pk bfv.PublicKey
+	*sync.Cond
 
 	//ChannelPublicKeyShares to send the public key shares
 	ChannelPublicKeyShares chan StructPublicKeyShare

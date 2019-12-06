@@ -4,7 +4,8 @@
 # Stuff from the simulation builds
 simulation/build/
 simulation/test_data/
-# Dont add the keys that are generated for testing. 
+simulation/simulation
+# Dont add the keys that are generated for testing.
 PublicKey*
 SecretKey*
 

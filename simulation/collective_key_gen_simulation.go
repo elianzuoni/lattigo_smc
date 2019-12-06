@@ -102,8 +102,9 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.\n\tNow comparing all polynomials.")
 
 	//check if we have all the same polys ckg_0
-	CheckKeys(ckgp, err)
 	round.Record()
+
+	CheckKeys(ckgp, err)
 	if err != nil {
 		log.Fatal("Could not start the tree : ", err)
 	}

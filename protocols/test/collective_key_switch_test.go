@@ -34,7 +34,7 @@ func TestCollectiveSwitching(t *testing.T) {
 		instance := proto.(*protocols.CollectiveKeySwitchingProtocol)
 		instance.Params = protocols.SwitchingParameters{
 			Params:       *bfv.DefaultParams[0],
-			SkInputHash:  "sk0",
+			SkInputHash:  "sk0", //todo create real key here
 			SkOutputHash: "sk1",
 			Ciphertext:   *CipherText,
 		}

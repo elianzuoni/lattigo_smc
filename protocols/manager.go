@@ -26,49 +26,6 @@ func init() {
 
 /*****************COLLECTIVE KEY GENERATION ONET HANDLERS *******************/
 
-//Start starts the protocol only at root
-func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
-	log.Lvl1(ckgp.ServerIdentity(), "Started Collective Public Key Generation protocol")
-
-	return nil
-}
-
-//Dispatch is called at each node to then run the protocol
-func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
-
-	log.Lvl1(ckgp.ServerIdentity(), " Dispatching ; is root = ", ckgp.IsRoot())
-
-	//When running a simulation we need to send a wake up message to the children so all nodes can run!
-	log.Lvl1("Sending wake up message")
-	err := ckgp.SendToChildren(&Start{})
-	if err != nil {
-		log.ErrFatal(err, "Could not send wake up message ")
-	}
-
-	PublicKey, e := ckgp.CollectiveKeyGeneration()
-	if e != nil {
-		return e
-	}
-
-	log.Lvl1(ckgp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
-
-	//for the test - send all to root and in the test check that all keys are equals.
-
-	err = ckgp.SendTo(ckgp.Root(), PublicKey.Get()[0])
-
-	if err != nil {
-		log.Lvl4("Error in key sending to root : ", err)
-	}
-
-	log.Lvl1(ckgp.ServerIdentity(), " : im done")
-	if Test() && !ckgp.IsRoot() {
-		ckgp.Done()
-
-	}
-
-	return nil
-}
-
 /** *****************KEY SWITCHING ONET HANDLERS ******************* **/
 
 //Start starts the protocol only at root
