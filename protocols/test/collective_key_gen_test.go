@@ -51,7 +51,6 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	elapsed := time.Since(now)
 	log.Lvl1("**********Collective Key Generated for ", len(ckgp.Roster().List), " nodes.****************")
 	log.Lvl1("**********Time elapsed : ", elapsed, "*************")
-	//check if we have all the same polys ckg_0
 	if compareKeys {
 		log.Lvl1("*******Now comparing all polynomials.")
 		CheckKeys(ckgp, err, t)

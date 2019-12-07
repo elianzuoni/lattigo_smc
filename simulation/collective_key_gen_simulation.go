@@ -11,7 +11,6 @@ import (
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
-	"time"
 )
 
 type KeyGenerationSim struct {
@@ -21,6 +20,8 @@ type KeyGenerationSim struct {
 func init() {
 	onet.SimulationRegister("CollectiveKeyGeneration", NewSimulationKeyGen)
 }
+
+var VerifyCorrectness = false
 
 func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 	sim := &KeyGenerationSim{}
@@ -35,7 +36,7 @@ func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 
 func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//setup following the config file.
-	log.Lvl1("Setting up the simulations")
+	log.Lvl4("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
@@ -46,25 +47,19 @@ func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 }
 
 func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
-	log.Lvl1("Node setup...")
-	//idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
-	//if idx < 0 {
-	//	log.Fatal("Error node not found")
-	//}
 
 	if _, err := config.Server.ProtocolRegister("CollectiveKeyGenerationSimul", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 		return NewKeyGenerationSimul(tni, s)
 	}); err != nil {
 		return errors.New("Error when registering CollectiveKeyGeneration instance " + err.Error())
 	}
-	log.Lvl1("Node setup OK")
+	log.Lvl4("Node setup OK")
 
 	return s.SimulationBFTree.Node(config)
 }
 
 func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (onet.ProtocolInstance, error) {
 	//This part allows to injec the data to the node ~ we don't need the messy channels.
-	log.Lvl1("NewKeygen simul")
 	protocol, err := proto.NewCollectiveKeyGeneration(tni)
 
 	if err != nil {
@@ -73,43 +68,50 @@ func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (o
 
 	//cast
 	colkeygen := protocol.(*proto.CollectiveKeyGenerationProtocol)
-	colkeygen.Params = *bfv.DefaultParams[0]
+
+	if proto.AssignParametersBeforeStart {
+		params := bfv.DefaultParams[0]
+		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().String())
+		if err != nil {
+			return nil, err
+		}
+		colkeygen.Params = *params
+
+		colkeygen.Sk = *sk
+	}
 	return colkeygen, nil
 
 }
 
 func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
-	log.Lvl1("Run")
 	size := config.Tree.Size()
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
-
-	round := monitor.NewTimeMeasure("round")
 
 	pi, err := config.Overlay.CreateProtocol("CollectiveKeyGenerationSimul", config.Tree, onet.NilServiceID)
 	if err != nil {
 		log.Fatal("Couldn't create new node:", err)
 	}
-
+	round := monitor.NewTimeMeasure("round")
 	ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
-	log.Lvl1("Starting Collective Key Generation simulation")
+	log.Lvl2("Starting Collective Key Generation simulation")
 	if err = ckgp.Start(); err != nil {
 		return err
 	}
 
-	log.Lvl1("Waiting on protocol to finish...")
-	<-time.After(time.Second * 2)
-	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.\n\tNow comparing all polynomials.")
+	ckgp.Wait()
+	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.")
 
 	//check if we have all the same polys ckg_0
 	round.Record()
 
-	CheckKeys(ckgp, err)
-	if err != nil {
-		log.Fatal("Could not start the tree : ", err)
+	if VerifyCorrectness {
+		CheckKeys(ckgp, err)
+		if err != nil {
+			log.Fatal("Could not start the tree : ", err)
+		}
 	}
 
-	log.Lvl1("finished")
 	return nil
 
 }
@@ -117,13 +119,9 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 /*****************UTILITY FOR VERIFYING KEYS *****/
 func CheckKeys(ckgp *proto.CollectiveKeyGenerationProtocol, err error) {
 	keys := make([]bfv.PublicKey, len(ckgp.Roster().List))
-	ctx := bfv.DefaultParams[0]
 	for i := 0; i < len(ckgp.Roster().List); i++ {
-		//get the keys.
-		seed := (*ckgp.List()[i].ServerIdentity).String()
 
-		key, _ := utils.LoadPublicKey(ctx, seed)
-		keys[i] = *key
+		keys[i] = (<-ckgp.ChannelPublicKey).PublicKey
 	}
 
 	for _, k1 := range keys {

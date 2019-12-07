@@ -11,8 +11,6 @@ import (
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
-
-	"time"
 )
 
 type RelinearizationKeySimulation struct {
@@ -46,7 +44,7 @@ func NewRelinearizationKeyGeneration(config string) (onet.Simulation, error) {
 
 func (s *RelinearizationKeySimulation) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//setup following the config file.
-	log.Lvl1("Setting up the simulations")
+	log.Lvl3("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
@@ -74,7 +72,7 @@ func (s *RelinearizationKeySimulation) Node(config *onet.SimulationConfig) error
 		log.Fatal("Error node not found")
 	}
 
-	log.Lvl1("Node setup")
+	log.Lvl4("Node setup")
 	if _, err := config.Server.ProtocolRegister("RelinearizationKeyProtocolSimul", func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
 		return NewRelinearizationKeySimul(tni, s)
 	}); err != nil {
@@ -90,10 +88,15 @@ func NewRelinearizationKeySimul(tni *onet.TreeNodeInstance, simulation *Relinear
 	if err != nil {
 		return nil, err
 	}
+	params := bfv.DefaultParams[0]
+	sk, err := utils.GetSecretKey(params, SkHash+tni.ServerIdentity().String())
+	if err != nil {
+		return nil, err
+	}
 	relinkey := protocol.(*proto.RelinearizationKeyProtocol)
 	relinkey.Params = *bfv.DefaultParams[0]
 	relinkey.Crp = CRP
-	relinkey.Sk.SecretKey = SkHash
+	relinkey.Sk = *sk
 	return relinkey, nil
 }
 
@@ -101,10 +104,6 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	size := config.Tree.Size()
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
-
-	round := monitor.NewTimeMeasure("round")
-
-	log.Lvl1("CRP :", CRP.A)
 
 	pi, err := config.Overlay.CreateProtocol("RelinearizationKeyProtocolSimul", config.Tree, onet.NilServiceID)
 	if err != nil {
@@ -115,6 +114,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	RelinProtocol := pi.(*proto.RelinearizationKeyProtocol)
 
 	//Now we can start the protocol
+	round := monitor.NewTimeMeasure("round")
 	err = RelinProtocol.Start()
 	defer RelinProtocol.Done()
 	if err != nil {
@@ -122,15 +122,25 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 		return err
 	}
 
-	<-time.After(3 * time.Second)
-	log.Lvl1("Collecting the relinearization keys")
+	RelinProtocol.Wait()
+	round.Record()
 
+	if VerifyCorrectness {
+		err := CheckRelinearization(size, config, RelinProtocol, err)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
+func CheckRelinearization(size int, config *onet.SimulationConfig, RelinProtocol *proto.RelinearizationKeyProtocol, err error) error {
 	i := 0
 	params := bfv.DefaultParams[0]
 	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
-
 	tmp0 := params.NewPolyQP()
-
 	for i < size {
 		si := config.Roster.List[i].String()
 		sk0, err := utils.GetSecretKey(params, SkHash+si)
@@ -143,31 +153,23 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 
 		i++
 	}
-
 	Sk := new(bfv.SecretKey)
 	Sk.Set(tmp0)
 	Pk := bfv.NewKeyGenerator(params).NewPublicKey(Sk)
 	encryptor_pk := bfv.NewEncryptorFromPk(params, Pk)
 	//encrypt some cipher text...
-
 	PlainText := bfv.NewPlaintext(params)
 	encoder := bfv.NewEncoder(params)
-
 	expected := params.NewPolyQP()
-
 	encoder.EncodeUint(expected.Coeffs[0], PlainText)
-
 	CipherText := encryptor_pk.EncryptNew(PlainText)
-
 	//multiply it !
 	evaluator := bfv.NewEvaluator(params)
-
 	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
 	//we want to relinearize MulCiphertexts
 	ExpectedCoeffs := params.NewPolyQP()
 	ctxPQ.MulCoeffs(expected, expected, ExpectedCoeffs)
 	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
-
 	array := make([]bfv.EvaluationKey, size)
 	//check if the keys are the same for all parties
 	for i := 0; i < size; i++ {
@@ -177,7 +179,6 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 		log.Lvl3("Got one eval key...")
 		array[i] = relkey
 	}
-
 	err = utils.CompareEvalKeys(array)
 	if err != nil {
 		log.Error("Different relinearization keys : ", err)
@@ -187,21 +188,14 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	log.Lvl1("Check : all peers have the same key ")
 	rlk := array[0]
 	ResCipher := evaluator.RelinearizeNew(MulCiphertext, &rlk)
-
 	//decrypt the cipher
 	decryptor := bfv.NewDecryptor(params, Sk)
 	resDecrypted := decryptor.DecryptNew(ResCipher)
 	resDecoded := encoder.DecodeUint(resDecrypted)
-
 	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
 		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
 		return err
 	}
 	log.Lvl1("Relinearization Successful :)")
-
-	round.Record()
-
-	log.Lvl1("finished")
 	return nil
-
 }
