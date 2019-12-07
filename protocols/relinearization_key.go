@@ -18,13 +18,18 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"lattigo-smc/utils"
+	"sync"
 )
+
+func init() {
+	_, _ = onet.GlobalProtocolRegister("RelinearizationKeyProtocol", NewRelinearizationKey)
+}
 
 //NewRelinearizationKey initializes a new protocol, registers the channels
 func NewRelinearizationKey(n *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
 	p := &RelinearizationKeyProtocol{
 		TreeNodeInstance: n,
+		Cond:             sync.NewCond(&sync.Mutex{}),
 	}
 
 	if e := p.RegisterChannels(&p.ChannelStart, &p.ChannelRoundOne, &p.ChannelRoundTwo, &p.ChannelRoundThree, &p.ChannelEvalKey); e != nil {
@@ -34,24 +39,59 @@ func NewRelinearizationKey(n *onet.TreeNodeInstance) (instance onet.ProtocolInst
 	return p, nil
 }
 
-//BitDecomp - ???
-const BitDecomp = 64
+/**********ONET HANDLERS *****************/
+
+//Start starts the protocol only at root
+func (rlp *RelinearizationKeyProtocol) Start() error {
+	log.Lvl3(rlp.ServerIdentity(), " : starting relin key protocol")
+
+	return nil
+}
+
+//Dispatch is called at each node to then run the protocol
+func (rlp *RelinearizationKeyProtocol) Dispatch() error {
+	log.Lvl3(rlp.ServerIdentity(), " : Dispatching for relinearization key protocol! ")
+	err := rlp.SendToChildren(&Start{})
+	if err != nil {
+		log.Error("Error when sending start up message : ", err)
+		return err
+	}
+	res, err := rlp.RelinearizationKey()
+	if err != nil {
+		log.Error("Error in RLProtocol :  ", err)
+		return err
+	}
+
+	if Test() {
+		_ = rlp.SendTo(rlp.Root(), &res)
+	}
+
+	if !rlp.IsRoot() && Test() {
+		rlp.Done()
+	}
+	rlp.Cond.Broadcast()
+	log.Lvl3(rlp.ServerIdentity(), " : exiting dispatch ")
+	return nil
+}
+
+func (rlp *RelinearizationKeyProtocol) Wait() {
+	rlp.Cond.L.Lock()
+	rlp.Cond.Wait()
+	rlp.Cond.L.Unlock()
+}
 
 //RelinearizationKey runs the relinearization protocol returns the evaluation key ( relinearization key ) and error if there is any.
 func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, error) {
 	//get the parameters..
-	log.Lvl1(rlp.ServerIdentity(), " : starting relin key ")
+	log.Lvl3(rlp.ServerIdentity(), " : starting relin key ")
 
 	//can start protocol now.
 	params := (rlp.Params)
 
 	rkg := dbfv.NewEkgProtocol(&params)
 	u := rkg.NewEphemeralKey(1.0 / 3.0)
-	sk, err := utils.GetSecretKey(&params, rlp.Sk.SecretKey+rlp.ServerIdentity().String())
-	if err != nil {
-		log.Error("Could not generate secret key : ", err)
-		return *new(bfv.EvaluationKey), err
-	}
+	sk := rlp.Sk
+
 	//Allocation
 	r1, r2, r3 := rkg.AllocateShares()
 	//Round 1
@@ -65,7 +105,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	}
 
 	//send to parent
-	err = rlp.SendToParent(&r1)
+	err := rlp.SendToParent(&r1)
 	if err != nil {
 		log.Error("Could not send round one share to parent : ", err)
 	}
@@ -81,7 +121,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	//now we do round 2
 	rkg.GenShareRoundTwo(r1, sk.Get(), rlp.Crp.A, r2)
 	if !rlp.IsLeaf() {
-		for _ = range rlp.Children() {
+		for range rlp.Children() {
 			h0 := (<-rlp.ChannelRoundTwo).RKGShareRoundTwo
 			rkg.AggregateShareRoundTwo(h0, r2, r2)
 		}
@@ -104,7 +144,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	rkg.GenShareRoundThree(r2, u, sk.Get(), r3)
 
 	if !rlp.IsLeaf() {
-		for _ = range rlp.Children() {
+		for range rlp.Children() {
 			h0 := (<-rlp.ChannelRoundThree).RKGShareRoundThree
 			rkg.AggregateShareRoundThree(h0, r3, r3)
 		}
@@ -124,7 +164,7 @@ func (rlp *RelinearizationKeyProtocol) RelinearizationKey() (bfv.EvaluationKey, 
 	}
 
 	//now we can generate key.
-	log.Lvl1(rlp.ServerIdentity(), ": generating the relin key ! ")
+	log.Lvl3(rlp.ServerIdentity(), ": generating the relin key ! ")
 	//since all parties should have r2 and r3 dont need to send it.
 	evalKey := bfv.NewRelinKey(&params, 1) //todo check if ok
 	rkg.GenRelinearizationKey(r2, r3, evalKey)

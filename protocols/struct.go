@@ -37,6 +37,8 @@ type CollectiveKeySwitchingProtocol struct {
 	//Params used for the key switching
 	Params SwitchingParameters
 
+	*sync.Cond
+
 	//ChannelCiphertext to send the ciphertext in the end - for testing
 	ChannelCiphertext chan StructCiphertext
 	//ChannelCKSShare to forward the CKSS share
@@ -55,9 +57,11 @@ type CollectivePublicKeySwitchingProtocol struct {
 
 	bfv.PublicKey
 	//SK the secret key hash
-	Sk SK
+	Sk bfv.SecretKey
 
 	bfv.Ciphertext
+
+	*sync.Cond
 
 	//ChannelCiphertext to send the ciphertext in the end
 	ChannelCiphertext chan StructCiphertext
@@ -76,7 +80,9 @@ type RelinearizationKeyProtocol struct {
 	//CRP the random ring used during the round 1
 	Crp CRP
 	//SK the secret key of the party
-	Sk SK
+	Sk bfv.SecretKey
+
+	*sync.Cond
 
 	//ChannelRoundOne to send the different parts of the key
 	ChannelRoundOne chan StructRelinKeyRoundOne
@@ -134,17 +140,6 @@ type StructCiphertext struct {
 	bfv.Ciphertext
 }
 
-//StructSk handler for onet
-type StructSk struct {
-	*onet.TreeNode
-	SK
-}
-
-//SK encapsulates a hash for a secretkey - useful if you want to retrieve or experiment
-type SK struct {
-	SecretKey string
-}
-
 /***USED FOR CKS **/
 
 //StructSwitchParameters handler for onet
@@ -158,9 +153,9 @@ type SwitchingParameters struct {
 	//Params parameters bfv
 	Params bfv.Parameters
 	//SkInputHash the hash of secret key under which ciphertext is *currently* encrypted
-	SkInputHash string
+	SkInput bfv.SecretKey
 	//SkOutputHash the hash of secretkey under which ciphertext will be encrypted *after* running CKS
-	SkOutputHash string
+	SkOutput bfv.SecretKey
 	bfv.Ciphertext
 }
 

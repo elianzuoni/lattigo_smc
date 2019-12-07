@@ -12,10 +12,11 @@ import (
 )
 
 var params = bfv.DefaultParams[0]
-
-//var secretkeys []bfv.SecretKey
 var nbnodes = 50
 var compareKeys = false
+
+//***Go to manager -> assignparametersbeforestart
+//***If true then the parameters are assigned before the protocol starts. If False they are assigned on startup. may lead to different performance result.
 
 func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	log.SetDebugVisible(1)
@@ -24,7 +25,6 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil {
 		log.Error("Could not start CollectiveKeyGenerationTest : ", err)
 		t.Fail()
-
 	}
 
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
@@ -37,7 +37,6 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
-
 	ckgp := pi.(*protocols.CollectiveKeyGenerationProtocol)
 
 	log.Lvl1("Starting ckgp")
@@ -118,9 +117,10 @@ func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolIn
 		return nil, err
 	}
 	instance := proto.(*protocols.CollectiveKeyGenerationProtocol)
-	//instance.Params = *params
-	//instance.Sk = *bfv.NewSecretKey(params)
-	//secretkeys = append(secretkeys, instance.Sk)
+	if protocols.AssignParametersBeforeStart {
+		instance.Params = *params
+		instance.Sk = *bfv.NewSecretKey(params)
+	}
 
 	return instance, nil
 }

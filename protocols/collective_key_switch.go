@@ -16,14 +16,19 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"lattigo-smc/utils"
+	"sync"
 )
+
+func init() {
+	_, _ = onet.GlobalProtocolRegister("CollectiveKeySwitching", NewCollectiveKeySwitching)
+}
 
 //NewCollectiveKeySwitching initializes a new collective key switching , registers the channels in onet
 func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
 	p := &CollectiveKeySwitchingProtocol{
 		TreeNodeInstance: n,
+		Cond:             sync.NewCond(&sync.Mutex{}),
 	}
 
 	if e := p.RegisterChannels(&p.ChannelCKSShare, &p.ChannelCiphertext, &p.ChannelStart); e != nil {
@@ -33,19 +38,67 @@ func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance,
 	return p, nil
 }
 
-//we use the same parameters as from the collective key generation
+/************ONET HANDLERS ********************/
+//Start starts the protocol only at root
+func (cks *CollectiveKeySwitchingProtocol) Start() error {
+	log.Lvl4(cks.ServerIdentity(), "Starting collective key switching for key : ", cks.Params)
+	//find a way to take advantage of the unmarshalin
+
+	//cks.ChannelParams <- StructSwitchParameters{cks.TreeNode(), SwitchingParameters{cks.Params.Params, cks.Params.SkInputHash, cks.Params.SkOutputHash, cks.Params.Ciphertext}}
+
+	return nil
+
+}
+
+//Dispatch is called at each node to then run the protocol
+func (cks *CollectiveKeySwitchingProtocol) Dispatch() error {
+
+	//Wake up the nodes
+	log.Lvl2("Sending wake up message")
+	err := cks.SendToChildren(&Start{})
+	if err != nil {
+		log.ErrFatal(err, "Could not send wake up message ")
+	}
+
+	//start the key switching
+	d, _ := cks.Params.Ciphertext.MarshalBinary()
+	log.Lvl2("ORIGINAL CIPHER :", d[0:25])
+	res, err := cks.CollectiveKeySwitching()
+	if err != nil {
+		return err
+	}
+	d, _ = res.MarshalBinary()
+	log.Lvl4(cks.ServerIdentity(), " : Resulting ciphertext - ", d[0:25])
+	//send it back when testing to check...
+
+	if Test() {
+		err := cks.SendTo(cks.Root(), res)
+		if err != nil {
+			return nil
+		}
+		if !cks.IsRoot() {
+			cks.Done()
+		}
+	}
+	cks.Cond.Broadcast()
+
+	return nil
+
+}
+
+func (cks *CollectiveKeySwitchingProtocol) Wait() {
+	cks.Cond.L.Lock()
+	cks.Cond.Wait()
+	cks.Cond.L.Unlock()
+}
 
 //CollectiveKeySwitching runs the collective key switching protocol returns the ciphertext after switching its key and error if there is any
 func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Ciphertext, error) {
 
 	params := cks.Params.Params
-	SkInput, err := utils.GetSecretKey(&params, cks.Params.SkInputHash+cks.ServerIdentity().String())
+	SkInput := cks.Params.SkInput
 
-	SkOutput, err := utils.GetSecretKey(&params, cks.Params.SkOutputHash+cks.ServerIdentity().String())
-
-	if err != nil {
-		return &bfv.Ciphertext{}, err
-	}
+	SkOutput := cks.Params.SkOutput
 
 	keySwitch := dbfv.NewCKSProtocol(&params, cks.Params.Params.Sigma)
 	h := keySwitch.AllocateShare()
@@ -67,7 +120,7 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Cipher
 	}
 
 	//send to parent.
-	err = cks.SendToParent(&h)
+	err := cks.SendToParent(&h)
 	if err != nil {
 		return nil, err
 	}
@@ -77,12 +130,11 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Cipher
 
 	res := bfv.NewCiphertext(&params, cks.Params.Ciphertext.Degree())
 	if cks.IsRoot() {
-
+		log.Lvl2("Root doing key switching ! ")
 		keySwitch.KeySwitch(h, &cks.Params.Ciphertext, res)
 	} else {
 		log.Lvl4("Waiting on cipher text ")
 		val := <-cks.ChannelCiphertext
-		//log.Print(cks.ServerIdentity(), " : " , val.Ciphertext)
 		res = &val.Ciphertext // receive final cipher from parents.
 
 	}
@@ -90,7 +142,7 @@ func (cks *CollectiveKeySwitchingProtocol) CollectiveKeySwitching() (*bfv.Cipher
 	err = cks.SendToChildren(res)
 	// forward the resulting ciphertext to the children
 	if err != nil {
-		log.Print("Error sending it to children")
+		log.Error("Error sending it to children")
 		return res, err
 	}
 

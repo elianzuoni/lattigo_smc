@@ -5,11 +5,10 @@ package protocols
 
 import (
 	"errors"
-	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
-	"strings"
 )
 
+/*
 //MarshalBinary creates a data array from the switching parameters sp
 func (sp SwitchingParameters) MarshalBinary() (data []byte, err error) {
 	var buffer strings.Builder
@@ -20,7 +19,7 @@ func (sp SwitchingParameters) MarshalBinary() (data []byte, err error) {
 	data = append(data, byte(lenParam))
 	buffer.WriteByte(byte(lenParam))
 	buffer.Write(param)
-	//add the strings...
+	//add the secretkeys...
 	hashes := []byte(sp.SkInputHash + "," + sp.SkOutputHash)
 	buffer.WriteByte(byte(len(hashes)))
 	buffer.Write(hashes)
@@ -61,7 +60,7 @@ func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 	return nil
 
 }
-
+*/
 //MarshalBinary creates a data array from the CRP
 func (crp *CRP) MarshalBinary() ([]byte, error) {
 	if len(crp.A) == 0 {
