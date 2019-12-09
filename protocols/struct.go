@@ -16,6 +16,11 @@ type CollectiveKeyGenerationProtocol struct {
 
 	//Params parameters of the protocol
 	Params bfv.Parameters
+	//Secret key of the protocol
+	Sk bfv.SecretKey
+	//Public key generated in the protocol
+	Pk bfv.PublicKey
+	*sync.Cond
 
 	//ChannelPublicKeyShares to send the public key shares
 	ChannelPublicKeyShares chan StructPublicKeyShare
@@ -23,15 +28,6 @@ type CollectiveKeyGenerationProtocol struct {
 	ChannelPublicKey chan StructPublicKey
 	//ChannelStart to get the wake up
 	ChannelStart chan StructStart
-	//sync.Cond to make sure the protocols don't move too fast.
-	*sync.Cond
-}
-
-//Wait waits until the protocol has completed.
-func (ckgp *CollectiveKeyGenerationProtocol) Wait() {
-	ckgp.Cond.L.Lock()
-	ckgp.Cond.Wait()
-	ckgp.Cond.L.Unlock()
 }
 
 //CollectiveKeySwitchingProtocol struct for onet
@@ -40,6 +36,8 @@ type CollectiveKeySwitchingProtocol struct {
 
 	//Params used for the key switching
 	Params SwitchingParameters
+
+	*sync.Cond
 
 	//ChannelCiphertext to send the ciphertext in the end - for testing
 	ChannelCiphertext chan StructCiphertext
@@ -59,9 +57,11 @@ type CollectivePublicKeySwitchingProtocol struct {
 
 	bfv.PublicKey
 	//SK the secret key hash
-	Sk SK
+	Sk bfv.SecretKey
 
 	bfv.Ciphertext
+
+	*sync.Cond
 
 	//ChannelCiphertext to send the ciphertext in the end
 	ChannelCiphertext chan StructCiphertext
@@ -80,7 +80,9 @@ type RelinearizationKeyProtocol struct {
 	//CRP the random ring used during the round 1
 	Crp CRP
 	//SK the secret key of the party
-	Sk SK
+	Sk bfv.SecretKey
+
+	*sync.Cond
 
 	//ChannelRoundOne to send the different parts of the key
 	ChannelRoundOne chan StructRelinKeyRoundOne
@@ -138,17 +140,6 @@ type StructCiphertext struct {
 	bfv.Ciphertext
 }
 
-//StructSk handler for onet
-type StructSk struct {
-	*onet.TreeNode
-	SK
-}
-
-//SK encapsulates a hash for a secretkey - useful if you want to retrieve or experiment
-type SK struct {
-	SecretKey string
-}
-
 /***USED FOR CKS **/
 
 //StructSwitchParameters handler for onet
@@ -162,9 +153,9 @@ type SwitchingParameters struct {
 	//Params parameters bfv
 	Params bfv.Parameters
 	//SkInputHash the hash of secret key under which ciphertext is *currently* encrypted
-	SkInputHash string
+	SkInput bfv.SecretKey
 	//SkOutputHash the hash of secretkey under which ciphertext will be encrypted *after* running CKS
-	SkOutputHash string
+	SkOutput bfv.SecretKey
 	bfv.Ciphertext
 }
 

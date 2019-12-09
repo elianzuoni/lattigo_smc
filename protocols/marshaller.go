@@ -5,11 +5,10 @@ package protocols
 
 import (
 	"errors"
-	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
-	"strings"
 )
 
+/*
 //MarshalBinary creates a data array from the switching parameters sp
 func (sp SwitchingParameters) MarshalBinary() (data []byte, err error) {
 	var buffer strings.Builder
@@ -20,7 +19,7 @@ func (sp SwitchingParameters) MarshalBinary() (data []byte, err error) {
 	data = append(data, byte(lenParam))
 	buffer.WriteByte(byte(lenParam))
 	buffer.Write(param)
-	//add the strings...
+	//add the secretkeys...
 	hashes := []byte(sp.SkInputHash + "," + sp.SkOutputHash)
 	buffer.WriteByte(byte(len(hashes)))
 	buffer.Write(hashes)
@@ -52,11 +51,7 @@ func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 	}
 	sp.SkInputHash = xs[0]
 	sp.SkOutputHash = xs[1]
-	//finally the cipher text..
-	//bfvCtx, err := bfv.NewBfvContextWithParam(&sp.Params)
 
-	//len_cipher := data[ptr]
-	//ptr++
 	sp.Ciphertext = *new(bfv.Ciphertext)
 	err = sp.Ciphertext.UnmarshalBinary(data[ptr:])
 	if err != nil {
@@ -65,7 +60,7 @@ func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
 	return nil
 
 }
-
+*/
 //MarshalBinary creates a data array from the CRP
 func (crp *CRP) MarshalBinary() ([]byte, error) {
 	if len(crp.A) == 0 {
@@ -77,13 +72,12 @@ func (crp *CRP) MarshalBinary() ([]byte, error) {
 	data := make([]byte, length+2)
 	data[0] = uint8(len(crp.A))
 	ptr := uint64(1)
-	for _, xs := range crp.A {
-		cnt, err := xs.WriteTo(data[ptr : ptr+ringLen])
+	for _, x := range crp.A {
+		cnt, err := x.WriteTo(data[ptr : ptr+ringLen])
 		if err != nil {
 			return []byte{}, errors.New("Could not write the crp")
 		}
 		ptr += cnt
-
 	}
 
 	return data, nil
@@ -109,7 +103,6 @@ func (crp *CRP) UnmarshalBinary(data []byte) error {
 		}
 
 		ptr += lenRing
-
 	}
 
 	return nil

@@ -5,7 +5,6 @@ import (
 	"go.dedis.ch/onet/v3/simul"
 	"lattigo-smc/protocols"
 	"testing"
-	"time"
 )
 
 //Simulate the collective key generation. With a test.
@@ -15,8 +14,6 @@ func TestSimulationCollectiveKeyGen(t *testing.T) {
 	protocols.TurnOffTest()
 
 	simul.Start("runconfigs/key_gen_config.toml")
-
-	<-time.After(time.Second * 5)
 
 	return
 }
