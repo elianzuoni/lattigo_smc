@@ -1,12 +1,5 @@
 package test
 
-import (
-	"fmt"
-	"github.com/ldsec/lattigo/bfv"
-	"lattigo-smc/utils"
-	"testing"
-)
-
 //checking if the marshalling works.
 //func TestMarshallingSwitchingParameters(t *testing.T) {
 //	params := bfv.DefaultParams[0]
@@ -53,26 +46,26 @@ import (
 //	return
 //}
 
-func TestCiphertextMarshal(t *testing.T) {
-	receiver := new(bfv.Ciphertext)
-	params := bfv.DefaultParams[0]
-	cipher := bfv.NewCiphertextRandom(params, 1)
-	data, _ := cipher.MarshalBinary()
-
-	_ = receiver.UnmarshalBinary(data)
-	for i := 0; uint64(i) < receiver.Degree()+1; i++ {
-		err := utils.ComparePolys(*receiver.Value()[0], *cipher.Value()[0])
-		if err != nil {
-			fmt.Print(err)
-			t.Fail()
-			return
-		}
-	}
-
-	fmt.Print("Success")
-
-}
-
-func TestCRPMarshal(t *testing.T) {
-
-}
+//func TestCiphertextMarshal(t *testing.T) {
+//	receiver := new(bfv.Ciphertext)
+//	params := bfv.DefaultParams[0]
+//	cipher := bfv.NewCiphertextRandom(params, 1)
+//	data, _ := cipher.MarshalBinary()
+//
+//	_ = receiver.UnmarshalBinary(data)
+//	for i := 0; uint64(i) < receiver.Degree()+1; i++ {
+//		err := utils.ComparePolys(*receiver.Value()[0], *cipher.Value()[0])
+//		if err != nil {
+//			fmt.Print(err)
+//			t.Fail()
+//			return
+//		}
+//	}
+//
+//	fmt.Print("Success")
+//
+//}
+//
+//func TestCRPMarshal(t *testing.T) {
+//
+//}

@@ -65,7 +65,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	//Now we can start the protocol
 	now := time.Now()
 	err = RelinProtocol.Start()
-	defer RelinProtocol.Done()
+
 	if err != nil {
 		log.Error("Could not start relinearization protocol : ", err)
 		t.Fail()
@@ -78,6 +78,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	if VerifyCorrectness {
 		VerifyRKG(nbnodes, tree, t, ctxPQ, RelinProtocol, err)
 	}
+	RelinProtocol.Done()
 
 }
 

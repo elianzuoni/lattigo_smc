@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var PublicKeySwitchNbNodes = 50
+var PublicKeySwitchNbNodes = 5
 var SkHash = "sk0"
 var CPKSparams = bfv.DefaultParams[0]
 

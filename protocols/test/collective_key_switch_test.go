@@ -13,7 +13,7 @@ import (
 )
 
 //Global variables to modify tests.
-var CKSNbnodes = 50
+var CKSNbnodes = 5
 var SkInputHash = "sk1"
 
 var SkOutputHash = "sk1"
