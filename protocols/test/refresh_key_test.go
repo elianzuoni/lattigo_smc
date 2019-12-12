@@ -13,26 +13,31 @@ import (
 )
 
 //Global variables to modify tests.
-var CKSNbnodes = 50
-var SkInputHash = "sk0"
+var RPNobes = 5
 
-var SkOutputHash = "sk1"
-var VerifyCorrectness = true
-
-func TestCollectiveSwitching(t *testing.T) {
+func TestRefreshProtocol(t *testing.T) {
 	//to do this we need to have some keys already.
 	//for this we can set up with the collective key generation
 	log.SetDebugVisible(1)
 
 	log.Lvl1("Setting up context and plaintext/ciphertext of reference")
-	params := (bfv.DefaultParams[0])
+	params := bfv.DefaultParams[0]
 
 	CipherText := bfv.NewCiphertextRandom(params, 1)
+
+	ctxQP, err := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Pi, params.Moduli.Qi...))
+	if err != nil {
+		t.Fatal(err)
+
+	}
+	crp := ring.NewCRPGenerator(nil, ctxQP)
+	crp.Seed([]byte{})
+	crs := *crp.ClockNew() //crp.ClockNew() is not thread safe ?
 	log.Lvl1("Set up done - Starting protocols")
 	//register the test protocol
-	if _, err := onet.GlobalProtocolRegister("CollectiveKeySwitchingTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+	if _, err := onet.GlobalProtocolRegister("CollectiveRefreshKeyTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 		//Use a local function so we can use ciphertext !
-		proto, err := protocols.NewCollectiveKeySwitching(tni)
+		proto, err := protocols.NewCollectiveRefresh(tni)
 		if err != nil {
 			return nil, err
 		}
@@ -40,53 +45,49 @@ func TestCollectiveSwitching(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		SkOutput, err := utils.GetSecretKey(params, SkOutputHash+tni.ServerIdentity().String())
-		if err != nil {
-			return nil, err
-		}
-		instance := proto.(*protocols.CollectiveKeySwitchingProtocol)
-		instance.Params = protocols.SwitchingParameters{
-			Params:     *params,
-			SkInput:    *SkInput, //todo create real key here
-			SkOutput:   *SkOutput,
-			Ciphertext: *CipherText,
-		}
+
+		instance := proto.(*protocols.RefreshKeyProtocol)
+		instance.Ciphertext = *CipherText
+		instance.CRS = crs
+		instance.Sk = *SkInput
+		instance.Params = *params
 		return instance, nil
 
 	}); err != nil {
-		log.Error("Could not start CollectiveKeySwitchingTest : ", err)
+		log.Error("Could not start RefreshKeyTest : ", err)
 		t.Fail()
 
 	}
 
 	//can start protocol
-	log.Lvl1("Started to test collective key switching locally with nodes amount : ", CKSNbnodes)
+	log.Lvl1("Started to test refresh key locally with nodes amount : ", CKSNbnodes)
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
-	_, _, tree := local.GenTree(CKSNbnodes, true)
-	pi, err := local.CreateProtocol("CollectiveKeySwitchingTest", tree)
+	_, _, tree := local.GenTree(RPNobes, true)
+	pi, err := local.CreateProtocol("CollectiveRefreshKeyTest", tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
 
-	cksp := pi.(*protocols.CollectiveKeySwitchingProtocol)
+	rkp := pi.(*protocols.RefreshKeyProtocol)
 	now := time.Now()
-	log.Lvl4("Starting cksp")
-	err = cksp.Start()
+	log.Lvl4("Starting rkp")
+	err = rkp.Start()
+	defer rkp.Done()
+
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
 	}
-	cksp.Wait()
+	rkp.Wait()
 	elapsed := time.Since(now)
-	log.Lvl1("*****************Collective key switching done.******************")
+	log.Lvl1("*****************Refresh key done.******************")
 	log.Lvl1("*****************Time elapsed : ", elapsed, "*******************")
 
 	//From here check that Original ciphertext decrypted under SkInput === Resulting ciphertext decrypted under SkOutput
 	if VerifyCorrectness {
-		CheckCorrectness(err, t, local, CipherText, cksp)
+		CheckCorrectnessRefresh(err, t, local, CipherText, rkp)
 	}
 
-	cksp.Done()
 	//check if the resulting cipher text decrypted with SkOutput works
 
 	log.Lvl1("Success")
@@ -105,9 +106,8 @@ func TestCollectiveSwitching(t *testing.T) {
 
 }
 
-func CheckCorrectness(err error, t *testing.T, local *onet.LocalTest, CipherText *bfv.Ciphertext, cksp *protocols.CollectiveKeySwitchingProtocol) {
+func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, CipherText *bfv.Ciphertext, rkp *protocols.RefreshKeyProtocol) {
 	tmp0 := params.NewPolyQ()
-	tmp1 := params.NewPolyQ()
 	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
 	if err != nil {
 		t.Fatal(err)
@@ -117,45 +117,37 @@ func CheckCorrectness(err error, t *testing.T, local *onet.LocalTest, CipherText
 		si := server.ServerIdentity().String()
 		log.Lvl3("name : ", si)
 
-		sk0, err := utils.GetSecretKey(params, "sk0"+si)
+		sk0, err := utils.GetSecretKey(params, SkInputHash+si)
 		if err != nil {
 			log.Error("error : ", err)
 		}
-		sk1, err := utils.GetSecretKey(params, "sk1"+si)
-		if err != nil {
-			log.Error("err : ", err)
-		}
 
 		ctx.Add(tmp0, sk0.Get(), tmp0)
-		ctx.Add(tmp1, sk1.Get(), tmp1)
 	}
 	SkInput := new(bfv.SecretKey)
-	SkOutput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
-	SkOutput.Set(tmp1)
 	encoder := bfv.NewEncoder(params)
 	DecryptorInput := bfv.NewDecryptor(params, SkInput)
 	//expected
 	ReferencePlaintext := DecryptorInput.DecryptNew(CipherText)
 	expected := encoder.DecodeUint(ReferencePlaintext)
-	DecryptorOutput := bfv.NewDecryptor(params, SkOutput)
-	log.Lvl1("test is downloading the ciphertext..")
+	log.Lvl1("test is downloading the ciphertext..expected pt: ", expected[0:25])
 	i := 0
 	for i < CKSNbnodes {
-		newCipher := (<-cksp.ChannelCiphertext).Ciphertext
+		newCipher := (<-rkp.ChannelCiphertext).Ciphertext
 		d, _ := newCipher.MarshalBinary()
-		log.Lvl4("Got cipher : ", d[0:25])
+		log.Lvl1("Got cipher : ", d[0:25])
 		res := bfv.NewPlaintext(params)
-		DecryptorOutput.Decrypt(&newCipher, res)
+		DecryptorInput.Decrypt(&newCipher, res)
 
-		log.Lvl1("Comparing a cipher..")
 		decoded := encoder.DecodeUint(res)
+
+		log.Lvl1("Comparing a pt.. have : ", decoded[0:25])
 		ok := utils.Equalslice(decoded, expected)
 
 		if !ok {
 			log.Print("Plaintext do not match ")
 			t.Fail()
-			cksp.Done()
 
 		}
 		i++
