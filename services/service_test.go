@@ -6,9 +6,11 @@ import (
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"testing"
+	"time"
 )
 
-func TestSetup(t *testing.T) {
+func TestSetupCollectiveKey(t *testing.T) {
+	log.SetDebugVisible(3)
 	log.Lvl1("Testing if setup is done properly for the service")
 	//turning off test.
 	protocols.TurnOffTest()
@@ -21,13 +23,33 @@ func TestSetup(t *testing.T) {
 	if err != nil {
 		t.Fatal("Could not setup the roster", err)
 	}
+	<-time.After(10 * time.Second)
 
-	queryID, err := client.SendWriteQuery(el, "", "lattigo")
+}
+
+func TestWrite(t *testing.T) {
+	protocols.TurnOffTest()
+	size := 5
+	local := onet.NewLocalTest(utils.SUITE)
+	_, el, _ := local.GenTree(size, true)
+
+	client := NewLattigoSMCClient(el.List[0], "0")
+	err := client.SendSetupQuery(el, false)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	<-time.After(2 * time.Second)
+	client1 := NewLattigoSMCClient(el.List[1], "1")
+
+	queryID, err := client1.SendWriteQuery(el, "", []byte("lattigood"))
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
 	}
 
 	log.Lvl2("Query id : ", queryID)
+
+	<-time.After(10 * time.Second)
 
 }

@@ -19,8 +19,10 @@ import (
 	"sync"
 )
 
+const CollectiveKeySwitchingProtocolName = "CollectiveKeySwitching"
+
 func init() {
-	_, _ = onet.GlobalProtocolRegister("CollectiveKeySwitching", NewCollectiveKeySwitching)
+	_, _ = onet.GlobalProtocolRegister(CollectiveKeySwitchingProtocolName, NewCollectiveKeySwitching)
 }
 
 //NewCollectiveKeySwitching initializes a new collective key switching , registers the channels in onet

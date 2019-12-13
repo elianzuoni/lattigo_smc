@@ -8,6 +8,7 @@ import (
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
+	"math/rand"
 )
 
 //ID of query. Should be unique
@@ -25,6 +26,7 @@ type Service struct {
 	*bfv.EvaluationKey
 	pubKeyGenerated  bool
 	evalKeyGenerated bool
+	DataBase         []*bfv.Ciphertext
 }
 
 //MsgTypes different messages that can be used for the service.
@@ -34,6 +36,7 @@ type MsgTypes struct {
 	msgQuery         network.MessageTypeID
 	msgSumQuery      network.MessageTypeID
 	msgMultiplyQuery network.MessageTypeID
+	msgStoreReply    network.MessageTypeID
 }
 
 var msgTypes = MsgTypes{}
@@ -47,12 +50,13 @@ func init() {
 
 	//Register the messages
 	log.Lvl1("Registering messages")
-	msgTypes.msgQuery = network.RegisterMessage(&Query{})
+	msgTypes.msgQuery = network.RegisterMessage(&StoreQuery{})
 	msgTypes.msgQueryData = network.RegisterMessage(&QueryData{})
 	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
 	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{})
 	msgTypes.msgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{})
 
+	msgTypes.msgStoreReply = network.RegisterMessage(&StoreReply{})
 }
 
 func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
@@ -95,13 +99,28 @@ func (s *Service) Process(msg *network.Envelope) {
 			log.Error(err)
 		}
 	} else if msg.MsgType.Equal(msgTypes.msgQuery) {
-
+		//query to store data..
+		log.Lvl1(s.ServerIdentity(), "got a request to store a cipher")
+		tmp := (msg.Msg).(*StoreQuery)
+		s.DataBase = append(s.DataBase, &tmp.Ciphertext)
+		//send an acknowledgement of storing..
+		sender := msg.ServerIdentity
+		Ack := StoreReply{tmp.Id, true}
+		err := s.SendRaw(sender, &Ack)
+		if err != nil {
+			log.Error("Could not send acknowledgement")
+		}
+		log.Lvl1("Sent an acknowledgement to  ", sender.String())
 	} else if msg.MsgType.Equal(msgTypes.msgQueryData) {
 
 	} else if msg.MsgType.Equal(msgTypes.msgMultiplyQuery) {
 
 	} else if msg.MsgType.Equal(msgTypes.msgSumQuery) {
 
+	} else if msg.MsgType.Equal(msgTypes.msgStoreReply) {
+		log.Lvl1("Got a store reply")
+		tmp := (msg.Msg).(*StoreReply)
+		log.Lvl1("ID : ", tmp.Id, "Done :", tmp.Done)
 	}
 
 }
@@ -121,9 +140,18 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		if err != nil {
 			return nil, err
 		}
-		keygen := protocol.(*protocols.CollectiveKeyGenerationProtocol)
-		keygen.Params = bfv.DefaultParams[0]
-		if tn.IsRoot() {
+
+		if !tn.IsRoot() {
+			go func() {
+				ckgp := protocol.(*protocols.CollectiveKeyGenerationProtocol)
+				log.Lvl1("Waiting for the protocol to be finished...")
+				ckgp.Wait()
+				log.Lvl1(tn.ServerIdentity(), " : done with collective key gen ! ")
+
+				s.SecretKey = &ckgp.Sk
+				s.PublicKey = &ckgp.Pk
+				s.pubKeyGenerated = true
+			}()
 
 		}
 	case protocols.CollectiveKeySwitchingProtocolName:
@@ -134,38 +162,16 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 
 	case protocols.RelinearizationKeyProtocolName:
 		log.Lvl1(s.ServerIdentity(), ": New protocol rlkp")
-
-	}
-	return protocol, nil
-}
-
-func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
-	log.Lvl1(s.ServerIdentity(), ": starts protocol :", name)
-	tree := s.GenerateBigNaryTree(2, len(s.Roster.List))
-	tni := s.NewTreeNodeInstance(tree, tree.Root, name)
-	var conf onet.GenericConfig //todo what is the config ?
-	protocol, err := s.NewProtocol(tni, &conf)
-	if err != nil {
-		return nil, errors.New("Error runnning " + name + ": " + err.Error())
-	}
-	err = s.RegisterProtocolInstance(protocol)
-	if err != nil {
-		return nil, err
-	}
-	go func(protoname string) {
-		err := protocol.Dispatch()
+		protocol, err = protocols.NewRelinearizationKey(tn)
 		if err != nil {
-			log.Error("Error in dispatch : ", err)
+			return nil, err
 		}
-	}(name)
+		if tn.IsRoot() {
+			//has to generate the CRP for all other nodes.
 
-	go func(protoname string) {
-		err := protocol.Start()
-		if err != nil {
-			log.Error("Error on start :", err)
 		}
-	}(name)
 
+	}
 	return protocol, nil
 }
 
@@ -173,12 +179,34 @@ func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
 //HandleQueryData is called by the service when the client makes a request to write some data.
 func (s *Service) HandleQueryData(query *QueryData) (network.Message, error) {
 	log.Lvl1(s.ServerIdentity(), " received query data ")
-	return nil, nil
+
+	data := query.Data
+	if !s.pubKeyGenerated {
+		//here we can not yet do the answer
+		return nil, errors.New("Key has not yet been generated.")
+	}
+	params := bfv.DefaultParams[0]
+	encoder := bfv.NewEncoder(params)
+	coeffs, err := utils.BytesToUint64(data)
+	if err != nil {
+		return nil, err
+	}
+	pt := bfv.NewPlaintext(params)
+	encoder.EncodeUint(coeffs, pt)
+	encryptorPk := bfv.NewEncryptorFromPk(params, s.PublicKey)
+	cipher := encryptorPk.EncryptNew(pt)
+	//now we can send this to the root
+	tree := query.Roster.GenerateBinaryTree()
+	random := rand.Int()
+	err = s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{uint64(random), *cipher})
+	if err != nil {
+		log.Error("could not send cipher to the root. ")
+	}
+	return &ServiceState{""}, nil
 }
 
 func (s *Service) HandleStoreQuery(storeQuery *StoreQuery) (network.Message, error) {
 	log.Lvl1(s.ServerIdentity(), ": got a query to store data")
-
 	return nil, nil
 }
 
@@ -195,12 +223,12 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 	log.Lvl1(s.ServerIdentity(), "new setup request")
 	tree := request.Roster.GenerateBinaryTree()
 	log.Lvl1("Begin new setup with ", tree.Size(), " parties")
-	//todo here wake up all the other servers.
 
 	//check if the request comes from root ~ maybe not necessary.
 	if !tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
 		return nil, errors.New("ClientSetup request should be sent to a server of the roster.")
 	}
+	s.Roster = request.Roster
 
 	//Collective Key Generation
 	if !s.pubKeyGenerated {
@@ -230,6 +258,21 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 
 func (s *Service) genEvalKey(tree *onet.Tree) error {
 	//TODO
+	log.Lvl1("Starting relinearization key protocol")
+	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
+	protocol, err := s.NewProtocol(tni, nil)
+	if err != nil {
+		panic(err)
+	}
+	rkg := protocol.(*protocols.RelinearizationKeyProtocol)
+	err = s.RegisterProtocolInstance(protocol)
+	if err != nil {
+		panic(err)
+	}
+	//inject the parameters.
+	rkg.Sk = *s.SecretKey
+	rkg.Params = *bfv.DefaultParams[0]
+	//rkg.Crp = nil
 	return nil
 }
 
@@ -245,8 +288,8 @@ func (s *Service) genPublicKey(tree *onet.Tree) error {
 	if err != nil {
 		log.ErrFatal(err, "Could not register protocol instance")
 	}
-	//todo here inject parameters.
-	ckgp.Params = bfv.DefaultParams[0]
+
+	ckgp.Params = *bfv.DefaultParams[0]
 	err = ckgp.Start()
 	go ckgp.Dispatch()
 	if err != nil {
@@ -255,11 +298,43 @@ func (s *Service) genPublicKey(tree *onet.Tree) error {
 	}
 	//we should wait until the above is done.
 	log.Lvl1("Waiting for the protocol to be finished...")
-	publickey := (<-ckgp.ChannelPublicKey).PublicKey
+	ckgp.Wait()
 	ckgp.Done()
-	s.SecretKey, err = utils.LoadSecretKey(s.ServerIdentity().String())
-	s.PublicKey = &publickey
+	s.SecretKey = &ckgp.Sk
+	s.PublicKey = &ckgp.Pk
 	s.pubKeyGenerated = true
 	log.Lvl1(s.ServerIdentity(), " got public key!")
 	return nil
+}
+
+/*************UNUSED FOR NOW ******************/
+
+func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
+	log.Lvl1(s.ServerIdentity(), ": starts protocol :", name)
+	tree := s.GenerateBigNaryTree(2, len(s.Roster.List))
+	tni := s.NewTreeNodeInstance(tree, tree.Root, name)
+	var conf onet.GenericConfig //todo what is the config ?
+	protocol, err := s.NewProtocol(tni, &conf)
+	if err != nil {
+		return nil, errors.New("Error runnning " + name + ": " + err.Error())
+	}
+	err = s.RegisterProtocolInstance(protocol)
+	if err != nil {
+		return nil, err
+	}
+	go func(protoname string) {
+		err := protocol.Dispatch()
+		if err != nil {
+			log.Error("Error in dispatch : ", err)
+		}
+	}(name)
+
+	go func(protoname string) {
+		err := protocol.Start()
+		if err != nil {
+			log.Error("Error on start :", err)
+		}
+	}(name)
+
+	return protocol, nil
 }

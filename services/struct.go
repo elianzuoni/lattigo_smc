@@ -34,9 +34,9 @@ type QueryData struct {
 	Source       *network.ServerIdentity
 
 	//what is in the query
-	sum      bool
-	multiply bool
-	data     []byte
+	Sum      bool
+	Multiply bool
+	Data     []byte
 }
 
 type SetupRequest struct {
@@ -45,23 +45,24 @@ type SetupRequest struct {
 	GenerateEvaluationKey bool //it was available in gomomorphic hence it may have some uses.
 }
 
-//Query a query that a client can make to the service
-type Query struct {
+type StoreQuery struct {
+	Id uint64
 	bfv.Ciphertext
 }
 
-type StoreQuery struct {
-	data []byte
-	//maybe more is needed.
+type StoreReply struct {
+	Id   uint64
+	Done bool
 }
+
 type SumQuery struct {
-	amt uint32
+	Amt uint32
 }
 
 type MultiplyQuery struct {
-	amt uint32
+	Amt uint32
 }
 
 type SetupReply struct {
-	done int
+	Done int
 }

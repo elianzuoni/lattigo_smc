@@ -21,8 +21,10 @@ import (
 	"sync"
 )
 
+const RelinearizationKeyProtocolName = "RelinearizationKeyProtocol"
+
 func init() {
-	_, _ = onet.GlobalProtocolRegister("RelinearizationKeyProtocol", NewRelinearizationKey)
+	_, _ = onet.GlobalProtocolRegister(RelinearizationKeyProtocolName, NewRelinearizationKey)
 }
 
 //NewRelinearizationKey initializes a new protocol, registers the channels

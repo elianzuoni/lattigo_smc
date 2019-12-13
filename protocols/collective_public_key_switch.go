@@ -17,10 +17,10 @@ import (
 	"sync"
 )
 
-const ProtocolName = "CollectivePublicKeySwitching"
+const CollectivePublicKeySwitchingProtocolName = "CollectivePublicKeySwitching"
 
 func init() {
-	_, _ = onet.GlobalProtocolRegister(ProtocolName, NewCollectivePublicKeySwitching)
+	_, _ = onet.GlobalProtocolRegister(CollectivePublicKeySwitchingProtocolName, NewCollectivePublicKeySwitching)
 }
 
 //NewCollectivePublicKeySwitching initialize a new protocol, register the channels for onet.

@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
@@ -36,7 +38,7 @@ func SaveSecretKey(sk *bfv.SecretKey, seed string) error {
 //Load a secret key. Will fail if the key does not exist.
 func LoadSecretKey(params bfv.Parameters, seed string) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	sk = bfv.NewSecretKey(&params)
+	sk = bfv.NewKeyGenerator(&params).NewSecretKey()
 
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
@@ -55,7 +57,7 @@ func GetSecretKey(ctx *bfv.Parameters, seed string) (sk *bfv.SecretKey, err erro
 	if sk, err = LoadSecretKey(*ctx, seed); sk != nil {
 		return
 	}
-	sk = bfv.NewSecretKey(ctx)
+	sk = bfv.NewKeyGenerator(ctx).NewSecretKey()
 
 	return sk, SaveSecretKey(sk, seed)
 }
@@ -195,4 +197,40 @@ func CompareArray(key [][2]*ring.Poly, key2 [][2]*ring.Poly) error {
 
 	return nil
 
+}
+
+func Uint64ToBytes(data []uint64) ([]byte, error) {
+	padding := data[0]
+	//log.Lvl1(padding)
+	buf := new(bytes.Buffer)
+
+	xs := data[1:]
+	err := binary.Write(buf, binary.LittleEndian, xs)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	//buf.Write(make([]byte,padding))
+	result := buf.Bytes()
+	result = result[:len(result)-int(padding)]
+	return result, nil
+}
+
+func BytesToUint64(data []byte) ([]uint64, error) {
+
+	padding := 8 - (len(data) % 8)
+	if padding == 8 {
+		padding = 0
+	}
+	array := make([]byte, len(data)+padding)
+	copy(array, data)
+	buf := bytes.NewBuffer(array)
+	result := make([]uint64, (len(data)+7)/8+1)
+	result[0] = uint64(padding)
+	xs := result[1:]
+	err := binary.Read(buf, binary.LittleEndian, &xs)
+	if err != nil {
+		return []uint64{}, err
+	}
+	return result, nil
 }

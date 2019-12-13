@@ -84,7 +84,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Wait() {
 /********PROTOCOL****************/
 //NewCollectiveKeyGeneration is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
 func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl4("NewCollectiveKeyGen called")
+	log.Lvl2("NewCollectiveKeyGen called")
 
 	p := &CollectiveKeyGenerationProtocol{
 		TreeNodeInstance: n,
@@ -98,7 +98,8 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 	if !AssignParametersBeforeStart {
 		params := bfv.DefaultParams[0]
 		p.Params = *params
-		p.Sk = *bfv.NewSecretKey(params)
+		p.Sk = *bfv.NewKeyGenerator(params).NewSecretKey()
+
 	}
 
 	return p, nil

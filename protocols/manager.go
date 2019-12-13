@@ -1,6 +1,6 @@
 package protocols
 
-var AssignParametersBeforeStart = true
+var AssignParametersBeforeStart = false
 var test = true
 
 //Test has a variable test used when you want to test so the protocols sends the result back to the root so you

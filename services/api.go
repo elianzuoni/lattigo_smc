@@ -40,11 +40,13 @@ func (c *API) String() string {
 	return "[Client " + c.clientID + "]"
 }
 
-func (c *API) SendWriteQuery(roster *onet.Roster, qID QueryID, data string) (*QueryID, error) {
+func (c *API) SendWriteQuery(roster *onet.Roster, qID QueryID, data []byte) (*QueryID, error) {
 	var queryID QueryID
 
 	result := ServiceState{}
 	query := QueryData{}
+	query.Data = data
+	query.Roster = *roster
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
 	if err != nil {
 		return nil, err
