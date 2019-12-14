@@ -12,12 +12,19 @@ import (
 )
 
 var params = bfv.DefaultParams[0]
+<<<<<<< Updated upstream
 var nbnodes = 5
 var compareKeys = false
 
 //***Go to manager -> assignparametersbeforestart
 //***If true then the parameters are assigned before the protocol starts. If False they are assigned on startup. may lead to different performance result.
 
+=======
+//var secretkeys []bfv.SecretKey
+var nbnodes = 50
+var compareKeys = false
+
+>>>>>>> Stashed changes
 func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	log.SetDebugVisible(1)
 
@@ -50,8 +57,14 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	ckgp.Wait()
 	elapsed := time.Since(now)
 	log.Lvl1("**********Collective Key Generated for ", len(ckgp.Roster().List), " nodes.****************")
+<<<<<<< Updated upstream
 	log.Lvl1("**********Time elapsed : ", elapsed, "*************")
 	if compareKeys {
+=======
+	log.Lvl1("**********Time elapsed : ", elapsed,"*************")
+	//check if we have all the same polys ckg_0
+	if compareKeys{
+>>>>>>> Stashed changes
 		log.Lvl1("*******Now comparing all polynomials.")
 		CheckKeys(ckgp, err, t)
 	}
@@ -59,6 +72,10 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	log.Lvl1("Success")
 
 }
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
 
 //same as local except we use TCP.
 func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
@@ -67,6 +84,10 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 	//register the test protocol
 	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil {
 		log.Error("Could not start CollectiveKeyGenerationTest : ", err)
+<<<<<<< Updated upstream
+=======
+		t.Fail()
+>>>>>>> Stashed changes
 
 	}
 
@@ -84,7 +105,11 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 	log.Lvl1("Starting ckgp")
 	now := time.Now()
 	err = ckgp.Start()
+<<<<<<< Updated upstream
 
+=======
+	defer ckgp.Done()
+>>>>>>> Stashed changes
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
 	}
@@ -95,12 +120,20 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 	log.Lvl1("*****************Time elapsed : ", elapsed, "*****************")
 
 	//check if we have all the same polys ckg_0
+<<<<<<< Updated upstream
 	if compareKeys {
+=======
+	if compareKeys{
+>>>>>>> Stashed changes
 		log.Lvl1("-Now comparing all polynomials.")
 		CheckKeys(ckgp, err, t)
 
 	}
+<<<<<<< Updated upstream
 	ckgp.Done()
+=======
+
+>>>>>>> Stashed changes
 
 	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
 			Will be better once we ca have all the suites of protocol rolling out. We can know when to stop this protocol.
@@ -109,6 +142,12 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 	*/
 }
 
+<<<<<<< Updated upstream
+=======
+
+
+
+>>>>>>> Stashed changes
 func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	log.Lvl4("New collective key gen test.")
 	proto, err := protocols.NewCollectiveKeyGeneration(tni)
@@ -116,10 +155,16 @@ func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolIn
 		return nil, err
 	}
 	instance := proto.(*protocols.CollectiveKeyGenerationProtocol)
+<<<<<<< Updated upstream
 	if protocols.AssignParametersBeforeStart {
 		instance.Params = *params
 		instance.Sk = *bfv.NewSecretKey(params)
 	}
+=======
+	//instance.Params = *params
+	//instance.Sk = *bfv.NewSecretKey(params)
+	//secretkeys = append(secretkeys, instance.Sk)
+>>>>>>> Stashed changes
 
 	return instance, nil
 }

@@ -110,6 +110,7 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 		if err != nil {
 			log.Fatal("Could not start the tree : ", err)
 		}
+
 	}
 
 	return nil

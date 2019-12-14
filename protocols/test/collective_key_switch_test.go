@@ -36,6 +36,7 @@ func TestCollectiveSwitching(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
+<<<<<<< Updated upstream
 		SkInput, err := utils.GetSecretKey(params, SkInputHash+tni.ServerIdentity().String())
 		if err != nil {
 			return nil, err
@@ -50,6 +51,16 @@ func TestCollectiveSwitching(t *testing.T) {
 			SkInput:    *SkInput, //todo create real key here
 			SkOutput:   *SkOutput,
 			Ciphertext: *CipherText,
+=======
+
+
+		instance := proto.(*protocols.CollectiveKeySwitchingProtocol)
+		instance.Params = protocols.SwitchingParameters{
+			Params:       *bfv.DefaultParams[0],
+			SkInputHash:  "sk0",//todo create real key here
+			SkOutputHash: "sk1",
+			Ciphertext:   *CipherText,
+>>>>>>> Stashed changes
 		}
 		return instance, nil
 
