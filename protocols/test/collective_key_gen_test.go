@@ -50,9 +50,7 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	ckgp.Wait()
 	elapsed := time.Since(now)
 	log.Lvl1("**********Collective Key Generated for ", len(ckgp.Roster().List), " nodes.****************")
-
 	log.Lvl1("**********Time elapsed : ", elapsed, "*************")
-	//check if we have all the same polys ckg_0
 	if compareKeys {
 		log.Lvl1("*******Now comparing all polynomials.")
 		CheckKeys(ckgp, err, t)
@@ -67,7 +65,7 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
 	//register the test protocol
-	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil {
+	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTestTCP", NewCollectiveKeyGenerationTest); err != nil {
 		log.Error("Could not start CollectiveKeyGenerationTest : ", err)
 
 	}
@@ -77,7 +75,7 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 
 	_, _, tree := local.GenTree(nbnodes, true)
 
-	pi, err := local.CreateProtocol("CollectiveKeyGenerationTest", tree)
+	pi, err := local.CreateProtocol("CollectiveKeyGenerationTestTCP", tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
@@ -97,7 +95,6 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 	log.Lvl1("*****************Time elapsed : ", elapsed, "*****************")
 
 	//check if we have all the same polys ckg_0
-
 	if compareKeys {
 		log.Lvl1("-Now comparing all polynomials.")
 		CheckKeys(ckgp, err, t)

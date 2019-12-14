@@ -1,3 +1,5 @@
+//This file is used for some utilities and debuging purpose.
+
 package protocols
 
 var AssignParametersBeforeStart = false

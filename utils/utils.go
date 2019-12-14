@@ -54,6 +54,7 @@ func LoadSecretKey(params bfv.Parameters, seed string) (sk *bfv.SecretKey, err e
 
 //Will try to load the secret key, else will generate a new one.
 func GetSecretKey(ctx *bfv.Parameters, seed string) (sk *bfv.SecretKey, err error) {
+	log.Lvl3("Loading a key with seed : ", seed)
 	if sk, err = LoadSecretKey(*ctx, seed); sk != nil {
 		return
 	}

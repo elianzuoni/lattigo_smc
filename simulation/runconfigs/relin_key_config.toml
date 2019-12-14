@@ -5,8 +5,9 @@ Rounds = 1
 Suite = "Ed25519"
 # SingleHost = True
 
-# number nodes = Sum(BF^i) i [0,Depth]
-Depth
-1
+Hosts, Servers
+3, 3
+7, 7
+5, 5
 
 

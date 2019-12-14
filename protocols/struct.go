@@ -98,6 +98,22 @@ type RelinearizationKeyProtocol struct {
 	ChannelStart chan StructStart
 }
 
+type RefreshKeyProtocol struct {
+	*onet.TreeNodeInstance
+
+	*sync.Cond
+
+	Sk              bfv.SecretKey
+	Ciphertext      bfv.Ciphertext
+	FinalCiphertext bfv.Ciphertext
+	CRS             ring.Poly
+	Params          bfv.Parameters
+
+	ChannelCiphertext chan StructCiphertext
+	ChannelRShare     chan StructRShare
+	ChannelStart      chan StructStart
+}
+
 /********MESSSAGE STRUCTURES ***/
 
 /**USED FOR ALL ***/
@@ -130,6 +146,11 @@ type StructPublicKey struct {
 type StructPublicKeyShare struct {
 	*onet.TreeNode
 	dbfv.CKGShare
+}
+
+type StructRShare struct {
+	*onet.TreeNode
+	dbfv.RefreshShare
 }
 
 /*****USED FOR BOTH CKS AND PCKS ***/
