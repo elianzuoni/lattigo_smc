@@ -98,7 +98,7 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 	if !AssignParametersBeforeStart {
 		params := bfv.DefaultParams[0]
 		p.Params = *params
-		p.Sk = *bfv.NewSecretKey(params)
+		p.Sk = *bfv.NewKeyGenerator(params).NewSecretKey()
 	}
 
 	return p, nil

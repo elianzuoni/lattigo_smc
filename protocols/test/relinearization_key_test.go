@@ -16,8 +16,7 @@ const SKHash = "sk0"
 
 func TestNewRelinearizationKey(t *testing.T) {
 	//first generate a secret key and from shards and the resulting public key
-	nbnodes := 3
-	log.SetDebugVisible(1)
+	log.SetDebugVisible(3)
 	log.Lvl1("Started to test relinearization protocol with nodes amount : ", nbnodes)
 
 	params := bfv.DefaultParams[0]
@@ -65,11 +64,11 @@ func TestNewRelinearizationKey(t *testing.T) {
 	//Now we can start the protocol
 	now := time.Now()
 	err = RelinProtocol.Start()
-	defer RelinProtocol.Done()
 	if err != nil {
 		log.Error("Could not start relinearization protocol : ", err)
 		t.Fail()
 	}
+
 	RelinProtocol.Wait()
 	elapsed := time.Since(now)
 	log.Lvl1("**********RELINEARIZATION KEY PROTOCOL DONE ***************")
@@ -78,6 +77,7 @@ func TestNewRelinearizationKey(t *testing.T) {
 	if VerifyCorrectness {
 		VerifyRKG(nbnodes, tree, t, ctxPQ, RelinProtocol, err)
 	}
+	RelinProtocol.Done()
 
 }
 

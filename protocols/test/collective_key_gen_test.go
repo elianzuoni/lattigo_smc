@@ -12,7 +12,7 @@ import (
 )
 
 var params = bfv.DefaultParams[0]
-var nbnodes = 50
+var nbnodes = 5
 var compareKeys = false
 
 //***Go to manager -> assignparametersbeforestart
@@ -65,18 +65,20 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
 	//register the test protocol
-	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", NewCollectiveKeyGenerationTest); err != nil {
-		log.Error("Could not start CollectiveKeyGenerationTest : ", err)
-		t.Fail()
+	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest1", NewCollectiveKeyGenerationTest); err != nil {
+		log.Error("Could not register CollectiveKeyGenerationTest : ", err)
+		log.Warn("This is normal if all test are run in a row as it has already been registered by a previous test. ")
+		//t.Fail()
 
 	}
 
 	local := onet.NewTCPTest(suites.MustFind("Ed25519"))
+
 	defer local.CloseAll()
 
 	_, _, tree := local.GenTree(nbnodes, true)
 
-	pi, err := local.CreateProtocol("CollectiveKeyGenerationTest", tree)
+	pi, err := local.CreateProtocol("CollectiveKeyGenerationTest1", tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}

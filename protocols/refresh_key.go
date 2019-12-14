@@ -22,7 +22,7 @@ func init() {
 
 //NewCollectiveKeyGeneration is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
 func NewCollectiveRefresh(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl4("NewCollectiveKeyGen called")
+	log.Lvl4("NewCollectiveRefresh called")
 
 	p := &RefreshKeyProtocol{
 		TreeNodeInstance: n,
@@ -36,7 +36,7 @@ func NewCollectiveRefresh(n *onet.TreeNodeInstance) (onet.ProtocolInstance, erro
 	if !AssignParametersBeforeStart {
 		params := bfv.DefaultParams[0]
 		p.Params = *params
-		p.Sk = *bfv.NewSecretKey(params)
+		p.Sk = *bfv.NewKeyGenerator(params).NewSecretKey()
 
 	}
 
@@ -78,9 +78,10 @@ func (rkp *RefreshKeyProtocol) Dispatch() error {
 
 	}
 
-	log.Lvl2(rkp.ServerIdentity(), "Completed Collective Public Key Generation protocol ")
+	log.Lvl2(rkp.ServerIdentity(), "Completed Collective Public Refresh protocol ")
 
 	if Test() && !rkp.IsRoot() {
+		log.Lvl1("Done")
 		rkp.Done()
 
 	}
@@ -100,14 +101,13 @@ func (rkp *RefreshKeyProtocol) RefreshKeyProtocol() (bfv.Ciphertext, error) {
 
 	//Set up the parameters - context and the crp
 	params := rkp.Params
-
-	//todo have a different seed at each generation.
-	//Generate random ckg_1
+	//for debug...
 	data, _ := rkp.Ciphertext.MarshalBinary()
 	log.Lvl1("Original cipher :", data[0:25])
 	data, _ = rkp.CRS.MarshalBinary()
 	log.Lvl1("CRP :", data[0:25])
-
+	data, _ = rkp.Sk.MarshalBinary()
+	log.Lvl1(rkp.ServerIdentity(), " : sk = ", data[0:25])
 	refproto := dbfv.NewRefreshProtocol(&params)
 	//get si
 	sk := rkp.Sk
@@ -121,14 +121,16 @@ func (rkp *RefreshKeyProtocol) RefreshKeyProtocol() (bfv.Ciphertext, error) {
 	if !rkp.IsLeaf() {
 		for i := 0; i < len(rkp.Children()); i++ {
 			child := <-rkp.ChannelRShare
-			log.Lvl4(rkp.ServerIdentity(), "Got from share from child ")
+			d, _ := child.MarshalBinary()
+			log.Lvl1(rkp.ServerIdentity(), "Got from share from child : ", d[0:25])
 			refproto.Aggregate(child.RefreshShare, partial, partial)
 
 		}
 	}
 
 	//send to parent
-	log.Lvl4(rkp.ServerIdentity(), " sending my partial key : ", partial)
+	data, _ = partial.MarshalBinary()
+	log.Lvl1(rkp.ServerIdentity(), " sending my partial key  :  ", data[0:25])
 	err := rkp.SendToParent(&partial)
 
 	if err != nil {
@@ -137,18 +139,19 @@ func (rkp *RefreshKeyProtocol) RefreshKeyProtocol() (bfv.Ciphertext, error) {
 
 	log.Lvl4(rkp.ServerIdentity(), "Sent partial")
 
-	resultingCipher := bfv.NewCiphertext(&params, rkp.Ciphertext.Degree())
-	if rkp.IsRoot() {
-		refproto.Finalize(&rkp.Ciphertext, &rkp.CRS, partial, resultingCipher) // if node is root, the combined key is the final collective key
-	} else {
-		cipher := <-rkp.ChannelCiphertext
-		resultingCipher.SetValue(cipher.Ciphertext.Value())
+	if !rkp.IsRoot() {
+		log.Lvl1("getting final cipher from parent.:")
+		finalShare := (<-rkp.ChannelRShare).RefreshShare
+		partial = finalShare
 	}
 
 	//send it to the children
-	if err = rkp.SendToChildren(resultingCipher); err != nil {
+	if err = rkp.SendToChildren(&partial); err != nil {
 		return bfv.Ciphertext{}, err
 	}
+
+	resultingCipher := bfv.NewCiphertextRandom(&params, rkp.Ciphertext.Degree())
+	refproto.Finalize(&rkp.Ciphertext, &rkp.CRS, partial, resultingCipher)
 
 	log.Lvl4(rkp.ServerIdentity(), "sent resulting cipher ")
 

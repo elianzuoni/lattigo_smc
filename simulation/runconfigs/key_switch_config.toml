@@ -7,8 +7,7 @@ Suite = "Ed25519"
 
 # here you can have for different depth to test.
 # keep in mind that if the number of nodes will be Sum(BF^i) i [0,Depth]
-Depth
-1
-
-
-
+Hosts, Servers
+3, 3
+7, 7
+5, 5

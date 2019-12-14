@@ -36,7 +36,7 @@ func SaveSecretKey(sk *bfv.SecretKey, seed string) error {
 //Load a secret key. Will fail if the key does not exist.
 func LoadSecretKey(params bfv.Parameters, seed string) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	sk = bfv.NewSecretKey(&params)
+	sk = bfv.NewKeyGenerator(&params).NewSecretKey()
 
 	xs := sha256.Sum256([]byte(seed))
 	fingerprint := fmt.Sprintf("%x", xs)
@@ -56,7 +56,7 @@ func GetSecretKey(ctx *bfv.Parameters, seed string) (sk *bfv.SecretKey, err erro
 	if sk, err = LoadSecretKey(*ctx, seed); sk != nil {
 		return
 	}
-	sk = bfv.NewSecretKey(ctx)
+	sk = bfv.NewKeyGenerator(ctx).NewSecretKey()
 
 	return sk, SaveSecretKey(sk, seed)
 }

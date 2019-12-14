@@ -2,6 +2,7 @@ package test
 
 import (
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
@@ -13,7 +14,7 @@ import (
 )
 
 //Global variables to modify tests.
-var RPNobes = 5
+var RPNobes = 3
 
 func TestRefreshProtocol(t *testing.T) {
 	//to do this we need to have some keys already.
@@ -25,14 +26,10 @@ func TestRefreshProtocol(t *testing.T) {
 
 	CipherText := bfv.NewCiphertextRandom(params, 1)
 
-	ctxQP, err := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Pi, params.Moduli.Qi...))
-	if err != nil {
-		t.Fatal(err)
-
-	}
-	crp := ring.NewCRPGenerator(nil, ctxQP)
+	crp := dbfv.NewCRPGenerator(params, nil)
 	crp.Seed([]byte{})
 	crs := *crp.ClockNew() //crp.ClockNew() is not thread safe ?
+
 	log.Lvl1("Set up done - Starting protocols")
 	//register the test protocol
 	if _, err := onet.GlobalProtocolRegister("CollectiveRefreshKeyTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
@@ -60,7 +57,7 @@ func TestRefreshProtocol(t *testing.T) {
 	}
 
 	//can start protocol
-	log.Lvl1("Started to test refresh key locally with nodes amount : ", CKSNbnodes)
+	log.Lvl1("Started to test refresh key locally with nodes amount : ", RPNobes)
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
 	_, _, tree := local.GenTree(RPNobes, true)
@@ -73,7 +70,6 @@ func TestRefreshProtocol(t *testing.T) {
 	now := time.Now()
 	log.Lvl4("Starting rkp")
 	err = rkp.Start()
-	defer rkp.Done()
 
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
@@ -87,22 +83,16 @@ func TestRefreshProtocol(t *testing.T) {
 	if VerifyCorrectness {
 		CheckCorrectnessRefresh(err, t, local, CipherText, rkp)
 	}
+	rkp.Done()
 
 	//check if the resulting cipher text decrypted with SkOutput works
 
-	log.Lvl1("Success")
+	log.Lvl1("Test over.")
 	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
 			Will be better once we ca have all the suites of protocol rolling out. We can know when to stop this protocol.
 	Ideally id like to call this vvv so it can all shutdown outside of the collectivekeygen
 	//local.CloseAll()
 	*/
-	//then choose two random sk from two participant
-
-	//chose a random cipher text.
-
-	//go from skIn -> skOut -> skIn and check equality of cipher text.
-
-	//repeat n times
 
 }
 
@@ -115,17 +105,20 @@ func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, Cip
 	for _, server := range local.Overlays {
 
 		si := server.ServerIdentity().String()
-		log.Lvl3("name : ", si)
+		log.Lvl1("name : ", si)
 
 		sk0, err := utils.GetSecretKey(params, SkInputHash+si)
 		if err != nil {
 			log.Error("error : ", err)
+			t.Fatal(err)
 		}
 
 		ctx.Add(tmp0, sk0.Get(), tmp0)
 	}
 	SkInput := new(bfv.SecretKey)
 	SkInput.Set(tmp0)
+	d, _ := SkInput.MarshalBinary()
+	log.Lvl1("Master key : ", d[0:25])
 	encoder := bfv.NewEncoder(params)
 	DecryptorInput := bfv.NewDecryptor(params, SkInput)
 	//expected
@@ -133,12 +126,9 @@ func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, Cip
 	expected := encoder.DecodeUint(ReferencePlaintext)
 	log.Lvl1("test is downloading the ciphertext..expected pt: ", expected[0:25])
 	i := 0
-	for i < CKSNbnodes {
+	for i < RPNobes {
 		newCipher := (<-rkp.ChannelCiphertext).Ciphertext
-		d, _ := newCipher.MarshalBinary()
-		log.Lvl1("Got cipher : ", d[0:25])
-		res := bfv.NewPlaintext(params)
-		DecryptorInput.Decrypt(&newCipher, res)
+		res := DecryptorInput.DecryptNew(&newCipher)
 
 		decoded := encoder.DecodeUint(res)
 
@@ -148,9 +138,14 @@ func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, Cip
 		if !ok {
 			log.Print("Plaintext do not match ")
 			t.Fail()
+			return
 
 		}
 		i++
 	}
-	log.Lvl1("Got all matches on ciphers.")
+
+	if !t.Failed() {
+		log.Lvl1("Got all matches on ciphers.")
+
+	}
 }

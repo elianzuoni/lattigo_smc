@@ -13,7 +13,7 @@ import (
 )
 
 //Global variables to modify tests.
-var CKSNbnodes = 50
+var CKSNbnodes = 5
 var SkInputHash = "sk0"
 
 var SkOutputHash = "sk1"
@@ -47,7 +47,7 @@ func TestCollectiveSwitching(t *testing.T) {
 		instance := proto.(*protocols.CollectiveKeySwitchingProtocol)
 		instance.Params = protocols.SwitchingParameters{
 			Params:     *params,
-			SkInput:    *SkInput, //todo create real key here
+			SkInput:    *SkInput,
 			SkOutput:   *SkOutput,
 			Ciphertext: *CipherText,
 		}
@@ -135,10 +135,12 @@ func CheckCorrectness(err error, t *testing.T, local *onet.LocalTest, CipherText
 	SkOutput.Set(tmp1)
 	encoder := bfv.NewEncoder(params)
 	DecryptorInput := bfv.NewDecryptor(params, SkInput)
+
 	//expected
 	ReferencePlaintext := DecryptorInput.DecryptNew(CipherText)
 	expected := encoder.DecodeUint(ReferencePlaintext)
 	DecryptorOutput := bfv.NewDecryptor(params, SkOutput)
+
 	log.Lvl1("test is downloading the ciphertext..")
 	i := 0
 	for i < CKSNbnodes {
@@ -148,8 +150,8 @@ func CheckCorrectness(err error, t *testing.T, local *onet.LocalTest, CipherText
 		res := bfv.NewPlaintext(params)
 		DecryptorOutput.Decrypt(&newCipher, res)
 
-		log.Lvl1("Comparing a cipher..")
 		decoded := encoder.DecodeUint(res)
+
 		ok := utils.Equalslice(decoded, expected)
 
 		if !ok {
