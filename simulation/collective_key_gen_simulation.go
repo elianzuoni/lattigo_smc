@@ -11,6 +11,7 @@ import (
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
+	"time"
 )
 
 type KeyGenerationSim struct {
@@ -95,13 +96,15 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 	round := monitor.NewTimeMeasure("round")
 	ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
 	log.Lvl2("Starting Collective Key Generation simulation")
+	now := time.Now()
 	if err = ckgp.Start(); err != nil {
 		return err
 	}
 
 	ckgp.Wait()
+	elapsed := time.Since(now)
 	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.")
-
+	log.Lvl1("Elapsed time : ", elapsed)
 	//check if we have all the same polys ckg_0
 	round.Record()
 

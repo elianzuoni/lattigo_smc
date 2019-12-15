@@ -11,6 +11,7 @@ import (
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
+	"time"
 )
 
 type RelinearizationKeySimulation struct {
@@ -115,6 +116,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 
 	//Now we can start the protocol
 	round := monitor.NewTimeMeasure("round")
+	now := time.Now()
 	err = RelinProtocol.Start()
 	defer RelinProtocol.Done()
 	if err != nil {
@@ -123,7 +125,11 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	}
 
 	RelinProtocol.Wait()
+	elapsed := time.Since(now)
 	round.Record()
+
+	log.Lvl1("Relinearization key generated for ", size)
+	log.Lvl1("Elapsed time :", elapsed)
 
 	if VerifyCorrectness {
 		err := CheckRelinearization(size, config, RelinProtocol, err)

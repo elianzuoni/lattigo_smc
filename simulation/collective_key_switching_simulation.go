@@ -11,6 +11,7 @@ import (
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
+	"time"
 )
 
 type KeySwitchingSim struct {
@@ -117,16 +118,19 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	cksp := pi.(*proto.CollectiveKeySwitchingProtocol)
 
 	log.Lvl4("Starting collective key switching protocol")
+	now := time.Now()
 	err = cksp.Start()
 	defer cksp.Done()
 
 	cksp.Wait()
+	elapsed := time.Since(now)
 
 	round.Record()
 
-	log.Lvl4("Collective key switch done for  ", len(cksp.Roster().List), " nodes.\n\tNow comparing verifying ciphers.")
-
+	log.Lvl1("Collective key switch done for  ", len(cksp.Roster().List), " nodes")
+	log.Lvl1("Elapsed time : ", elapsed)
 	if VerifyCorrectness {
+		log.Lvl1("Verify correctness..")
 		err = VerifyPCKSSim(err, size, config, s, cksp)
 		if err != nil {
 			return err

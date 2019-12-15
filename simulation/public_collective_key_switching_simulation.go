@@ -11,6 +11,7 @@ import (
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
+	"time"
 )
 
 type PublicKeySwitchingSim struct {
@@ -97,15 +98,18 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	pcksp := pi.(*proto.CollectivePublicKeySwitchingProtocol)
 	round := monitor.NewTimeMeasure("round")
+	now := time.Now()
 	err = pcksp.Start()
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 	pcksp.Wait()
+	elapsed := time.Since(now)
 	round.Record()
 
 	log.Lvl1("Public Collective key switching done.")
+	log.Lvl1("Elapsed time :", elapsed)
 	if VerifyCorrectness {
 		err = CheckCKS(err, size, config, pcksp)
 		if err != nil {
