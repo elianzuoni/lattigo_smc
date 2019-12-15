@@ -3,7 +3,6 @@ package test
 import (
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -14,15 +13,17 @@ import (
 )
 
 //Global variables to modify tests.
-var RPNobes = 3
 
 func TestRefreshProtocol(t *testing.T) {
-	//to do this we need to have some keys already.
-	//for this we can set up with the collective key generation
+	/**Variables for test ***/
+	var nbnodes = 7
+	var VerifyCorrectness = false
+	var params = bfv.DefaultParams[0]
+	var SkInputHash = "sk0"
+
 	log.SetDebugVisible(1)
 
 	log.Lvl1("Setting up context and plaintext/ciphertext of reference")
-	params := bfv.DefaultParams[0]
 
 	CipherText := bfv.NewCiphertextRandom(params, 1)
 
@@ -57,10 +58,10 @@ func TestRefreshProtocol(t *testing.T) {
 	}
 
 	//can start protocol
-	log.Lvl1("Started to test refresh key locally with nodes amount : ", RPNobes)
+	log.Lvl1("Started to test refresh key locally with nodes amount : ", nbnodes)
 	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	defer local.CloseAll()
-	_, _, tree := local.GenTree(RPNobes, true)
+	_, _, tree := local.GenTree(nbnodes, true)
 	pi, err := local.CreateProtocol("CollectiveRefreshKeyTest", tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
@@ -81,7 +82,7 @@ func TestRefreshProtocol(t *testing.T) {
 
 	//From here check that Original ciphertext decrypted under SkInput === Resulting ciphertext decrypted under SkOutput
 	if VerifyCorrectness {
-		CheckCorrectnessRefresh(err, t, local, CipherText, rkp)
+		CheckCorrectnessRefresh(err, t, local, CipherText, rkp, SkInputHash, params)
 	}
 	rkp.Done()
 
@@ -94,58 +95,4 @@ func TestRefreshProtocol(t *testing.T) {
 	//local.CloseAll()
 	*/
 
-}
-
-func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, CipherText *bfv.Ciphertext, rkp *protocols.RefreshKeyProtocol) {
-	tmp0 := params.NewPolyQ()
-	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, server := range local.Overlays {
-
-		si := server.ServerIdentity().String()
-		log.Lvl1("name : ", si)
-
-		sk0, err := utils.GetSecretKey(params, SkInputHash+si)
-		if err != nil {
-			log.Error("error : ", err)
-			t.Fatal(err)
-		}
-
-		ctx.Add(tmp0, sk0.Get(), tmp0)
-	}
-	SkInput := new(bfv.SecretKey)
-	SkInput.Set(tmp0)
-	d, _ := SkInput.MarshalBinary()
-	log.Lvl1("Master key : ", d[0:25])
-	encoder := bfv.NewEncoder(params)
-	DecryptorInput := bfv.NewDecryptor(params, SkInput)
-	//expected
-	ReferencePlaintext := DecryptorInput.DecryptNew(CipherText)
-	expected := encoder.DecodeUint(ReferencePlaintext)
-	log.Lvl1("test is downloading the ciphertext..expected pt: ", expected[0:25])
-	i := 0
-	for i < RPNobes {
-		newCipher := (<-rkp.ChannelCiphertext).Ciphertext
-		res := DecryptorInput.DecryptNew(&newCipher)
-
-		decoded := encoder.DecodeUint(res)
-
-		log.Lvl1("Comparing a pt.. have : ", decoded[0:25])
-		ok := utils.Equalslice(decoded, expected)
-
-		if !ok {
-			log.Print("Plaintext do not match ")
-			t.Fail()
-			return
-
-		}
-		i++
-	}
-
-	if !t.Failed() {
-		log.Lvl1("Got all matches on ciphers.")
-
-	}
 }

@@ -6,19 +6,20 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/protocols"
-	"lattigo-smc/utils"
 	"testing"
 	"time"
 )
 
 var params = bfv.DefaultParams[0]
-var nbnodes = 5
-var compareKeys = false
 
 //***Go to manager -> assignparametersbeforestart
 //***If true then the parameters are assigned before the protocol starts. If False they are assigned on startup. may lead to different performance result.
 
 func TestLocalCollectiveKeyGeneration(t *testing.T) {
+	/***VARIABLES TO USE FOR TH TEST ********/
+	var nbnodes = 5
+	var compareKeys = false
+
 	log.SetDebugVisible(1)
 
 	//register the test protocol
@@ -53,7 +54,7 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 	log.Lvl1("**********Time elapsed : ", elapsed, "*************")
 	if compareKeys {
 		log.Lvl1("*******Now comparing all polynomials.")
-		CheckKeys(ckgp, err, t)
+		CheckCorrectnessCPKG(ckgp, err, t)
 	}
 
 	log.Lvl1("Success")
@@ -62,6 +63,9 @@ func TestLocalCollectiveKeyGeneration(t *testing.T) {
 
 //same as local except we use TCP.
 func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
+	/**VARIABLES FOR TEST****/
+	var nbnodes = 5
+	var compareKeys = false
 
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
 	//register the test protocol
@@ -100,7 +104,7 @@ func TestLocalTCPCollectiveKeyGeneration(t *testing.T) {
 	//check if we have all the same polys ckg_0
 	if compareKeys {
 		log.Lvl1("-Now comparing all polynomials.")
-		CheckKeys(ckgp, err, t)
+		CheckCorrectnessCPKG(ckgp, err, t)
 
 	}
 
@@ -124,22 +128,4 @@ func NewCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolIn
 	}
 
 	return instance, nil
-}
-
-func CheckKeys(ckgp *protocols.CollectiveKeyGenerationProtocol, err error, t *testing.T) {
-	keys := make([]bfv.PublicKey, nbnodes)
-	for i := 0; i < nbnodes; i++ {
-		//get the keys.
-
-		keys[i] = (<-ckgp.ChannelPublicKey).PublicKey
-	}
-	for _, k1 := range keys {
-		for _, k2 := range keys {
-			err = utils.CompareKeys(k1, k2)
-			if err != nil {
-				log.Error("Error in polynomial comparison : ", err)
-				t.Fail()
-			}
-		}
-	}
 }
