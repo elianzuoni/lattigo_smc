@@ -13,14 +13,23 @@ import (
 //CollectiveKeyGenerationProtocol structure encapsulating a key gen protocol for onet.
 type CollectiveKeyGenerationProtocol struct {
 	*onet.TreeNodeInstance
+	*dbfv.CKGProtocol
+	*sync.Cond
+
 
 	//Params parameters of the protocol
-	Params bfv.Parameters
+	Params *bfv.Parameters
 	//Secret key of the protocol
-	Sk bfv.SecretKey
+	Sk *bfv.SecretKey
+
+	// Public key CRP
+	CKG1 *ring.Poly
+
+	// Public key share in the protocol
+	CKGShare dbfv.CKGShare
+
 	//Public key generated in the protocol
-	Pk bfv.PublicKey
-	*sync.Cond
+	Pk *bfv.PublicKey
 
 	//ChannelPublicKeyShares to send the public key shares
 	ChannelPublicKeyShares chan StructPublicKeyShare

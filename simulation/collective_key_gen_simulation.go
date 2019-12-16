@@ -70,16 +70,18 @@ func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (o
 	//cast
 	colkeygen := protocol.(*proto.CollectiveKeyGenerationProtocol)
 
-	if proto.AssignParametersBeforeStart {
-		params := bfv.DefaultParams[0]
-		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().String())
-		if err != nil {
-			return nil, err
-		}
-		colkeygen.Params = *params
 
-		colkeygen.Sk = *sk
+	params := bfv.DefaultParams[0]
+	sk, err := utils.GetSecretKey(params, tni.ServerIdentity().String())
+	if err != nil {
+		return nil, err
 	}
+
+	err = colkeygen.Init(params, sk, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	if err != nil {
+		return nil, err
+	}
+
 	return colkeygen, nil
 
 }
