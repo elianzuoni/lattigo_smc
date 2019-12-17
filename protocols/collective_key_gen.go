@@ -66,7 +66,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	log.Lvl2(ckgp.ServerIdentity(), " Dispatching ; is root = ", ckgp.IsRoot())
 
 	//When running a simulation we need to send a wake up message to the children so all nodes can run!
-	log.Lvl4("Sending wake up message")
+	log.Lvl3("Sending wake up message")
 	err := ckgp.SendToChildren(&Start{})
 	if err != nil {
 		log.ErrFatal(err, "Could not send wake up message ")
@@ -76,7 +76,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	if !ckgp.IsLeaf() {
 		for i := 0; i < len(ckgp.Children()); i++ {
 			child := <-ckgp.ChannelPublicKeyShares
-			log.Lvl4(ckgp.ServerIdentity(), "Got from shared from child ")
+			log.Lvl3(ckgp.ServerIdentity(), "Got from shared from child ")
 			ckgp.AggregateShares(child.CKGShare, ckgp.CKGShare, ckgp.CKGShare)
 
 		}
@@ -87,7 +87,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	if err != nil {
 		return err
 	}
-	log.Lvl4(ckgp.ServerIdentity(), "sent collective key share to parent")
+	log.Lvl3(ckgp.ServerIdentity(), "sent collective key share to parent")
 
 	if ckgp.IsRoot() {
 		ckgp.GenPublicKey(ckgp.CKGShare, ckgp.CKG1, ckgp.Pk)
@@ -112,7 +112,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Wait() {
 /********PROTOCOL****************/
 //NewCollectiveKeyGeneration is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
 func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl4("NewCollectiveKeyGen called")
+	log.Lvl3("NewCollectiveKeyGen called")
 
 	p := &CollectiveKeyGenerationProtocol{
 		TreeNodeInstance: n,

@@ -13,14 +13,14 @@ import (
 	"time"
 )
 
-var params = bfv.DefaultParams[0]
+var params = bfv.DefaultParams[1]
 
 //***Go to manager -> assignparametersbeforestart
 //***If true then the parameters are assigned before the protocol starts. If False they are assigned on startup. may lead to different performance result.
 
 func TestCollectiveKeyGeneration(t *testing.T) {
 	/***VARIABLES TO USE FOR TH TEST ********/
-	var nbnodes = 5
+	var nbnodes = 3
 
 	log.SetDebugVisible(1)
 
@@ -92,7 +92,7 @@ func testLocal(t *testing.T, nbnodes int, local *onet.LocalTest) {
 }
 
 func newCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl4("new collective key gen protocol instance for", tni.ServerIdentity())
+	log.Lvl3("new collective key gen protocol instance for", tni.ServerIdentity())
 	proto, err := protocols.NewCollectiveKeyGeneration(tni)
 	if err != nil {
 		return nil, err

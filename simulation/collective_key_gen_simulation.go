@@ -14,8 +14,11 @@ import (
 	"time"
 )
 
+
 type KeyGenerationSim struct {
 	onet.SimulationBFTree
+
+	sk *bfv.SecretKey
 }
 
 func init() {
@@ -23,6 +26,7 @@ func init() {
 }
 
 var VerifyCorrectness = false
+var params = bfv.DefaultParams[1]
 
 func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 	sim := &KeyGenerationSim{}
@@ -37,7 +41,7 @@ func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 
 func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//setup following the config file.
-	log.Lvl4("Setting up the simulations")
+	log.Lvl3("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
@@ -54,30 +58,28 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 	}); err != nil {
 		return errors.New("Error when registering CollectiveKeyGeneration instance " + err.Error())
 	}
-	log.Lvl4("Node setup OK")
 
+	// Pre-loading of the secret key at the node
+	var err error
+	s.sk, err = utils.GetSecretKey(params, config.Server.ServerIdentity.String())
+	if err != nil {
+		return err
+	}
+
+	log.Lvl3("Node setup OK")
 	return s.SimulationBFTree.Node(config)
 }
 
 func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (onet.ProtocolInstance, error) {
 	//This part allows to injec the data to the node ~ we don't need the messy channels.
 	protocol, err := proto.NewCollectiveKeyGeneration(tni)
-
 	if err != nil {
 		return nil, err
 	}
 
-	//cast
+	// Injects simulation parameters
 	colkeygen := protocol.(*proto.CollectiveKeyGenerationProtocol)
-
-
-	params := bfv.DefaultParams[0]
-	sk, err := utils.GetSecretKey(params, tni.ServerIdentity().String())
-	if err != nil {
-		return nil, err
-	}
-
-	err = colkeygen.Init(params, sk, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	err = colkeygen.Init(params, sim.sk, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +91,7 @@ func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (o
 func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
 
-	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
+	log.Lvl3("Size : ", size, " rounds : ", s.Rounds)
 
 	pi, err := config.Overlay.CreateProtocol("CollectiveKeyGenerationSimul", config.Tree, onet.NilServiceID)
 	if err != nil {
