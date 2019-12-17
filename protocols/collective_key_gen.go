@@ -14,6 +14,7 @@ import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"sync"
@@ -31,7 +32,7 @@ func init() {
 }
 
 
-func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bfv.SecretKey, crpKey []byte) error {
+func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bfv.SecretKey, crp *ring.Poly) error {
 
 	//Set up the parameters - context and the crp
 	ckgp.Params = params.Copy()
@@ -39,10 +40,9 @@ func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bf
 	ckgp.Pk = bfv.NewPublicKey(ckgp.Params)
 	ckgp.CKGProtocol = dbfv.NewCKGProtocol(ckgp.Params)
 
-	//Generate random ckg_1
-	crsGen := dbfv.NewCRPGenerator(ckgp.Params, crpKey)
+	//Copies ckg_1
 	ckgp.CKG1 = ckgp.Params.NewPolyQP()
-	crsGen.Clock(ckgp.CKG1)
+	ckgp.CKG1.Copy(crp)
 
 	//generate p0,i
 	ckgp.CKGShare = ckgp.AllocateShares()

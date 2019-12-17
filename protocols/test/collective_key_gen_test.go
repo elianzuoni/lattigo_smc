@@ -3,6 +3,7 @@ package test
 import (
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
@@ -22,7 +23,7 @@ func TestCollectiveKeyGeneration(t *testing.T) {
 	/***VARIABLES TO USE FOR TH TEST ********/
 	var nbnodes = 3
 
-	log.SetDebugVisible(1)
+	log.SetDebugVisible(2)
 
 	//register the test protocol
 	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", newCollectiveKeyGenerationTest); err != nil {
@@ -102,8 +103,11 @@ func newCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolIn
 		return nil, err
 	}
 
+	crsGen := dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	crp := crsGen.ClockNew()
+
 	instance := proto.(*protocols.CollectiveKeyGenerationProtocol)
-	err = instance.Init(params, sk, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	err = instance.Init(params, sk, crp)
 
 	return instance, err
 }

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
@@ -19,6 +21,7 @@ type KeyGenerationSim struct {
 	onet.SimulationBFTree
 
 	sk *bfv.SecretKey
+	crp *ring.Poly
 }
 
 func init() {
@@ -66,6 +69,10 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 		return err
 	}
 
+	// Pre-initialize the CRP generator
+	crsGen := dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	s.crp = crsGen.ClockNew()
+
 	log.Lvl3("Node setup OK")
 	return s.SimulationBFTree.Node(config)
 }
@@ -79,7 +86,7 @@ func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (o
 
 	// Injects simulation parameters
 	colkeygen := protocol.(*proto.CollectiveKeyGenerationProtocol)
-	err = colkeygen.Init(params, sim.sk, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	err = colkeygen.Init(params, sim.sk, sim.crp)
 	if err != nil {
 		return nil, err
 	}
