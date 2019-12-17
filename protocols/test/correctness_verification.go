@@ -40,14 +40,11 @@ func CheckCorrectnessCKS(err error, t *testing.T, local *onet.LocalTest, CipherT
 	}
 	for _, server := range local.Overlays {
 
-		si := server.ServerIdentity().String()
-		log.Lvl3("name : ", si)
-
-		sk0, err := utils.GetSecretKey(params, "sk0"+si)
+		sk0, err := utils.GetSecretKey(params, server.ServerIdentity().ID)
 		if err != nil {
 			log.Error("error : ", err)
 		}
-		sk1, err := utils.GetSecretKey(params, "sk1"+si)
+		sk1, err := utils.GetSecretKey(params, server.ServerIdentity().ID)
 		if err != nil {
 			log.Error("err : ", err)
 		}
@@ -100,8 +97,8 @@ func CheckCorrectnessPCKS(err error, t *testing.T, tree *onet.Tree, SkOutput *bf
 		t.Fatal(err)
 	}
 	for i < len(tree.Roster.List) {
-		si := tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(params, SkHash+si)
+		si := tree.Roster.List[i]
+		sk0, err := utils.GetSecretKey(params, si.ID)
 		if err != nil {
 			fmt.Print("error : ", err)
 			t.Fatal(err)
@@ -150,8 +147,8 @@ func CheckCorrectnessRKG(i int, tree *onet.Tree, t *testing.T, ctxPQ *ring.Conte
 	i = 0
 	tmp0 := params.NewPolyQP()
 	for i < nbnodes {
-		si := tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(params, SkHash+si)
+		si := tree.Roster.List[i]
+		sk0, err := utils.GetSecretKey(params, si.ID)
 		if err != nil {
 			log.Error("error : ", err)
 			t.Fail()
@@ -218,10 +215,10 @@ func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, Cip
 	}
 	for _, server := range local.Overlays {
 
-		si := server.ServerIdentity().String()
+		si := server.ServerIdentity()
 		log.Lvl1("name : ", si)
 
-		sk0, err := utils.GetSecretKey(params, SkInputHash+si)
+		sk0, err := utils.GetSecretKey(params, si.ID)
 		if err != nil {
 			log.Error("error : ", err)
 			t.Fatal(err)

@@ -39,7 +39,7 @@ func TestRefreshProtocol(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		SkInput, err := utils.GetSecretKey(params, SkInputHash+tni.ServerIdentity().String())
+		SkInput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 		if err != nil {
 			return nil, err
 		}

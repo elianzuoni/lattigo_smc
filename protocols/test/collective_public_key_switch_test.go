@@ -37,7 +37,7 @@ func TestCollectivePublicKeySwitchingLocal(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		sk, err := utils.GetSecretKey(CPKSparams, SkHash+tni.ServerIdentity().String())
+		sk, err := utils.GetSecretKey(CPKSparams, tni.ServerIdentity().ID)
 		if err != nil {
 			log.Error("could not get secret key : ", err)
 		}
@@ -78,7 +78,7 @@ func TestCollectivePublicKeySwitchingLocal(t *testing.T) {
 	log.Lvl1("*************Public Collective key switching done. ************")
 	log.Lvl1("*********** Time elaspsed ", elapsed, "***************")
 	if VerifyCorrectness {
-		CheckCorrectnessPCKS(err, t, tree, SkOutput, CipherText, pcksp, params, SkHash)
+		CheckCorrectnessPCKS(err, t, tree, SkOutput, CipherText, pcksp, CPKSparams, SkHash)
 	}
 
 	pcksp.Done()
@@ -113,7 +113,7 @@ func TestCollectivePublicKeySwitchingTCP(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		sk, err := utils.GetSecretKey(CPKSparams, SkHash+tni.ServerIdentity().String())
+		sk, err := utils.GetSecretKey(CPKSparams, tni.ServerIdentity().ID)
 		if err != nil {
 			log.Error("could not get secret key : ", err)
 		}
@@ -154,7 +154,7 @@ func TestCollectivePublicKeySwitchingTCP(t *testing.T) {
 	log.Lvl1("*************Public Collective key switching done. ************")
 	log.Lvl1("*********** Time elaspsed ", elapsed, "***************")
 	if VerifyCorrectness {
-		CheckCorrectnessPCKS(err, t, tree, SkOutput, CipherText, pcksp, params, SkHash)
+		CheckCorrectnessPCKS(err, t, tree, SkOutput, CipherText, pcksp, CPKSparams, SkHash)
 	}
 
 	pcksp.Done()

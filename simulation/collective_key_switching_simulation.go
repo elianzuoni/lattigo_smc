@@ -85,11 +85,11 @@ func NewKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (one
 
 	//cast
 	params := bfv.DefaultParams[0]
-	sk0, err := utils.GetSecretKey(params, SkInput+tni.ServerIdentity().String())
+	sk0, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 	if err != nil {
 		return nil, err
 	}
-	sk1, err := utils.GetSecretKey(params, SkOutput+tni.ServerIdentity().String())
+	sk1, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 	if err != nil {
 		return nil, err
 	}
@@ -152,12 +152,12 @@ func VerifyPCKSSim(err error, size int, config *onet.SimulationConfig, s *KeySwi
 		return err
 	}
 	for i < size {
-		si := config.Tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(params, "sk0"+si)
+		si := config.Tree.Roster.List[i]
+		sk0, err := utils.GetSecretKey(params, si.ID)
 		if err != nil {
 			fmt.Print("error : ", err)
 		}
-		sk1, err := utils.GetSecretKey(params, "sk1"+si)
+		sk1, err := utils.GetSecretKey(params, si.ID)
 		if err != nil {
 			fmt.Print("err : ", err)
 		}

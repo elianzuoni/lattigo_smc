@@ -90,7 +90,7 @@ func NewRelinearizationKeySimul(tni *onet.TreeNodeInstance, simulation *Relinear
 		return nil, err
 	}
 	params := bfv.DefaultParams[0]
-	sk, err := utils.GetSecretKey(params, SkHash+tni.ServerIdentity().String())
+	sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +148,8 @@ func CheckRelinearization(size int, config *onet.SimulationConfig, RelinProtocol
 	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	tmp0 := params.NewPolyQP()
 	for i < size {
-		si := config.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(params, SkHash+si)
+		si := config.Roster.List[i]
+		sk0, err := utils.GetSecretKey(params, si.ID)
 		if err != nil {
 			log.Error("error : ", err)
 			return err

@@ -1,31 +1,62 @@
 package utils
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
+	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
 	"io/ioutil"
+	"os"
 	"reflect"
 	"strconv"
 )
 
-//Save the given secret key with a seed that will be hashed
-func SaveSecretKey(sk *bfv.SecretKey, seed string) error {
-	data, err := sk.MarshalBinary()
+type LocalTest struct {
+	Roster *onet.Roster
+	IdealSecretKey *bfv.SecretKey
+	SecretKeyShares map[network.ServerIdentityID]*bfv.SecretKey
+}
 
+func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters) (lt *LocalTest, err error) {
+	lt = new(LocalTest)
+	lt.IdealSecretKey = bfv.NewSecretKey(params) // ideal secret key
+	lt.Roster = roster
+	lt.SecretKeyShares = make(map[network.ServerIdentityID]*bfv.SecretKey)
+
+	rq, _ := ring.NewContextWithParams(1 << params.LogN, append(params.Qi, params.Pi...))
+	for _, si := range roster.List {
+		lt.SecretKeyShares[si.ID], err = GetSecretKey(params, si.ID)
+		if err != nil {
+			return
+		}
+		rq.Add(lt.IdealSecretKey.Get(), lt.SecretKeyShares[si.ID].Get(), lt.IdealSecretKey.Get())
+	}
+	return
+}
+
+func (lt *LocalTest) TearDown() error {
+	var err error
+	for _, si := range lt.Roster.List {
+		keyfileName := si.ID.String()+".sk"
+		log.Lvl3("cleaning:", keyfileName)
+		err = os.Remove(keyfileName)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+//Save the given secret key with a seed that will be hashed
+func SaveSecretKey(sk *bfv.SecretKey, seed network.ServerIdentityID) error {
+	data, err := sk.MarshalBinary()
 	if err != nil {
 		return err
 	}
-	log.Lvl4("saving file..", seed, " \n ")
-	xs := sha256.Sum256([]byte(seed))
-	fingerprint := fmt.Sprintf("%x", xs)
-	log.Lvl4("Saving a new key. sha : ", fingerprint)
-
-	err = ioutil.WriteFile("SecretKey"+fingerprint, data, 0644)
-
+	err = ioutil.WriteFile(seed.String()+".sk", data, 0644)
 	if err != nil {
 		log.Lvl4("file is not saved...", err)
 		return err
@@ -34,15 +65,10 @@ func SaveSecretKey(sk *bfv.SecretKey, seed string) error {
 }
 
 //Load a secret key. Will fail if the key does not exist.
-func LoadSecretKey(params bfv.Parameters, seed string) (sk *bfv.SecretKey, err error) {
+func LoadSecretKey(params bfv.Parameters, seed network.ServerIdentityID) (sk *bfv.SecretKey, err error) {
 	var data []byte
 	sk = bfv.NewKeyGenerator(&params).NewSecretKey()
-
-	xs := sha256.Sum256([]byte(seed))
-	fingerprint := fmt.Sprintf("%x", xs)
-	log.Lvl4(seed, " : Loading a key. sha : ", fingerprint)
-
-	if data, err = ioutil.ReadFile("SecretKey" + fingerprint); err != nil {
+	if data, err = ioutil.ReadFile(seed.String()+".sk"); err != nil {
 		return nil, fmt.Errorf("could not read key: %s", err)
 	}
 
@@ -51,7 +77,7 @@ func LoadSecretKey(params bfv.Parameters, seed string) (sk *bfv.SecretKey, err e
 }
 
 //Will try to load the secret key, else will generate a new one.
-func GetSecretKey(ctx *bfv.Parameters, seed string) (sk *bfv.SecretKey, err error) {
+func GetSecretKey(ctx *bfv.Parameters, seed network.ServerIdentityID) (sk *bfv.SecretKey, err error) {
 	log.Lvl3("Loading a key with seed : ", seed)
 	if sk, err = LoadSecretKey(*ctx, seed); sk != nil {
 		return
@@ -62,19 +88,13 @@ func GetSecretKey(ctx *bfv.Parameters, seed string) (sk *bfv.SecretKey, err erro
 }
 
 //Save the public key so it can be loaded afterwards.
-func SavePublicKey(pk *bfv.PublicKey, seed string) error {
+func SavePublicKey(pk *bfv.PublicKey, seed network.ServerIdentityID) error {
 	data, err := pk.MarshalBinary()
 
 	if err != nil {
 		return err
 	}
-	log.Lvl4("saving file..", seed, " \n ")
-	xs := sha256.Sum256([]byte(seed))
-	fingerprint := fmt.Sprintf("%x", xs)
-	log.Lvl4("Saving a new key. sha : ", fingerprint)
-
-	err = ioutil.WriteFile("PublicKey"+fingerprint, data, 0644)
-
+	err = ioutil.WriteFile(seed.String()+"pk", data, 0644)
 	if err != nil {
 		log.Lvl4("file is not saved...", err)
 		return err
@@ -83,16 +103,10 @@ func SavePublicKey(pk *bfv.PublicKey, seed string) error {
 }
 
 //Load public key
-func LoadPublicKey(ctx *bfv.Parameters, seed string) (pk *bfv.PublicKey, err error) {
+func LoadPublicKey(ctx *bfv.Parameters, seed network.ServerIdentityID) (pk *bfv.PublicKey, err error) {
 	var data []byte
-
 	pk = bfv.NewPublicKey(ctx)
-
-	xs := sha256.Sum256([]byte(seed))
-	fingerprint := fmt.Sprintf("%x", xs)
-	log.Lvl4("Loading a public key. sha : ", fingerprint)
-
-	if data, err = ioutil.ReadFile("PublicKey" + fingerprint); err != nil {
+	if data, err = ioutil.ReadFile(seed.String()+"pk"); err != nil {
 		return nil, fmt.Errorf("could not read key: %s", err)
 	}
 

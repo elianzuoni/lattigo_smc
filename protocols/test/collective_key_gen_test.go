@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -14,53 +13,68 @@ import (
 	"time"
 )
 
-var params = bfv.DefaultParams[1]
-
-//***Go to manager -> assignparametersbeforestart
-//***If true then the parameters are assigned before the protocol starts. If False they are assigned on startup. may lead to different performance result.
-
 func TestCollectiveKeyGeneration(t *testing.T) {
-	/***VARIABLES TO USE FOR TH TEST ********/
-	var nbnodes = 3
 
-	log.SetDebugVisible(2)
-
-	//register the test protocol
-	if _, err := onet.GlobalProtocolRegister("CollectiveKeyGenerationTest", newCollectiveKeyGenerationTest); err != nil {
-		log.Error("Could not start CollectiveKeyGenerationTest : ", err)
-		t.Fail()
+	var nbnodes = []int{3, 8, 16}
+	var paramsSets = bfv.DefaultParams
+	if testing.Short() {
+		nbnodes = nbnodes[:1]
+		paramsSets = paramsSets[:1]
 	}
 
-	t.Run(fmt.Sprintf("/local/nbnodes=%d", nbnodes), func(t *testing.T) {
-		testLocal(t, nbnodes, onet.NewLocalTest(suites.MustFind("Ed25519")))
-	})
+	log.SetDebugVisible(1)
 
-	t.Run(fmt.Sprintf("/TCP/nbnodes=%d", nbnodes), func(t *testing.T) {
-		testLocal(t, nbnodes, onet.NewTCPTest(suites.MustFind("Ed25519")))
-	})
+	for _, params := range paramsSets {
 
+		//register the test protocols for each params set
+		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("CollectiveKeyGenerationTest-%d", params.LogN),
+			func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
+				log.Lvl3("new collective key gen protocol instance for", tni.ServerIdentity())
+				instance, err := protocols.NewCollectiveKeyGeneration(tni)
+				if err != nil {
+					return nil, err
+				}
+				lt, err := utils.GetLocalTestForRoster(tni.Roster(), params)
+				if err != nil {
+					return nil, err
+				}
+
+				crsGen := dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+				crp := crsGen.ClockNew()
+
+				e = instance.(*protocols.CollectiveKeyGenerationProtocol).Init(params, lt.SecretKeyShares[tni.ServerIdentity().ID], crp)
+				return
+		}); err != nil {
+			log.Error("Could not start CollectiveKeyGenerationTest : ", err)
+			t.Fail()
+		}
+
+
+		for _, N := range nbnodes {
+			t.Run(fmt.Sprintf("/local/params=%d/nbnodes=%d", 1 << params.LogN, N), func(t *testing.T) {
+				testLocal(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")))
+			})
+
+			t.Run(fmt.Sprintf("/TCP/params=%d/nbnodes=%d", 1 << params.LogN, N), func(t *testing.T) {
+				testLocal(t, params, N, onet.NewTCPTest(suites.MustFind("Ed25519")))
+			})
+
+		}
+	}
 }
 
-func testLocal(t *testing.T, nbnodes int, local *onet.LocalTest) {
-	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", nbnodes)
+func testLocal(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest) {
+	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", N)
 	defer local.CloseAll()
 
-	_, _, tree := local.GenTree(nbnodes, true)
+	_, roster, tree := local.GenTree(N, true)
 
-	rq, err := ring.NewContextWithParams(1 << params.LogN, append(params.Qi, params.Pi...))
+	lt, err := utils.GetLocalTestForRoster(roster, params)
 	if err != nil {
 		t.Fatal(err)
 	}
-	isk := bfv.NewSecretKey(params) // ideal secret key
-	for _, tn := range tree.List() {
-		ski, err := utils.GetSecretKey(params, fmt.Sprint("sk-party-",tn.RosterIndex))
-		if err != nil {
-			t.Fatal(err)
-		}
-		rq.Add(isk.Get(), ski.Get(), isk.Get())
-	}
 
-	pi, err := local.CreateProtocol("CollectiveKeyGenerationTest", tree)
+	pi, err := local.CreateProtocol(fmt.Sprintf("CollectiveKeyGenerationTest-%d", params.LogN), tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
@@ -82,7 +96,7 @@ func testLocal(t *testing.T, nbnodes int, local *onet.LocalTest) {
 
 	encoder := bfv.NewEncoder(params)
 	enc := bfv.NewEncryptorFromPk(params,  ckgp.Pk)
-	dec := bfv.NewDecryptor(params, isk)
+	dec := bfv.NewDecryptor(params, lt.IdealSecretKey)
 	pt := bfv.NewPlaintext(params)
 	ct := enc.EncryptNew(pt)
 	ptp := dec.DecryptNew(ct)
@@ -91,26 +105,10 @@ func testLocal(t *testing.T, nbnodes int, local *onet.LocalTest) {
 		t.Fatal("Decryption failed")
 	}
 
+	err = lt.TearDown()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	log.Lvl1("Success")
-
-}
-
-func newCollectiveKeyGenerationTest(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl3("new collective key gen protocol instance for", tni.ServerIdentity())
-	proto, err := protocols.NewCollectiveKeyGeneration(tni)
-	if err != nil {
-		return nil, err
-	}
-	sk, err := utils.GetSecretKey(params, fmt.Sprint("sk-party-",tni.TreeNode().RosterIndex))
-	if err != nil {
-		return nil, err
-	}
-
-	crsGen := dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
-	crp := crsGen.ClockNew()
-
-	instance := proto.(*protocols.CollectiveKeyGenerationProtocol)
-	err = instance.Init(params, sk, crp)
-
-	return instance, err
 }

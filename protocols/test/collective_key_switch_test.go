@@ -16,8 +16,6 @@ import (
 func TestCollectiveSwitchingLocal(t *testing.T) {
 	/**VARIABLES FOR TEST**/
 	var nbnodes = 7
-	var SkInputHash = "sk0"
-	var SkOutputHash = "sk1"
 	var VerifyCorrectness = false
 	var params = (bfv.DefaultParams[0])
 
@@ -36,11 +34,11 @@ func TestCollectiveSwitchingLocal(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		SkInput, err := utils.GetSecretKey(params, SkInputHash+tni.ServerIdentity().String())
+		SkInput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 		if err != nil {
 			return nil, err
 		}
-		SkOutput, err := utils.GetSecretKey(params, SkOutputHash+tni.ServerIdentity().String())
+		SkOutput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 		if err != nil {
 			return nil, err
 		}
@@ -96,8 +94,6 @@ func TestCollectiveSwitchingLocal(t *testing.T) {
 func TestCollectiveSwitchingTCP(t *testing.T) {
 	/**VARIABLES FOR TEST **/
 	var nbnodes = 7
-	var SkInputHash = "sk0"
-	var SkOutputHash = "sk1"
 	var VerifyCorrectness = false
 	var params = (bfv.DefaultParams[0])
 
@@ -116,11 +112,11 @@ func TestCollectiveSwitchingTCP(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		SkInput, err := utils.GetSecretKey(params, SkInputHash+tni.ServerIdentity().String())
+		SkInput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 		if err != nil {
 			return nil, err
 		}
-		SkOutput, err := utils.GetSecretKey(params, SkOutputHash+tni.ServerIdentity().String())
+		SkOutput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 		if err != nil {
 			return nil, err
 		}

@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
@@ -19,6 +20,8 @@ import (
 
 type KeyGenerationSim struct {
 	onet.SimulationBFTree
+
+	lt *utils.LocalTest
 
 	sk *bfv.SecretKey
 	crp *ring.Poly
@@ -47,7 +50,15 @@ func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 	log.Lvl3("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
-	err := s.CreateTree(sc)
+
+	var err error
+	s.lt, err = utils.GetLocalTestForRoster(sc.Roster, params)
+	if err != nil {
+		return nil, err
+	}
+
+
+	err = s.CreateTree(sc)
 	if err != nil {
 		return nil, err
 	}
@@ -62,11 +73,18 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 		return errors.New("Error when registering CollectiveKeyGeneration instance " + err.Error())
 	}
 
-	// Pre-loading of the secret key at the node
 	var err error
-	s.sk, err = utils.GetSecretKey(params, config.Server.ServerIdentity.String())
+	s.lt, err = utils.GetLocalTestForRoster(config.Roster, params)
 	if err != nil {
 		return err
+	}
+
+
+	// Pre-loading of the secret key at the node
+	var found bool
+	s.sk, found = s.lt.SecretKeyShares[config.Server.ServerIdentity.ID]
+	if !found {
+		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
 	}
 
 	// Pre-initialize the CRP generator
@@ -124,6 +142,11 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 		if err != nil {
 			log.Fatal("Could not start the tree : ", err)
 		}
+	}
+
+	err = s.lt.TearDown()
+	if err != nil {
+		return err
 	}
 
 	return nil

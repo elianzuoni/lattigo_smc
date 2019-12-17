@@ -37,7 +37,7 @@ func TestNewRelinearizationKeyLocal(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		sk, err := utils.GetSecretKey(params, SKHash+tni.ServerIdentity().String())
+		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +108,7 @@ func TestNewRelinearizationKeyTCP(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		sk, err := utils.GetSecretKey(params, SKHash+tni.ServerIdentity().String())
+		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
 		if err != nil {
 			return nil, err
 		}
