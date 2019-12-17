@@ -47,7 +47,7 @@ func testLocal(t *testing.T, nbnodes int, local *onet.LocalTest) {
 
 	_, _, tree := local.GenTree(nbnodes, true)
 
-	rq, err := ring.NewContextWithParams(1 << params.LogN, params.Moduli.Qi)
+	rq, err := ring.NewContextWithParams(1 << params.LogN, append(params.Qi, params.Pi...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,12 +79,15 @@ func testLocal(t *testing.T, nbnodes int, local *onet.LocalTest) {
 	log.Lvl1("**********Collective Key Generated for ", len(ckgp.Roster().List), " nodes.****************")
 	log.Lvl1("**********Time elapsed : ", elapsed, "*************")
 
+
+	encoder := bfv.NewEncoder(params)
 	enc := bfv.NewEncryptorFromPk(params,  ckgp.Pk)
 	dec := bfv.NewDecryptor(params, isk)
 	pt := bfv.NewPlaintext(params)
 	ct := enc.EncryptNew(pt)
 	ptp := dec.DecryptNew(ct)
-	if !utils.Equalslice(pt.Value()[0].Coeffs[0], ptp.Value()[0].Coeffs[0]) {
+	msgp := encoder.DecodeUint(ptp)
+	if !utils.Equalslice(pt.Value()[0].Coeffs[0], msgp) {
 		t.Fatal("Decryption failed")
 	}
 
