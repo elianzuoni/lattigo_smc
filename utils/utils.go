@@ -15,24 +15,42 @@ import (
 )
 
 type LocalTest struct {
-	Roster *onet.Roster
-	IdealSecretKey *bfv.SecretKey
-	SecretKeyShares map[network.ServerIdentityID]*bfv.SecretKey
+	Roster          *onet.Roster
+	IdealSecretKey0 *bfv.SecretKey
+	IdealSecretKey1 *bfv.SecretKey
+
+	SecretKeyShares0 map[network.ServerIdentityID]*bfv.SecretKey
+	SecretKeyShares1 map[network.ServerIdentityID]*bfv.SecretKey
+	StorageDirectory string
 }
 
-func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters) (lt *LocalTest, err error) {
+func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, directory string) (lt *LocalTest, err error) {
 	lt = new(LocalTest)
-	lt.IdealSecretKey = bfv.NewSecretKey(params) // ideal secret key
+	lt.IdealSecretKey0 = bfv.NewSecretKey(params) // ideal secret key 0
+	lt.IdealSecretKey1 = bfv.NewSecretKey(params)
 	lt.Roster = roster
-	lt.SecretKeyShares = make(map[network.ServerIdentityID]*bfv.SecretKey)
+	lt.SecretKeyShares0 = make(map[network.ServerIdentityID]*bfv.SecretKey)
+	lt.SecretKeyShares1 = make(map[network.ServerIdentityID]*bfv.SecretKey)
+	lt.StorageDirectory = directory
 
-	rq, _ := ring.NewContextWithParams(1 << params.LogN, append(params.Qi, params.Pi...))
+	rq, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	for _, si := range roster.List {
-		lt.SecretKeyShares[si.ID], err = GetSecretKey(params, si.ID)
+		lt.SecretKeyShares0[si.ID], err = GetSecretKey(params, si.ID, directory+"sk0")
+		d, _ := lt.SecretKeyShares0[si.ID].MarshalBinary()
+		log.Lvl2(si.ID, "share 0 ", d[0:25])
 		if err != nil {
 			return
 		}
-		rq.Add(lt.IdealSecretKey.Get(), lt.SecretKeyShares[si.ID].Get(), lt.IdealSecretKey.Get())
+		rq.Add(lt.IdealSecretKey0.Get(), lt.SecretKeyShares0[si.ID].Get(), lt.IdealSecretKey0.Get())
+
+		lt.SecretKeyShares1[si.ID], err = GetSecretKey(params, si.ID, directory+"sk1")
+		d, _ = lt.SecretKeyShares1[si.ID].MarshalBinary()
+		log.Lvl2(si.ID, "share 1 ", d[0:25])
+		if err != nil {
+			return
+		}
+		rq.Add(lt.IdealSecretKey1.Get(), lt.SecretKeyShares1[si.ID].Get(), lt.IdealSecretKey1.Get())
+
 	}
 	return
 }
@@ -40,9 +58,13 @@ func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters) (lt *Loc
 func (lt *LocalTest) TearDown() error {
 	var err error
 	for _, si := range lt.Roster.List {
-		keyfileName := si.ID.String()+".sk"
+		keyfileName := si.ID.String() + ".sk"
 		log.Lvl3("cleaning:", keyfileName)
-		err = os.Remove(keyfileName)
+		err = os.Remove(lt.StorageDirectory + "sk0" + keyfileName)
+		if err != nil {
+			return err
+		}
+		err = os.Remove(lt.StorageDirectory + "sk1" + keyfileName)
 		if err != nil {
 			return err
 		}
@@ -51,40 +73,42 @@ func (lt *LocalTest) TearDown() error {
 }
 
 //Save the given secret key with a seed that will be hashed
-func SaveSecretKey(sk *bfv.SecretKey, seed network.ServerIdentityID) error {
+func SaveSecretKey(sk *bfv.SecretKey, seed network.ServerIdentityID, directory string) error {
 	data, err := sk.MarshalBinary()
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(seed.String()+".sk", data, 0644)
+
+	err = ioutil.WriteFile(directory+seed.String()+".sk", data, 0644)
 	if err != nil {
 		log.Lvl4("file is not saved...", err)
 		return err
 	}
+
 	return nil
 }
 
 //Load a secret key. Will fail if the key does not exist.
-func LoadSecretKey(params bfv.Parameters, seed network.ServerIdentityID) (sk *bfv.SecretKey, err error) {
+func LoadSecretKey(params bfv.Parameters, seed network.ServerIdentityID, directory string) (sk *bfv.SecretKey, err error) {
 	var data []byte
 	sk = bfv.NewKeyGenerator(&params).NewSecretKey()
-	if data, err = ioutil.ReadFile(seed.String()+".sk"); err != nil {
+
+	if data, err = ioutil.ReadFile(directory + seed.String() + ".sk"); err != nil {
 		return nil, fmt.Errorf("could not read key: %s", err)
 	}
-
 	err = sk.UnmarshalBinary(data)
 	return
 }
 
 //Will try to load the secret key, else will generate a new one.
-func GetSecretKey(ctx *bfv.Parameters, seed network.ServerIdentityID) (sk *bfv.SecretKey, err error) {
+func GetSecretKey(ctx *bfv.Parameters, seed network.ServerIdentityID, directory string) (sk *bfv.SecretKey, err error) {
 	log.Lvl3("Loading a key with seed : ", seed)
-	if sk, err = LoadSecretKey(*ctx, seed); sk != nil {
+	if sk, err = LoadSecretKey(*ctx, seed, directory); sk != nil {
 		return
 	}
 	sk = bfv.NewKeyGenerator(ctx).NewSecretKey()
 
-	return sk, SaveSecretKey(sk, seed)
+	return sk, SaveSecretKey(sk, seed, directory)
 }
 
 //Save the public key so it can be loaded afterwards.
@@ -106,7 +130,7 @@ func SavePublicKey(pk *bfv.PublicKey, seed network.ServerIdentityID) error {
 func LoadPublicKey(ctx *bfv.Parameters, seed network.ServerIdentityID) (pk *bfv.PublicKey, err error) {
 	var data []byte
 	pk = bfv.NewPublicKey(ctx)
-	if data, err = ioutil.ReadFile(seed.String()+"pk"); err != nil {
+	if data, err = ioutil.ReadFile(seed.String() + "pk"); err != nil {
 		return nil, fmt.Errorf("could not read key: %s", err)
 	}
 

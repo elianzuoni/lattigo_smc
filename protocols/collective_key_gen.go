@@ -31,7 +31,6 @@ func init() {
 
 }
 
-
 func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bfv.SecretKey, crp *ring.Poly) error {
 
 	//Set up the parameters - context and the crp
@@ -96,10 +95,8 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	log.Lvl2(ckgp.ServerIdentity(), "completed Collective Public Key Generation protocol ")
 	ckgp.Cond.Broadcast()
 
-	if Test() && !ckgp.IsRoot() {
-		ckgp.Done()
+	ckgp.Done()
 
-	}
 	return nil
 }
 

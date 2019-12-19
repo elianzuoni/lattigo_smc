@@ -18,6 +18,7 @@ func TestNewRelinearizationKeyLocal(t *testing.T) {
 	const SKHash = "sk0"
 	var VerifyCorrectness = false
 	var params = bfv.DefaultParams[0]
+	var storageDirectory = "tmp"
 
 	//first generate a secret key and from shards and the resulting public key
 	log.SetDebugVisible(1)
@@ -37,7 +38,7 @@ func TestNewRelinearizationKeyLocal(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
+		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID, storageDirectory)
 		if err != nil {
 			return nil, err
 		}
@@ -89,6 +90,7 @@ func TestNewRelinearizationKeyTCP(t *testing.T) {
 	const SKHash = "sk0"
 	var VerifyCorrectness = false
 	var params = bfv.DefaultParams[0]
+	var storageDirectory = "tmp"
 
 	//first generate a secret key and from shards and the resulting public key
 	log.SetDebugVisible(1)
@@ -108,7 +110,7 @@ func TestNewRelinearizationKeyTCP(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
+		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID, storageDirectory)
 		if err != nil {
 			return nil, err
 		}

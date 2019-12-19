@@ -23,6 +23,22 @@ func init() {
 	_, _ = onet.GlobalProtocolRegister(ProtocolName, NewCollectivePublicKeySwitching)
 }
 
+func (pcks *CollectivePublicKeySwitchingProtocol) Init(params bfv.Parameters, publicKey bfv.PublicKey, sk bfv.SecretKey, ciphertext *bfv.Ciphertext) error {
+	pcks.Params = params
+	pcks.Sk = sk
+	pcks.PublicKey = publicKey
+	pcks.Ciphertext = *ciphertext
+	pcks.CiphertextOut = *bfv.NewCiphertext(&params, ciphertext.Degree())
+
+	//Protocol
+	pcks.PublicKeySwitchProtocol = dbfv.NewPCKSProtocol(&params, params.Sigma)
+	pcks.PCKSShare = pcks.PublicKeySwitchProtocol.AllocateShares()
+	pcks.PublicKeySwitchProtocol.GenShare(sk.Get(), &publicKey, ciphertext, pcks.PCKSShare)
+
+	return nil
+
+}
+
 //NewCollectivePublicKeySwitching initialize a new protocol, register the channels for onet.
 func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 
@@ -56,21 +72,29 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Dispatch() error {
 		log.Error("Could not send start message  : ", err)
 		return err
 	}
-	log.Lvl4("Dispatching ! ")
-	res, err := pcks.CollectivePublicKeySwitching()
 
+	for range pcks.Children() {
+		log.Lvl3("Getting a child PCKSShare")
+		children := (<-pcks.ChannelPCKS).PCKSShare
+		pcks.PublicKeySwitchProtocol.AggregateShares(children, pcks.PCKSShare, pcks.PCKSShare)
+
+	}
+
+	//send the share to the parent..
+	log.Lvl3("Sending my PCKSShare")
+	err = pcks.SendToParent(&pcks.PCKSShare)
 	if err != nil {
-		log.Fatal("Error : ", err)
+		return err
 	}
 
-	if Test() {
-		//If test send to root again so we can check at the test program
-		_ = pcks.SendTo(pcks.Root(), res)
+	//check if its the root then aggregate else wait on the parent.
+	if pcks.IsRoot() {
+		pcks.PublicKeySwitchProtocol.KeySwitch(pcks.PCKSShare, &pcks.Ciphertext, &pcks.CiphertextOut)
 	}
 
-	if !pcks.IsRoot() && Test() {
-		pcks.Done()
-	}
+	pcks.Cond.Broadcast()
+
+	pcks.Done()
 
 	return nil
 
@@ -80,52 +104,4 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Wait() {
 	pcks.Cond.L.Lock()
 	pcks.Cond.Wait()
 	pcks.Cond.L.Unlock()
-}
-
-//CollectivePublicKeySwitching runs the protocol , returns the ciphertext after key switching and error if there is any.
-func (pcks *CollectivePublicKeySwitchingProtocol) CollectivePublicKeySwitching() (*bfv.Ciphertext, error) {
-
-	params := pcks.Params
-	protocol := dbfv.NewPCKSProtocol(&params, pcks.Params.Sigma)
-	//Round 1
-	share := protocol.AllocateShares()
-	SecretKey := pcks.Sk
-
-	protocol.GenShare(SecretKey.Get(), &pcks.PublicKey, &pcks.Ciphertext, share)
-
-	for range pcks.Children() {
-		log.Lvl3("Getting a child PCKSShare")
-		children := (<-pcks.ChannelPCKS).PCKSShare
-		protocol.AggregateShares(children, share, share)
-
-	}
-
-	//send the share to the parent..
-	log.Lvl3("Sending my PCKSShare")
-	err := pcks.SendToParent(&share)
-	if err != nil {
-		return &bfv.Ciphertext{}, err
-	}
-
-	//check if its the root then aggregate else wait on the parent.
-	cipher := bfv.NewCiphertext(&params, pcks.Ciphertext.Degree())
-	if pcks.IsRoot() {
-		protocol.KeySwitch(share, &pcks.Ciphertext, cipher)
-	} else {
-		res := <-pcks.ChannelCiphertext
-		cipher = &res.Ciphertext
-	}
-
-	//send the result to your child
-	d, _ := cipher.MarshalBinary()
-	log.Lvl4("FINAL CIPHER : ", d[0:25])
-	log.Lvl4("Sending final cipher text ! ")
-	err = pcks.SendToChildren(cipher)
-	if err != nil {
-		return &bfv.Ciphertext{}, err
-	}
-
-	pcks.Cond.Broadcast()
-
-	return cipher, nil
 }

@@ -31,7 +31,7 @@ func CheckCorrectnessCPKG(ckgp *protocols.CollectiveKeyGenerationProtocol, err e
 }
 
 //CheckCorrectnessCKS
-func CheckCorrectnessCKS(err error, t *testing.T, local *onet.LocalTest, CipherText *bfv.Ciphertext, cksp *protocols.CollectiveKeySwitchingProtocol, params *bfv.Parameters) {
+func CheckCorrectnessCKS(err error, t *testing.T, local *onet.LocalTest, CipherText *bfv.Ciphertext, cksp *protocols.CollectiveKeySwitchingProtocol, params *bfv.Parameters, storageDirectory string) {
 	tmp0 := params.NewPolyQ()
 	tmp1 := params.NewPolyQ()
 	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
@@ -40,11 +40,11 @@ func CheckCorrectnessCKS(err error, t *testing.T, local *onet.LocalTest, CipherT
 	}
 	for _, server := range local.Overlays {
 
-		sk0, err := utils.GetSecretKey(params, server.ServerIdentity().ID)
+		sk0, err := utils.GetSecretKey(params, server.ServerIdentity().ID, storageDirectory)
 		if err != nil {
 			log.Error("error : ", err)
 		}
-		sk1, err := utils.GetSecretKey(params, server.ServerIdentity().ID)
+		sk1, err := utils.GetSecretKey(params, server.ServerIdentity().ID, storageDirectory)
 		if err != nil {
 			log.Error("err : ", err)
 		}
@@ -89,7 +89,7 @@ func CheckCorrectnessCKS(err error, t *testing.T, local *onet.LocalTest, CipherT
 }
 
 //CheckCorrectnessPCKS
-func CheckCorrectnessPCKS(err error, t *testing.T, tree *onet.Tree, SkOutput *bfv.SecretKey, CipherText *bfv.Ciphertext, pcksp *protocols.CollectivePublicKeySwitchingProtocol, params *bfv.Parameters, SkHash string) {
+func CheckCorrectnessPCKS(err error, t *testing.T, tree *onet.Tree, SkOutput *bfv.SecretKey, CipherText *bfv.Ciphertext, pcksp *protocols.CollectivePublicKeySwitchingProtocol, params *bfv.Parameters, storageDirectory string) {
 	i := 0
 	tmp0 := params.NewPolyQ()
 	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
@@ -98,7 +98,7 @@ func CheckCorrectnessPCKS(err error, t *testing.T, tree *onet.Tree, SkOutput *bf
 	}
 	for i < len(tree.Roster.List) {
 		si := tree.Roster.List[i]
-		sk0, err := utils.GetSecretKey(params, si.ID)
+		sk0, err := utils.GetSecretKey(params, si.ID, storageDirectory)
 		if err != nil {
 			fmt.Print("error : ", err)
 			t.Fatal(err)
@@ -141,14 +141,14 @@ func CheckCorrectnessPCKS(err error, t *testing.T, tree *onet.Tree, SkOutput *bf
 }
 
 //CheckCorrectnessRKG
-func CheckCorrectnessRKG(i int, tree *onet.Tree, t *testing.T, ctxPQ *ring.Context, RelinProtocol *protocols.RelinearizationKeyProtocol, err error, SkHash string, params *bfv.Parameters) {
+func CheckCorrectnessRKG(i int, tree *onet.Tree, t *testing.T, ctxPQ *ring.Context, RelinProtocol *protocols.RelinearizationKeyProtocol, err error, storageDirectory string, params *bfv.Parameters) {
 	log.Lvl1("Collecting the relinearization keys")
 	nbnodes := len(tree.Roster.List)
 	i = 0
 	tmp0 := params.NewPolyQP()
 	for i < nbnodes {
 		si := tree.Roster.List[i]
-		sk0, err := utils.GetSecretKey(params, si.ID)
+		sk0, err := utils.GetSecretKey(params, si.ID, storageDirectory)
 		if err != nil {
 			log.Error("error : ", err)
 			t.Fail()
@@ -207,9 +207,9 @@ func CheckCorrectnessRKG(i int, tree *onet.Tree, t *testing.T, ctxPQ *ring.Conte
 	log.Lvl1("Relinearization OK")
 }
 
-func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, CipherText *bfv.Ciphertext, rkp *protocols.RefreshKeyProtocol, SkInputHash string, params *bfv.Parameters) {
-	tmp0 := params.NewPolyQ()
-	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
+func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, CipherText *bfv.Ciphertext, rkp *protocols.RefreshKeyProtocol, storageDirectory string, params *bfv.Parameters) {
+	tmp0 := params.NewPolyQP()
+	ctx, err := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, Cip
 		si := server.ServerIdentity()
 		log.Lvl1("name : ", si)
 
-		sk0, err := utils.GetSecretKey(params, si.ID)
+		sk0, err := utils.GetSecretKey(params, si.ID, storageDirectory)
 		if err != nil {
 			log.Error("error : ", err)
 			t.Fatal(err)

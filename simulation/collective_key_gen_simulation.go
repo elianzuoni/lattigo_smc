@@ -17,13 +17,12 @@ import (
 	"time"
 )
 
-
 type KeyGenerationSim struct {
 	onet.SimulationBFTree
 
 	lt *utils.LocalTest
 
-	sk *bfv.SecretKey
+	sk  *bfv.SecretKey
 	crp *ring.Poly
 }
 
@@ -57,7 +56,6 @@ func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 		return nil, err
 	}
 
-
 	err = s.CreateTree(sc)
 	if err != nil {
 		return nil, err
@@ -79,10 +77,9 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 		return err
 	}
 
-
 	// Pre-loading of the secret key at the node
 	var found bool
-	s.sk, found = s.lt.SecretKeyShares[config.Server.ServerIdentity.ID]
+	s.sk, found = s.lt.SecretKeyShares0[config.Server.ServerIdentity.ID]
 	if !found {
 		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
 	}

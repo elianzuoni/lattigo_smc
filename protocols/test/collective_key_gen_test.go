@@ -17,6 +17,7 @@ func TestCollectiveKeyGeneration(t *testing.T) {
 
 	var nbnodes = []int{3, 8, 16}
 	var paramsSets = bfv.DefaultParams
+	var storageDirectory = "/tmp/"
 	if testing.Short() {
 		nbnodes = nbnodes[:1]
 		paramsSets = paramsSets[:1]
@@ -25,7 +26,7 @@ func TestCollectiveKeyGeneration(t *testing.T) {
 	log.SetDebugVisible(1)
 
 	for _, params := range paramsSets {
-
+		var lt *utils.LocalTest
 		//register the test protocols for each params set
 		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("CollectiveKeyGenerationTest-%d", params.LogN),
 			func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
@@ -34,42 +35,47 @@ func TestCollectiveKeyGeneration(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				lt, err := utils.GetLocalTestForRoster(tni.Roster(), params)
-				if err != nil {
-					return nil, err
+
+				if tni.IsRoot() {
+					//Only need to be loaded once par protocol.
+					log.Lvl1("Loading once ! ")
+					lt, err = utils.GetLocalTestForRoster(tni.Roster(), params, storageDirectory)
+					if err != nil {
+						return nil, err
+					}
+
 				}
 
 				crsGen := dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
 				crp := crsGen.ClockNew()
 
-				e = instance.(*protocols.CollectiveKeyGenerationProtocol).Init(params, lt.SecretKeyShares[tni.ServerIdentity().ID], crp)
+				e = instance.(*protocols.CollectiveKeyGenerationProtocol).Init(params, lt.SecretKeyShares0[tni.ServerIdentity().ID], crp)
 				return
-		}); err != nil {
+			}); err != nil {
 			log.Error("Could not start CollectiveKeyGenerationTest : ", err)
 			t.Fail()
 		}
 
-
 		for _, N := range nbnodes {
-			t.Run(fmt.Sprintf("/local/params=%d/nbnodes=%d", 1 << params.LogN, N), func(t *testing.T) {
-				testLocal(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")))
+			t.Run(fmt.Sprintf("/local/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalCKG(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")), storageDirectory)
 			})
 
-			t.Run(fmt.Sprintf("/TCP/params=%d/nbnodes=%d", 1 << params.LogN, N), func(t *testing.T) {
-				testLocal(t, params, N, onet.NewTCPTest(suites.MustFind("Ed25519")))
+			t.Run(fmt.Sprintf("/TCP/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalCKG(t, params, N, onet.NewTCPTest(suites.MustFind("Ed25519")), storageDirectory)
 			})
 
 		}
 	}
 }
 
-func testLocal(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest) {
+func testLocalCKG(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string) {
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", N)
 	defer local.CloseAll()
 
 	_, roster, tree := local.GenTree(N, true)
 
-	lt, err := utils.GetLocalTestForRoster(roster, params)
+	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +89,7 @@ func testLocal(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTes
 	log.Lvl1("Starting ckgp")
 	now := time.Now()
 	err = ckgp.Start()
-	defer ckgp.Done()
+
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
 	}
@@ -93,10 +99,9 @@ func testLocal(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTes
 	log.Lvl1("**********Collective Key Generated for ", len(ckgp.Roster().List), " nodes.****************")
 	log.Lvl1("**********Time elapsed : ", elapsed, "*************")
 
-
 	encoder := bfv.NewEncoder(params)
-	enc := bfv.NewEncryptorFromPk(params,  ckgp.Pk)
-	dec := bfv.NewDecryptor(params, lt.IdealSecretKey)
+	enc := bfv.NewEncryptorFromPk(params, ckgp.Pk)
+	dec := bfv.NewDecryptor(params, lt.IdealSecretKey0)
 	pt := bfv.NewPlaintext(params)
 	ct := enc.EncryptNew(pt)
 	ptp := dec.DecryptNew(ct)

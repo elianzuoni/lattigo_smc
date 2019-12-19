@@ -1,6 +1,7 @@
 package test
 
 import (
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
@@ -13,157 +14,108 @@ import (
 
 //Global variables to modify tests.
 
-func TestCollectiveSwitchingLocal(t *testing.T) {
-	/**VARIABLES FOR TEST**/
-	var nbnodes = 7
-	var VerifyCorrectness = false
-	var params = (bfv.DefaultParams[0])
+func TestCollectiveKeySwitching(t *testing.T) {
+	var nbnodes = []int{3, 8, 16}
+	var paramsSets = bfv.DefaultParams
+	var storageDirectory = "tmp/"
+	if testing.Short() {
+		nbnodes = nbnodes[:1]
+		paramsSets = paramsSets[:1]
+	}
 
-	//to do this we need to have some keys already.
-	//for this we can set up with the collective key generation
 	log.SetDebugVisible(1)
 
-	log.Lvl1("Setting up context and plaintext/ciphertext of reference")
+	for _, params := range paramsSets {
+		//register protocol for each paramset.
+		pt := bfv.NewPlaintext(params)
+		var cipher bfv.Ciphertext
 
-	CipherText := bfv.NewCiphertextRandom(params, 1)
-	log.Lvl1("Set up done - Starting protocols")
-	//register the test protocol
-	if _, err := onet.GlobalProtocolRegister("CollectiveKeySwitchingTestLocal", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		//Use a local function so we can use ciphertext !
-		proto, err := protocols.NewCollectiveKeySwitching(tni)
-		if err != nil {
-			return nil, err
+		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("CollectiveKeySwitchingTest-%d", params.LogN),
+			func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+				log.Lvl3("New Collective key switching instance for ", tni.ServerIdentity())
+				instance, err := protocols.NewCollectiveKeySwitching(tni)
+				if err != nil {
+					return nil, err
+
+				}
+				lt, err := utils.GetLocalTestForRoster(tni.Roster(), params, storageDirectory)
+				if err != nil {
+					return nil, err
+				}
+				if tni.IsRoot() {
+					enc0 := bfv.NewEncryptorFromSk(params, lt.IdealSecretKey0)
+
+					cipher = *enc0.EncryptNew(pt)
+				}
+
+				err = instance.(*protocols.CollectiveKeySwitchingProtocol).Init(params, lt.SecretKeyShares0[tni.ServerIdentity().ID], lt.SecretKeyShares1[tni.ServerIdentity().ID], &cipher)
+
+				return instance, err
+			}); err != nil {
+			log.Error("Could not start CollectiveKeySwitchingTest : ", err)
 		}
-		SkInput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
-		if err != nil {
-			return nil, err
+
+		//Now run the tests.
+		for _, N := range nbnodes {
+			t.Run(fmt.Sprintf("/local/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalCKS(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")), storageDirectory, pt)
+			})
+			t.Run(fmt.Sprintf("/TCP/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalCKS(t, params, N, onet.NewTCPTest(suites.MustFind("Ed25519")), storageDirectory, pt)
+			})
 		}
-		SkOutput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
-		if err != nil {
-			return nil, err
-		}
-		instance := proto.(*protocols.CollectiveKeySwitchingProtocol)
-		instance.Params = protocols.SwitchingParameters{
-			Params:     *params,
-			SkInput:    *SkInput,
-			SkOutput:   *SkOutput,
-			Ciphertext: *CipherText,
-		}
-		return instance, nil
-
-	}); err != nil {
-		log.Error("Could not start CollectiveKeySwitchingTest : ", err)
-		t.Fail()
-
 	}
-
-	//can start protocol
-	log.Lvl1("Started to test collective key switching locally with nodes amount : ", nbnodes)
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
-	defer local.CloseAll()
-	_, _, tree := local.GenTree(nbnodes, true)
-	pi, err := local.CreateProtocol("CollectiveKeySwitchingTestLocal", tree)
-	if err != nil {
-		t.Fatal("Couldn't create new node:", err)
-	}
-
-	cksp := pi.(*protocols.CollectiveKeySwitchingProtocol)
-	now := time.Now()
-	log.Lvl4("Starting cksp")
-	err = cksp.Start()
-	if err != nil {
-		t.Fatal("Could not start the tree : ", err)
-	}
-	cksp.Wait()
-	elapsed := time.Since(now)
-	log.Lvl1("*****************Collective key switching done.******************")
-	log.Lvl1("*****************Time elapsed : ", elapsed, "*******************")
-
-	//From here check that Original ciphertext decrypted under SkInput === Resulting ciphertext decrypted under SkOutput
-	if VerifyCorrectness {
-		CheckCorrectnessCKS(err, t, local, CipherText, cksp, params)
-	}
-
-	cksp.Done()
-	//check if the resulting cipher text decrypted with SkOutput works
-
-	log.Lvl1("Success")
 
 }
 
-func TestCollectiveSwitchingTCP(t *testing.T) {
-	/**VARIABLES FOR TEST **/
-	var nbnodes = 7
-	var VerifyCorrectness = false
-	var params = (bfv.DefaultParams[0])
-
-	//to do this we need to have some keys already.
-	//for this we can set up with the collective key generation
-	log.SetDebugVisible(1)
-
-	log.Lvl1("Setting up context and plaintext/ciphertext of reference")
-
-	CipherText := bfv.NewCiphertextRandom(params, 1)
-	log.Lvl1("Set up done - Starting protocols")
-	//register the test protocol
-	if _, err := onet.GlobalProtocolRegister("CollectiveKeySwitchingTestTCP", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		//Use a local function so we can use ciphertext !
-		proto, err := protocols.NewCollectiveKeySwitching(tni)
-		if err != nil {
-			return nil, err
-		}
-		SkInput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
-		if err != nil {
-			return nil, err
-		}
-		SkOutput, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
-		if err != nil {
-			return nil, err
-		}
-		instance := proto.(*protocols.CollectiveKeySwitchingProtocol)
-		instance.Params = protocols.SwitchingParameters{
-			Params:     *params,
-			SkInput:    *SkInput,
-			SkOutput:   *SkOutput,
-			Ciphertext: *CipherText,
-		}
-		return instance, nil
-
-	}); err != nil {
-		log.Error("Could not start CollectiveKeySwitchingTest : ", err)
-		t.Fail()
-
-	}
-
-	//can start protocol
-	log.Lvl1("Started to test collective key switching locally TCP with nodes amount : ", nbnodes)
-	local := onet.NewTCPTest(suites.MustFind("Ed25519"))
+func testLocalCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, plaintext *bfv.Plaintext) {
+	log.Lvl1("Starting to test Collective key switching with nodes amount : ", N)
 	defer local.CloseAll()
-	_, _, tree := local.GenTree(nbnodes, true)
-	pi, err := local.CreateProtocol("CollectiveKeySwitchingTestTCP", tree)
+
+	_, roster, tree := local.GenTree(N, true)
+	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
+	defer func() {
+		err = lt.TearDown()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
 	if err != nil {
-		t.Fatal("Couldn't create new node:", err)
+		t.Fatal(err)
+	}
+	pi, err := local.CreateProtocol(fmt.Sprintf("CollectiveKeySwitchingTest-%d", params.LogN), tree)
+	if err != nil {
+		t.Fatal("Couldn't create new node : ", err)
 	}
 
 	cksp := pi.(*protocols.CollectiveKeySwitchingProtocol)
+	log.Lvl1("Starting Cks")
 	now := time.Now()
-	log.Lvl4("Starting cksp")
 	err = cksp.Start()
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
 	}
 	cksp.Wait()
+
 	elapsed := time.Since(now)
 	log.Lvl1("*****************Collective key switching done.******************")
 	log.Lvl1("*****************Time elapsed : ", elapsed, "*******************")
 
-	//From here check that Original ciphertext decrypted under SkInput === Resulting ciphertext decrypted under SkOutput
-	if VerifyCorrectness {
-		CheckCorrectnessCKS(err, t, local, CipherText, cksp, params)
-	}
+	//now check if okay.
 
-	cksp.Done()
-	//check if the resulting cipher text decrypted with SkOutput works
+	encoder := bfv.NewEncoder(params)
+	Decryptor1 := bfv.NewDecryptor(params, lt.IdealSecretKey1)
+
+	//expected
+	expected := encoder.DecodeUint(plaintext)
+	decoded := encoder.DecodeUint(Decryptor1.DecryptNew(cksp.CiphertextOut))
+	log.Lvl1("Exp :", expected[0:25])
+	log.Lvl1("Got :", decoded[0:25])
+	if !utils.Equalslice(expected, decoded) {
+		t.Fatal("Decryption failed")
+
+	}
 
 	log.Lvl1("Success")
 

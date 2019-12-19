@@ -16,7 +16,6 @@ type CollectiveKeyGenerationProtocol struct {
 	*dbfv.CKGProtocol
 	*sync.Cond
 
-
 	//Params parameters of the protocol
 	Params *bfv.Parameters
 	//Secret key of the protocol
@@ -42,11 +41,12 @@ type CollectiveKeyGenerationProtocol struct {
 //CollectiveKeySwitchingProtocol struct for onet
 type CollectiveKeySwitchingProtocol struct {
 	*onet.TreeNodeInstance
-
-	//Params used for the key switching
-	Params SwitchingParameters
-
+	*dbfv.CKSProtocol
 	*sync.Cond
+	//Params used for the key switching
+	Params        SwitchingParameters
+	CKSShare      dbfv.CKSShare
+	CiphertextOut *bfv.Ciphertext
 
 	//ChannelCiphertext to send the ciphertext in the end - for testing
 	ChannelCiphertext chan StructCiphertext
@@ -70,6 +70,10 @@ type CollectivePublicKeySwitchingProtocol struct {
 
 	bfv.Ciphertext
 
+	PublicKeySwitchProtocol *dbfv.PCKSProtocol
+	PCKSShare               dbfv.PCKSShare
+	CiphertextOut           bfv.Ciphertext
+
 	*sync.Cond
 
 	//ChannelCiphertext to send the ciphertext in the end
@@ -85,7 +89,6 @@ type RelinearizationKeyProtocol struct {
 	*onet.TreeNodeInstance
 	//Params the bfv parameters
 	Params bfv.Parameters
-	//Todo have better variable names once its coded.
 	//CRP the random ring used during the round 1
 	Crp CRP
 	//SK the secret key of the party
@@ -117,6 +120,9 @@ type RefreshKeyProtocol struct {
 	FinalCiphertext bfv.Ciphertext
 	CRS             ring.Poly
 	Params          bfv.Parameters
+	RShare          dbfv.RefreshShare
+
+	RefreshProto *dbfv.RefreshProtocol
 
 	ChannelCiphertext chan StructCiphertext
 	ChannelRShare     chan StructRShare
@@ -181,11 +187,8 @@ type StructSwitchParameters struct {
 //SwitchingParameters contains the public parameters for CKS
 type SwitchingParameters struct {
 	//Params parameters bfv
-	Params bfv.Parameters
-	//SkInputHash the hash of secret key under which ciphertext is *currently* encrypted
-	SkInput bfv.SecretKey
-	//SkOutputHash the hash of secretkey under which ciphertext will be encrypted *after* running CKS
-	SkOutput bfv.SecretKey
+	Params *bfv.Parameters
+
 	bfv.Ciphertext
 }
 
