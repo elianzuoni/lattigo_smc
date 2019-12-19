@@ -95,6 +95,12 @@ type RelinearizationKeyProtocol struct {
 	Sk bfv.SecretKey
 
 	*sync.Cond
+	RelinProto      *dbfv.RKGProtocol
+	RoundOneShare   dbfv.RKGShareRoundOne
+	RoundTwoShare   dbfv.RKGShareRoundTwo
+	RoundThreeShare dbfv.RKGShareRoundThree
+	U               *ring.Poly
+	EvaluationKey   *bfv.EvaluationKey
 
 	//ChannelRoundOne to send the different parts of the key
 	ChannelRoundOne chan StructRelinKeyRoundOne

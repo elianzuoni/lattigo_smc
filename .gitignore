@@ -8,4 +8,4 @@ simulation/simulation
 # Dont add the keys that are generated for testing.
 PublicKey*
 SecretKey*
-
+*.sk
