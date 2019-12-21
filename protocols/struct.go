@@ -135,6 +135,26 @@ type RefreshKeyProtocol struct {
 	ChannelStart      chan StructStart
 }
 
+type RotationKeyProtocol struct {
+	*onet.TreeNodeInstance
+	*sync.Cond
+
+	Params           bfv.Parameters
+	RotationProtocol *dbfv.RTGProtocol
+	RTShare          dbfv.RTGShare
+	RotKey           bfv.RotationKeys
+
+	Crp []*ring.Poly
+
+	ChannelRTShare chan StructRTShare
+	ChannelStart   chan StructStart
+}
+
+type StructRTShare struct {
+	*onet.TreeNode
+	dbfv.RTGShare
+}
+
 /********MESSSAGE STRUCTURES ***/
 
 /**USED FOR ALL ***/

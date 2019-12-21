@@ -15,14 +15,14 @@ import (
 
 func TestRelinearizationKeyLocal(t *testing.T) {
 	var nbnodes = []int{3, 8, 16}
-	var paramsSets = bfv.DefaultParams[3:]
+	var paramsSets = bfv.DefaultParams
 	var storageDirectory = "tmp/"
-	if true {
+	if testing.Short() {
 		nbnodes = nbnodes[:1]
 		paramsSets = paramsSets[:1]
 	}
 
-	log.SetDebugVisible(3)
+	log.SetDebugVisible(1)
 
 	for _, params := range paramsSets {
 		ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
