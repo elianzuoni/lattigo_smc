@@ -15,29 +15,71 @@ import (
 
 func TestRotationKeyLocal(t *testing.T) {
 	var nbnodes = []int{3, 8, 16}
-	var paramsSets = bfv.DefaultParams[3:]
+	var paramsSets = bfv.DefaultParams
 	var storageDirectory = "tmp/"
-	if true {
+	if testing.Short() {
 		nbnodes = nbnodes[:1]
 		paramsSets = paramsSets[:1]
 	}
 
-	log.SetDebugVisible(1)
+	log.SetDebugVisible(3)
 	for _, params := range paramsSets {
 		//prepare the crp
 		ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 		crpGenerator := ring.NewCRPGenerator(nil, ctxPQ)
 		modulus := params.Moduli.Qi
 		crp := make([]*ring.Poly, len(modulus))
-		k := uint64(3)
-		rottype := bfv.RotationRow
+		k := uint64(1)
+
 		for j := 0; j < len(modulus); j++ {
 			crp[j] = crpGenerator.ClockNew()
 		}
 
-		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("RotationKeyTest-%d", params.LogN),
+		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("RotationKeyTestRow-%d", params.LogN),
+			func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
+				rottype := bfv.RotationRow
+
+				log.Lvl3("New rotation row ")
+				instance, err := protocols.NewRotationKey(tni)
+				if err != nil {
+					return nil, err
+				}
+				lt, err := utils.GetLocalTestForRoster(tni.Roster(), params, storageDirectory)
+				if err != nil {
+					return nil, err
+				}
+
+				err = instance.(*protocols.RotationKeyProtocol).Init(params, *lt.SecretKeyShares0[tni.ServerIdentity().ID], bfv.Rotation(rottype), k, crp)
+				return instance, err
+			}); err != nil {
+			t.Fatal(err)
+		}
+
+		//register protocol for colLEft
+		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("RotationKeyTestLeft-%d", params.LogN),
+			func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
+				log.Lvl3("New rotation left ")
+				rottype := bfv.RotationLeft
+
+				instance, err := protocols.NewRotationKey(tni)
+				if err != nil {
+					return nil, err
+				}
+				lt, err := utils.GetLocalTestForRoster(tni.Roster(), params, storageDirectory)
+				if err != nil {
+					return nil, err
+				}
+
+				err = instance.(*protocols.RotationKeyProtocol).Init(params, *lt.SecretKeyShares0[tni.ServerIdentity().ID], bfv.Rotation(rottype), k, crp)
+				return instance, err
+			}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("RotationKeyTestRight-%d", params.LogN),
 			func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
 				log.Lvl3("New rotation")
+				rottype := bfv.RotationRight
+
 				instance, err := protocols.NewRotationKey(tni)
 				if err != nil {
 					return nil, err
@@ -54,16 +96,25 @@ func TestRotationKeyLocal(t *testing.T) {
 		}
 
 		for _, N := range nbnodes {
-			t.Run(fmt.Sprintf("/local/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
-				testLocalRotKG(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")), storageDirectory)
+			//t.Run(fmt.Sprintf("/local/row/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+			//	testLocalRotKG(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")), storageDirectory, bfv.RotationRow,k)
+			//})
+			//t.Run(fmt.Sprintf("/local/left/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+			//	testLocalRotKG(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")), storageDirectory, bfv.RotationLeft,k)
+			//})
+			t.Run(fmt.Sprintf("/TCP/row/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalRotKG(t, params, N, onet.NewTCPTest(suites.MustFind("Ed25519")), storageDirectory, bfv.RotationRow, k)
 			})
+			t.Run(fmt.Sprintf("/TCP/left/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalRotKG(t, params, N, onet.NewTCPTest(suites.MustFind("Ed25519")), storageDirectory, bfv.RotationLeft, k)
+			})
+
 		}
 
 	}
 }
 
-func testLocalRotKG(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string) {
-	//todo finish the protocol
+func testLocalRotKG(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, rotation bfv.Rotation, k uint64) {
 
 	defer local.CloseAll()
 	_, roster, tree := local.GenTree(N, true)
@@ -78,8 +129,23 @@ func testLocalRotKG(t *testing.T, params *bfv.Parameters, N int, local *onet.Loc
 			t.Fatal(err)
 		}
 	}()
+	s := ""
+	switch rotation {
+	case bfv.RotationRow:
+		s = fmt.Sprintf("RotationKeyTestRow-%d", params.LogN)
+		break
+	case bfv.RotationRight:
+		s = fmt.Sprintf("RotationKeyTestRight-%d", params.LogN)
+		break
+	case bfv.RotationLeft:
+		s = fmt.Sprintf("RotationKeyTestLeft-%d", params.LogN)
+		break
+	default:
+		t.Fatal("Unknown rotation type.")
 
-	pi, err := local.CreateProtocol(fmt.Sprintf("RotationKeyTest-%d", params.LogN), tree)
+	}
+
+	pi, err := local.CreateProtocol(s, tree)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,11 +172,30 @@ func testLocalRotKG(t *testing.T, params *bfv.Parameters, N int, local *onet.Loc
 	enc.EncodeUint(coeffs, pt)
 	ciphertext := bfv.NewEncryptorFromSk(params, lt.IdealSecretKey0).EncryptNew(pt)
 	evaluator := bfv.NewEvaluator(params)
-	evaluator.RotateRows(ciphertext, &rotkey, ciphertext)
 	n := 1 << params.LogN
-	expected := append(coeffs[n>>1:], coeffs[:n>>1]...)
+	mask := uint64(n>>1) - 1
+	expected := make([]uint64, n)
 
+	switch rotation {
+	case bfv.RotationRow:
+		evaluator.RotateRows(ciphertext, &rotkey, ciphertext)
+		expected = append(coeffs[n>>1:], coeffs[:n>>1]...)
+
+		break
+	case bfv.RotationRight:
+
+		t.Fatal("Not implemented")
+
+	case bfv.RotationLeft:
+		evaluator.RotateColumns(ciphertext, k, &rotkey, ciphertext)
+		for i := uint64(0); i < uint64(n)>>1; i++ {
+			expected[i] = coeffs[(i+k)&mask]
+			expected[i+uint64(n>>1)] = coeffs[((i+k)&mask)+uint64(n>>1)]
+		}
+		break
+	}
 	resultingPt := bfv.NewDecryptor(params, lt.IdealSecretKey0).DecryptNew(ciphertext)
+
 	decoded := enc.DecodeUint(resultingPt)
 
 	if !utils.Equalslice(expected, decoded) {
