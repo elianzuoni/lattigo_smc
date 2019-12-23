@@ -132,7 +132,7 @@ func CheckCKS(err error, size int, config *onet.SimulationConfig, pcksp *proto.C
 	}
 	for i < size {
 		si := config.Roster.List[i]
-		sk0, err := utils.GetSecretKey(params, si.ID)
+		sk0, err := utils.GetSecretKey(params, si.ID, "")
 		if err != nil {
 			fmt.Print("error : ", err)
 		}
@@ -185,7 +185,7 @@ func NewPublicKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *PublicKeySwitch
 	}
 
 	params := bfv.DefaultParams[0]
-	sk0, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
+	sk0, err := utils.GetSecretKey(params, tni.ServerIdentity().ID, "")
 	if err != nil {
 		return nil, err
 	}

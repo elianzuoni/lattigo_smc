@@ -79,7 +79,7 @@ func testLocalRefresh(t *testing.T, params *bfv.Parameters, N int, local *onet.L
 	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	//to clean up afterwards.
 	defer func() {
-		err = lt.TearDown()
+		err = lt.TearDown(false)
 		if err != nil {
 			t.Fatal(err)
 		}

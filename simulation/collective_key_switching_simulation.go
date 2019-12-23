@@ -2,15 +2,12 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
-	"lattigo-smc/utils"
 	"time"
 )
 
@@ -84,21 +81,11 @@ func NewKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (one
 	}
 
 	//cast
-	params := bfv.DefaultParams[0]
-	sk0, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
-	if err != nil {
-		return nil, err
-	}
-	sk1, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
-	if err != nil {
-		return nil, err
-	}
 
 	colkeyswitch := protocol.(*proto.CollectiveKeySwitchingProtocol)
 	colkeyswitch.Params = proto.SwitchingParameters{
-		Params:     *bfv.DefaultParams[0],
-		SkInput:    *sk0,
-		SkOutput:   *sk1,
+		Params: bfv.DefaultParams[0],
+
 		Ciphertext: sim.Ciphertext,
 	}
 
@@ -129,76 +116,76 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	log.Lvl1("Collective key switch done for  ", len(cksp.Roster().List), " nodes")
 	log.Lvl1("Elapsed time : ", elapsed)
-	if VerifyCorrectness {
-		log.Lvl1("Verify correctness..")
-		err = VerifyPCKSSim(err, size, config, s, cksp)
-		if err != nil {
-			return err
-		}
-	}
+	//if VerifyCorrectness {
+	//	log.Lvl1("Verify correctness..")
+	//	err = VerifyPCKSSim(err, size, config, s, cksp)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
 
 	return nil
 
 }
 
-func VerifyPCKSSim(err error, size int, config *onet.SimulationConfig, s *KeySwitchingSim, cksp *proto.CollectiveKeySwitchingProtocol) error {
-	//Now we can setup our keys..
-	params := bfv.DefaultParams[0]
-	i := 0
-	tmp0 := params.NewPolyQ()
-	tmp1 := params.NewPolyQ()
-	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
-	if err != nil {
-		return err
-	}
-	for i < size {
-		si := config.Tree.Roster.List[i]
-		sk0, err := utils.GetSecretKey(params, si.ID)
-		if err != nil {
-			fmt.Print("error : ", err)
-		}
-		sk1, err := utils.GetSecretKey(params, si.ID)
-		if err != nil {
-			fmt.Print("err : ", err)
-		}
-
-		ctx.Add(tmp0, sk0.Get(), tmp0)
-		ctx.Add(tmp1, sk1.Get(), tmp1)
-
-		i++
-	}
-	SkInput := new(bfv.SecretKey)
-	SkOutput := new(bfv.SecretKey)
-	SkInput.Set(tmp0)
-	SkOutput.Set(tmp1)
-	encoder := bfv.NewEncoder(params)
-	DecryptorInput := bfv.NewDecryptor(params, SkInput)
-	//expected
-	ReferencePlaintext := DecryptorInput.DecryptNew(&s.Ciphertext)
-	expected := encoder.DecodeUint(ReferencePlaintext)
-	DecryptorOutput := bfv.NewDecryptor(params, SkOutput)
-	log.Lvl1("test is downloading the ciphertext..")
-	//check if all ciphers are ok
-	i = 0
-	for i < size {
-		newCipher := (<-cksp.ChannelCiphertext).Ciphertext
-		d, _ := newCipher.MarshalBinary()
-		log.Lvl4("Got cipher : ", d[0:25])
-		res := bfv.NewPlaintext(params)
-		DecryptorOutput.Decrypt(&newCipher, res)
-
-		log.Lvl4("Comparing a cipher..")
-		decoded := encoder.DecodeUint(res)
-		ok := utils.Equalslice(decoded, expected)
-
-		if !ok {
-			log.Print("Plaintext do not match ")
-			cksp.Done()
-			return errors.New("plaintexts do not match")
-
-		}
-		i++
-	}
-	log.Lvl4("finished")
-	return nil
-}
+//func VerifyPCKSSim(err error, size int, config *onet.SimulationConfig, s *KeySwitchingSim, cksp *proto.CollectiveKeySwitchingProtocol) error {
+//	//Now we can setup our keys..
+//	params := bfv.DefaultParams[0]
+//	i := 0
+//	tmp0 := params.NewPolyQ()
+//	tmp1 := params.NewPolyQ()
+//	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
+//	if err != nil {
+//		return err
+//	}
+//	for i < size {
+//		si := config.Tree.Roster.List[i]
+//		sk0, err := utils.GetSecretKey(params, si.ID)
+//		if err != nil {
+//			fmt.Print("error : ", err)
+//		}
+//		sk1, err := utils.GetSecretKey(params, si.ID)
+//		if err != nil {
+//			fmt.Print("err : ", err)
+//		}
+//
+//		ctx.Add(tmp0, sk0.Get(), tmp0)
+//		ctx.Add(tmp1, sk1.Get(), tmp1)
+//
+//		i++
+//	}
+//	SkInput := new(bfv.SecretKey)
+//	SkOutput := new(bfv.SecretKey)
+//	SkInput.Set(tmp0)
+//	SkOutput.Set(tmp1)
+//	encoder := bfv.NewEncoder(params)
+//	DecryptorInput := bfv.NewDecryptor(params, SkInput)
+//	//expected
+//	ReferencePlaintext := DecryptorInput.DecryptNew(&s.Ciphertext)
+//	expected := encoder.DecodeUint(ReferencePlaintext)
+//	DecryptorOutput := bfv.NewDecryptor(params, SkOutput)
+//	log.Lvl1("test is downloading the ciphertext..")
+//	//check if all ciphers are ok
+//	i = 0
+//	for i < size {
+//		newCipher := (<-cksp.ChannelCiphertext).Ciphertext
+//		d, _ := newCipher.MarshalBinary()
+//		log.Lvl4("Got cipher : ", d[0:25])
+//		res := bfv.NewPlaintext(params)
+//		DecryptorOutput.Decrypt(&newCipher, res)
+//
+//		log.Lvl4("Comparing a cipher..")
+//		decoded := encoder.DecodeUint(res)
+//		ok := utils.Equalslice(decoded, expected)
+//
+//		if !ok {
+//			log.Print("Plaintext do not match ")
+//			cksp.Done()
+//			return errors.New("plaintexts do not match")
+//
+//		}
+//		i++
+//	}
+//	log.Lvl4("finished")
+//	return nil
+//}

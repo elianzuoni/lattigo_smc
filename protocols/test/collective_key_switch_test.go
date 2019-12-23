@@ -75,7 +75,7 @@ func testLocalCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.Local
 	_, roster, tree := local.GenTree(N, true)
 	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	defer func() {
-		err = lt.TearDown()
+		err = lt.TearDown(false)
 		if err != nil {
 			t.Fatal(err)
 		}

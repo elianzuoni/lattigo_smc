@@ -90,7 +90,7 @@ func NewRelinearizationKeySimul(tni *onet.TreeNodeInstance, simulation *Relinear
 		return nil, err
 	}
 	params := bfv.DefaultParams[0]
-	sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID)
+	sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID, "")
 	if err != nil {
 		return nil, err
 	}
@@ -131,77 +131,78 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	log.Lvl1("Relinearization key generated for ", size)
 	log.Lvl1("Elapsed time :", elapsed)
 
-	if VerifyCorrectness {
-		err := CheckRelinearization(size, config, RelinProtocol, err)
-		if err != nil {
-			return err
-		}
-	}
+	//if VerifyCorrectness {
+	//	err := CheckRelinearization(size, config, RelinProtocol, err)
+	//	if err != nil {
+	//		return err
+	//	}
+	//}
 
 	return nil
 
 }
 
-func CheckRelinearization(size int, config *onet.SimulationConfig, RelinProtocol *proto.RelinearizationKeyProtocol, err error) error {
-	i := 0
-	params := bfv.DefaultParams[0]
-	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
-	tmp0 := params.NewPolyQP()
-	for i < size {
-		si := config.Roster.List[i]
-		sk0, err := utils.GetSecretKey(params, si.ID)
-		if err != nil {
-			log.Error("error : ", err)
-			return err
-		}
-
-		ctxPQ.Add(tmp0, sk0.Get(), tmp0)
-
-		i++
-	}
-	Sk := new(bfv.SecretKey)
-	Sk.Set(tmp0)
-	Pk := bfv.NewKeyGenerator(params).NewPublicKey(Sk)
-	encryptor_pk := bfv.NewEncryptorFromPk(params, Pk)
-	//encrypt some cipher text...
-	PlainText := bfv.NewPlaintext(params)
-	encoder := bfv.NewEncoder(params)
-	expected := params.NewPolyQP()
-	encoder.EncodeUint(expected.Coeffs[0], PlainText)
-	CipherText := encryptor_pk.EncryptNew(PlainText)
-	//multiply it !
-	evaluator := bfv.NewEvaluator(params)
-	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
-	//we want to relinearize MulCiphertexts
-	ExpectedCoeffs := params.NewPolyQP()
-	ctxPQ.MulCoeffs(expected, expected, ExpectedCoeffs)
-	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
-	array := make([]bfv.EvaluationKey, size)
-	//check if the keys are the same for all parties
-	for i := 0; i < size; i++ {
-		relkey := (<-RelinProtocol.ChannelEvalKey).EvaluationKey
-		data, _ := relkey.MarshalBinary()
-		log.Lvl3("Key starting with : ", data[0:25])
-		log.Lvl3("Got one eval key...")
-		array[i] = relkey
-	}
-	err = utils.CompareEvalKeys(array)
-	if err != nil {
-		log.Error("Different relinearization keys : ", err)
-
-		return err
-	}
-	log.Lvl1("Check : all peers have the same key ")
-	rlk := array[0]
-	ResCipher := evaluator.RelinearizeNew(MulCiphertext, &rlk)
-	//decrypt the cipher
-	decryptor := bfv.NewDecryptor(params, Sk)
-	resDecrypted := decryptor.DecryptNew(ResCipher)
-	resDecoded := encoder.DecodeUint(resDecrypted)
-	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
-		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
-		return err
-	}
-	log.Lvl1("Relinearization Successful :)")
-	return nil
-}
+//
+//func CheckRelinearization(size int, config *onet.SimulationConfig, RelinProtocol *proto.RelinearizationKeyProtocol, err error) error {
+//	i := 0
+//	params := bfv.DefaultParams[0]
+//	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
+//	tmp0 := params.NewPolyQP()
+//	for i < size {
+//		si := config.Roster.List[i]
+//		sk0, err := utils.GetSecretKey(params, si.ID)
+//		if err != nil {
+//			log.Error("error : ", err)
+//			return err
+//		}
+//
+//		ctxPQ.Add(tmp0, sk0.Get(), tmp0)
+//
+//		i++
+//	}
+//	Sk := new(bfv.SecretKey)
+//	Sk.Set(tmp0)
+//	Pk := bfv.NewKeyGenerator(params).NewPublicKey(Sk)
+//	encryptor_pk := bfv.NewEncryptorFromPk(params, Pk)
+//	//encrypt some cipher text...
+//	PlainText := bfv.NewPlaintext(params)
+//	encoder := bfv.NewEncoder(params)
+//	expected := params.NewPolyQP()
+//	encoder.EncodeUint(expected.Coeffs[0], PlainText)
+//	CipherText := encryptor_pk.EncryptNew(PlainText)
+//	//multiply it !
+//	evaluator := bfv.NewEvaluator(params)
+//	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
+//	//we want to relinearize MulCiphertexts
+//	ExpectedCoeffs := params.NewPolyQP()
+//	ctxPQ.MulCoeffs(expected, expected, ExpectedCoeffs)
+//	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
+//	array := make([]bfv.EvaluationKey, size)
+//	//check if the keys are the same for all parties
+//	for i := 0; i < size; i++ {
+//		relkey := (<-RelinProtocol.ChannelEvalKey).EvaluationKey
+//		data, _ := relkey.MarshalBinary()
+//		log.Lvl3("Key starting with : ", data[0:25])
+//		log.Lvl3("Got one eval key...")
+//		array[i] = relkey
+//	}
+//	err = utils.CompareEvalKeys(array)
+//	if err != nil {
+//		log.Error("Different relinearization keys : ", err)
+//
+//		return err
+//	}
+//	log.Lvl1("Check : all peers have the same key ")
+//	rlk := array[0]
+//	ResCipher := evaluator.RelinearizeNew(MulCiphertext, &rlk)
+//	//decrypt the cipher
+//	decryptor := bfv.NewDecryptor(params, Sk)
+//	resDecrypted := decryptor.DecryptNew(ResCipher)
+//	resDecoded := encoder.DecodeUint(resDecrypted)
+//	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
+//		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
+//		return err
+//	}
+//	log.Lvl1("Relinearization Successful :)")
+//	return nil
+//}

@@ -55,16 +55,29 @@ func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, director
 	return
 }
 
-func (lt *LocalTest) TearDown() error {
+func (lt *LocalTest) TearDown(simul bool) error {
 	var err error
+
 	for _, si := range lt.Roster.List {
 		keyfileName := si.ID.String() + ".sk"
 		log.Lvl3("cleaning:", keyfileName)
-		err = os.Remove(lt.StorageDirectory + "sk0" + keyfileName)
+		if simul {
+			err = os.Remove("../" + lt.StorageDirectory + "sk0" + keyfileName)
+
+		} else {
+			err = os.Remove(lt.StorageDirectory + "sk0" + keyfileName)
+		}
 		if err != nil {
+
 			return err
 		}
-		err = os.Remove(lt.StorageDirectory + "sk1" + keyfileName)
+		if simul {
+			err = os.Remove("../" + lt.StorageDirectory + "sk1" + keyfileName)
+
+		} else {
+			err = os.Remove(lt.StorageDirectory + "sk1" + keyfileName)
+
+		}
 		if err != nil {
 			return err
 		}
@@ -78,11 +91,27 @@ func SaveSecretKey(sk *bfv.SecretKey, seed network.ServerIdentityID, directory s
 	if err != nil {
 		return err
 	}
-
+	err = CreateDirIfNotExist(directory)
+	if err != nil {
+		return err
+	}
 	err = ioutil.WriteFile(directory+seed.String()+".sk", data, 0644)
 	if err != nil {
-		log.Lvl4("file is not saved...", err)
+		log.Error("file is not saved...", err)
+
 		return err
+	}
+
+	return nil
+}
+
+//CreateDirIfNotExist creates a directory if it does not exist.
+func CreateDirIfNotExist(dir string) error {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.MkdirAll(dir, 0755)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

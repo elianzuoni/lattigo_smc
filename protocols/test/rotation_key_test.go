@@ -124,7 +124,7 @@ func testLocalRotKG(t *testing.T, params *bfv.Parameters, N int, local *onet.Loc
 	}
 
 	defer func() {
-		err = lt.TearDown()
+		err = lt.TearDown(false)
 		if err != nil {
 			t.Fatal(err)
 		}
