@@ -34,7 +34,6 @@ func init() {
 
 var VerifyCorrectness = false
 
-//var params = bfv.DefaultParams[0]
 var storageDir = "tmp/"
 var lt *utils.LocalTest
 

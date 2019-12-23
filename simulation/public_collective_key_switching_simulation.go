@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
@@ -16,23 +15,21 @@ import (
 
 type PublicKeySwitchingSim struct {
 	onet.SimulationBFTree
-	bfv.Ciphertext
-	bfv.PublicKey
-	bfv.SecretKey
+	*bfv.Ciphertext
+	*bfv.PublicKey
+	*bfv.SecretKey
+
+	lt           *utils.LocalTest
+	ParamsIdx    int
+	SwitchDegree uint64
+	Params       *bfv.Parameters
 }
 
-var CipherPublic *bfv.Ciphertext
 var PublicKey *bfv.PublicKey
-var SecretKey *bfv.SecretKey
 
 func init() {
 	onet.SimulationRegister("CollectivePublicKeySwitching", NewSimulationPublicKeySwitching)
-	//Setting up params.
-	params := (bfv.DefaultParams[0])
-	CipherPublic = bfv.NewCiphertextRandom(params, 1)
-	keygen := bfv.NewKeyGenerator(params)
-	SecretKey = keygen.NewSecretKey()
-	PublicKey = keygen.NewPublicKey(SecretKey)
+
 }
 
 func NewSimulationPublicKeySwitching(config string) (onet.Simulation, error) {
@@ -43,9 +40,8 @@ func NewSimulationPublicKeySwitching(config string) (onet.Simulation, error) {
 		return nil, err
 	}
 	//Give the params.
-	sim.Ciphertext = *CipherPublic
-	sim.PublicKey = *PublicKey
-	sim.SecretKey = *SecretKey
+	sim.Params = bfv.DefaultParams[sim.ParamsIdx]
+
 	return sim, nil
 }
 
@@ -58,6 +54,30 @@ func (s *PublicKeySwitchingSim) Setup(dir string, hosts []string) (*onet.Simulat
 	if err != nil {
 		return nil, err
 	}
+
+	s.lt, err = utils.GetLocalTestForRoster(sc.Roster, s.Params, storageDir)
+	if err != nil {
+		return nil, err
+	}
+	lt = s.lt
+	//Generate the cipher text. & public key
+	ctxT, err := ring.NewContextWithParams(1<<s.Params.LogN, []uint64{s.Params.T})
+	if err != nil {
+		return nil, err
+	}
+	coeffs := ctxT.NewUniformPoly()
+	enc := bfv.NewEncoder(s.Params)
+	pt := bfv.NewPlaintext(s.Params)
+
+	enc.EncodeUint(coeffs.Coeffs[0], pt)
+	pt = bfv.NewPlaintext(s.Params)
+	pk := bfv.NewKeyGenerator(s.Params).NewPublicKey(s.lt.IdealSecretKey1)
+	enc1 := bfv.NewEncryptorFromPk(s.Params, pk)
+
+	s.Ciphertext = enc1.EncryptNew(pt)
+	Cipher = s.Ciphertext
+	PublicKey = pk
+
 	return sc, nil
 }
 
@@ -75,13 +95,41 @@ func (s *PublicKeySwitchingSim) Node(config *onet.SimulationConfig) error {
 		return errors.New("Error when registering Collective Key Switching instance " + err.Error())
 	}
 
+	s.lt = lt
+
 	log.Lvl4("Node setup ok")
 
 	return s.SimulationBFTree.Node(config)
 }
 
+func NewPublicKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *PublicKeySwitchingSim) (onet.ProtocolInstance, error) {
+	//This part allows to injec the data to the node ~ we don't need the messy channels.
+	log.Lvl3("New pubkey switch simul")
+	protocol, err := proto.NewCollectivePublicKeySwitching(tni)
+
+	if err != nil {
+		return nil, err
+	}
+
+	//cast
+	publickeyswitch := protocol.(*proto.CollectivePublicKeySwitchingProtocol)
+	sim.Ciphertext = Cipher
+	sim.PublicKey = PublicKey
+
+	err = publickeyswitch.Init(*sim.Params, *sim.PublicKey, *lt.SecretKeyShares0[tni.ServerIdentity().ID], sim.Ciphertext)
+	return publickeyswitch, nil
+
+}
+
 func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
+
+	defer func() {
+		err := s.lt.TearDown(true)
+		if err != nil {
+			log.Error(err)
+		}
+	}()
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
 
@@ -110,91 +158,19 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 	log.Lvl1("Public Collective key switching done.")
 	log.Lvl1("Elapsed time :", elapsed)
-	if VerifyCorrectness {
-		err = CheckCKS(err, size, config, pcksp)
-		if err != nil {
-			return err
-		}
 
+	//Check if correct.
+	encoder := bfv.NewEncoder(s.Params)
+	DecryptorOutput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey1)
+	DecryptorInput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
+	plaintext := DecryptorInput.DecryptNew(Cipher)
+	expected := encoder.DecodeUint(plaintext)
+	decoded := encoder.DecodeUint(DecryptorOutput.DecryptNew(&pcksp.CiphertextOut))
+
+	if !utils.Equalslice(expected, decoded) {
+		log.Error("Decryption failed")
 	}
 
 	return nil
-
-}
-
-func CheckCKS(err error, size int, config *onet.SimulationConfig, pcksp *proto.CollectivePublicKeySwitchingProtocol) error {
-	i := 0
-	params := bfv.DefaultParams[0]
-	tmp0 := params.NewPolyQ()
-	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
-	if err != nil {
-		return err
-	}
-	for i < size {
-		si := config.Roster.List[i]
-		sk0, err := utils.GetSecretKey(params, si.ID, "")
-		if err != nil {
-			fmt.Print("error : ", err)
-		}
-
-		ctx.Add(tmp0, sk0.Get(), tmp0)
-
-		i++
-	}
-	SkInput := new(bfv.SecretKey)
-	SkInput.Set(tmp0)
-	DecryptorOutput := bfv.NewDecryptor(params, SecretKey)
-	DecryptorInput := bfv.NewDecryptor(params, SkInput)
-	encoder := bfv.NewEncoder(params)
-	//Get expected result.
-	decrypted := DecryptorInput.DecryptNew(CipherPublic)
-	expected := encoder.DecodeUint(decrypted)
-	i = 0
-	for i < size {
-		newCipher := (<-pcksp.ChannelCiphertext).Ciphertext
-		d, _ := newCipher.MarshalBinary()
-		log.Lvl4("Got cipher : ", d[0:25])
-		res := bfv.NewPlaintext(params)
-		DecryptorOutput.Decrypt(&newCipher, res)
-
-		log.Lvl4("Comparing a cipher..")
-		decoded := encoder.DecodeUint(res)
-		ok := utils.Equalslice(decoded, expected)
-
-		if !ok {
-			log.Print("Plaintext do not match ")
-			pcksp.Done()
-			return errors.New("Plaintext do not match")
-
-		}
-		i++
-	}
-	log.Lvl3("Got all matches on ciphers.")
-	//check if the resulting cipher text decrypted with SkOutput works
-	log.Lvl3("Success")
-	return nil
-}
-
-func NewPublicKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *PublicKeySwitchingSim) (onet.ProtocolInstance, error) {
-	//This part allows to injec the data to the node ~ we don't need the messy channels.
-	log.Lvl3("New pubkey switch simul")
-	protocol, err := proto.NewCollectivePublicKeySwitching(tni)
-
-	if err != nil {
-		return nil, err
-	}
-
-	params := bfv.DefaultParams[0]
-	sk0, err := utils.GetSecretKey(params, tni.ServerIdentity().ID, "")
-	if err != nil {
-		return nil, err
-	}
-	//cast
-	keygen := protocol.(*proto.CollectivePublicKeySwitchingProtocol)
-	keygen.Params = *bfv.DefaultParams[0]
-	keygen.Sk = *sk0
-	keygen.Ciphertext = sim.Ciphertext
-	keygen.PublicKey = sim.PublicKey
-	return keygen, nil
 
 }
