@@ -1,4 +1,4 @@
-Simulation = "RelinearizationKeyGeneration"
+Simulation = "RotationKeyGeneration"
 Servers = 5
 BF = 2
 Rounds = 1
@@ -7,15 +7,14 @@ Suite = "Ed25519"
 
 Hosts, Servers, ParamsIdx
 3,3,0
-3,3,1
-3,3,2
-8,8,0
-8,8,1
-8,8,2
-16,16,0
-16,16,1
-16,16,2
-
+#3,3,1
+#3,3,2
 #3,3,3
+#8,8,0
+#8,8,1
+#8,8,2
 #8,8,3
+#16,16,0
+#16,16,1
+#16,16,2
 #16,16,3

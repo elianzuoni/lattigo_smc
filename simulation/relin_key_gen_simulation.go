@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
@@ -17,13 +18,13 @@ import (
 type RelinearizationKeySimulation struct {
 	onet.SimulationBFTree
 	proto.CRP
+
+	lt        *utils.LocalTest
+	ParamsIdx int
+	Params    *bfv.Parameters
 }
 
-const BitDecomp = 64
-
 var CRP proto.CRP
-
-const SkHash = "sk0"
 
 func init() {
 	onet.SimulationRegister("RelinearizationKeyGeneration", NewRelinearizationKeyGeneration)
@@ -39,6 +40,7 @@ func NewRelinearizationKeyGeneration(config string) (onet.Simulation, error) {
 	}
 
 	sim.CRP = CRP
+	sim.Params = bfv.DefaultParams[sim.ParamsIdx]
 
 	return sim, nil
 }
@@ -52,9 +54,13 @@ func (s *RelinearizationKeySimulation) Setup(dir string, hosts []string) (*onet.
 	if err != nil {
 		return nil, err
 	}
+	s.lt, err = utils.GetLocalTestForRoster(sc.Roster, s.Params, storageDir)
+	if err != nil {
+		return nil, err
+	}
+	lt = s.lt
 
-	params := bfv.DefaultParams[0]
-
+	params := s.Params
 	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	crpGenerator := ring.NewCRPGenerator(nil, ctxPQ)
 	modulus := params.Moduli.Qi
@@ -80,6 +86,8 @@ func (s *RelinearizationKeySimulation) Node(config *onet.SimulationConfig) error
 		log.ErrFatal(err, "Error could not inject parameters")
 		return err
 	}
+	s.lt = lt
+	s.CRP = CRP
 
 	return s.SimulationBFTree.Node(config)
 }
@@ -89,20 +97,22 @@ func NewRelinearizationKeySimul(tni *onet.TreeNodeInstance, simulation *Relinear
 	if err != nil {
 		return nil, err
 	}
-	params := bfv.DefaultParams[0]
-	sk, err := utils.GetSecretKey(params, tni.ServerIdentity().ID, "")
-	if err != nil {
-		return nil, err
-	}
+
 	relinkey := protocol.(*proto.RelinearizationKeyProtocol)
-	relinkey.Params = *bfv.DefaultParams[0]
-	relinkey.Crp = CRP
-	relinkey.Sk = *sk
+
+	err = relinkey.Init(*simulation.Params, *simulation.lt.SecretKeyShares0[tni.ServerIdentity().ID], simulation.CRP.A)
 	return relinkey, nil
 }
 
 func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
+
+	defer func() {
+		err := lt.TearDown(true)
+		if err != nil {
+			log.Error(err)
+		}
+	}()
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
 
@@ -131,78 +141,33 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	log.Lvl1("Relinearization key generated for ", size)
 	log.Lvl1("Elapsed time :", elapsed)
 
-	//if VerifyCorrectness {
-	//	err := CheckRelinearization(size, config, RelinProtocol, err)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
+	sk := lt.IdealSecretKey0
+	pk := bfv.NewKeyGenerator(s.Params).NewPublicKey(sk)
+	encryptor_pk := bfv.NewEncryptorFromPk(s.Params, pk)
+	encoder := bfv.NewEncoder(s.Params)
+
+	pt := bfv.NewPlaintext(s.Params)
+	expected := s.Params.NewPolyQP()
+	encoder.EncodeUint(expected.Coeffs[0], pt)
+	CipherText := encryptor_pk.EncryptNew(pt)
+	//multiply it !
+	evaluator := bfv.NewEvaluator(s.Params)
+	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
+	//we want to relinearize MulCiphertexts
+	ExpectedCoeffs := s.Params.NewPolyQP()
+	ctxPQ, _ := ring.NewContextWithParams(1<<s.Params.LogN, append(s.Params.Moduli.Qi, s.Params.Moduli.Pi...))
+	ctxPQ.MulCoeffs(expected, expected, ExpectedCoeffs)
+	evalkey := RelinProtocol.EvaluationKey
+	ResCipher := evaluator.RelinearizeNew(MulCiphertext, evalkey)
+
+	decryptor := bfv.NewDecryptor(s.Params, sk)
+	resDecrypted := decryptor.DecryptNew(ResCipher)
+	resDecoded := encoder.DecodeUint(resDecrypted)
+	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
+		log.Error("Decryption failed")
+		return errors.New("decryption failed")
+	}
 
 	return nil
 
 }
-
-//
-//func CheckRelinearization(size int, config *onet.SimulationConfig, RelinProtocol *proto.RelinearizationKeyProtocol, err error) error {
-//	i := 0
-//	params := bfv.DefaultParams[0]
-//	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
-//	tmp0 := params.NewPolyQP()
-//	for i < size {
-//		si := config.Roster.List[i]
-//		sk0, err := utils.GetSecretKey(params, si.ID)
-//		if err != nil {
-//			log.Error("error : ", err)
-//			return err
-//		}
-//
-//		ctxPQ.Add(tmp0, sk0.Get(), tmp0)
-//
-//		i++
-//	}
-//	Sk := new(bfv.SecretKey)
-//	Sk.Set(tmp0)
-//	Pk := bfv.NewKeyGenerator(params).NewPublicKey(Sk)
-//	encryptor_pk := bfv.NewEncryptorFromPk(params, Pk)
-//	//encrypt some cipher text...
-//	PlainText := bfv.NewPlaintext(params)
-//	encoder := bfv.NewEncoder(params)
-//	expected := params.NewPolyQP()
-//	encoder.EncodeUint(expected.Coeffs[0], PlainText)
-//	CipherText := encryptor_pk.EncryptNew(PlainText)
-//	//multiply it !
-//	evaluator := bfv.NewEvaluator(params)
-//	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
-//	//we want to relinearize MulCiphertexts
-//	ExpectedCoeffs := params.NewPolyQP()
-//	ctxPQ.MulCoeffs(expected, expected, ExpectedCoeffs)
-//	//in the end of relin we should have RelinCipher === ExpectedCoeffs.
-//	array := make([]bfv.EvaluationKey, size)
-//	//check if the keys are the same for all parties
-//	for i := 0; i < size; i++ {
-//		relkey := (<-RelinProtocol.ChannelEvalKey).EvaluationKey
-//		data, _ := relkey.MarshalBinary()
-//		log.Lvl3("Key starting with : ", data[0:25])
-//		log.Lvl3("Got one eval key...")
-//		array[i] = relkey
-//	}
-//	err = utils.CompareEvalKeys(array)
-//	if err != nil {
-//		log.Error("Different relinearization keys : ", err)
-//
-//		return err
-//	}
-//	log.Lvl1("Check : all peers have the same key ")
-//	rlk := array[0]
-//	ResCipher := evaluator.RelinearizeNew(MulCiphertext, &rlk)
-//	//decrypt the cipher
-//	decryptor := bfv.NewDecryptor(params, Sk)
-//	resDecrypted := decryptor.DecryptNew(ResCipher)
-//	resDecoded := encoder.DecodeUint(resDecrypted)
-//	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
-//		log.Error("Decrypted relinearized cipher is not equal to expected plaintext")
-//		return err
-//	}
-//	log.Lvl1("Relinearization Successful :)")
-//	return nil
-//}

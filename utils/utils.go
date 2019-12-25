@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -22,6 +23,8 @@ type LocalTest struct {
 	SecretKeyShares0 map[network.ServerIdentityID]*bfv.SecretKey
 	SecretKeyShares1 map[network.ServerIdentityID]*bfv.SecretKey
 	StorageDirectory string
+	CrsGen           *ring.CRPGenerator
+	Crs              *ring.Poly
 }
 
 func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, directory string) (lt *LocalTest, err error) {
@@ -32,6 +35,9 @@ func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, director
 	lt.SecretKeyShares0 = make(map[network.ServerIdentityID]*bfv.SecretKey)
 	lt.SecretKeyShares1 = make(map[network.ServerIdentityID]*bfv.SecretKey)
 	lt.StorageDirectory = directory
+
+	lt.CrsGen = dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	lt.Crs = lt.CrsGen.ClockNew()
 
 	rq, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	for _, si := range roster.List {
