@@ -54,7 +54,7 @@ func (rkp *RotationKeyProtocol) Dispatch() error {
 		return err
 	}
 
-	log.Lvl1(rkp.ServerIdentity(), "Starting rotation key protocol")
+	log.Lvl2(rkp.ServerIdentity(), "Starting rotation key protocol")
 	if !rkp.IsLeaf() {
 		for range rkp.Children() {
 			share := (<-rkp.ChannelRTShare).RTGShare
@@ -74,7 +74,7 @@ func (rkp *RotationKeyProtocol) Dispatch() error {
 		rkp.RotationProtocol.Finalize(rkp.RTShare, rkp.Crp, &rkp.RotKey)
 	}
 
-	log.Lvl1("Rotation protocol done. ")
+	log.Lvl2("Rotation protocol done. ")
 
 	rkp.Done()
 	rkp.Cond.Broadcast()
