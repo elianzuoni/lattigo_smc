@@ -15,14 +15,14 @@ import (
 
 func TestRotationKeyLocal(t *testing.T) {
 	var nbnodes = []int{3, 8, 16}
-	var paramsSets = bfv.DefaultParams
+	var paramsSets = bfv.DefaultParams[:3]
 	var storageDirectory = "tmp/"
 	if testing.Short() {
 		nbnodes = nbnodes[:1]
 		paramsSets = paramsSets[:1]
 	}
 
-	log.SetDebugVisible(3)
+	log.SetDebugVisible(1)
 	for _, params := range paramsSets {
 		//prepare the crp
 		ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
@@ -117,7 +117,10 @@ func TestRotationKeyLocal(t *testing.T) {
 func testLocalRotKG(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, rotation bfv.Rotation, k uint64) {
 
 	defer local.CloseAll()
+	utils.QuietServers(local.Servers)
+
 	_, roster, tree := local.GenTree(N, true)
+
 	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	if err != nil {
 		t.Fatal(err)

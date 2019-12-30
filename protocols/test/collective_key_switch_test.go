@@ -71,6 +71,7 @@ func TestCollectiveKeySwitching(t *testing.T) {
 func testLocalCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, plaintext *bfv.Plaintext) {
 	log.Lvl1("Starting to test Collective key switching with nodes amount : ", N)
 	defer local.CloseAll()
+	utils.QuietServers(local.Servers)
 
 	_, roster, tree := local.GenTree(N, true)
 	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
@@ -110,8 +111,8 @@ func testLocalCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.Local
 	//expected
 	expected := encoder.DecodeUint(plaintext)
 	decoded := encoder.DecodeUint(Decryptor1.DecryptNew(cksp.CiphertextOut))
-	log.Lvl1("Exp :", expected[0:25])
-	log.Lvl1("Got :", decoded[0:25])
+	log.Lvl2("Exp :", expected[0:25])
+	log.Lvl2("Got :", decoded[0:25])
 	if !utils.Equalslice(expected, decoded) {
 		t.Fatal("Decryption failed")
 

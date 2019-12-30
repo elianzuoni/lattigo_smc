@@ -142,7 +142,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	log.Lvl1("Elapsed time :", elapsed)
 
 	sk := lt.IdealSecretKey0
-	pk := bfv.NewKeyGenerator(s.Params).NewPublicKey(sk)
+	pk := bfv.NewKeyGenerator(s.Params).GenPublicKey(sk)
 	encryptor_pk := bfv.NewEncryptorFromPk(s.Params, pk)
 	encoder := bfv.NewEncoder(s.Params)
 

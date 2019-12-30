@@ -15,7 +15,7 @@ import (
 
 func TestRelinearizationKeyLocal(t *testing.T) {
 	var nbnodes = []int{3, 8, 16}
-	var paramsSets = bfv.DefaultParams
+	var paramsSets = bfv.DefaultParams[:3]
 	var storageDirectory = "tmp/"
 	if testing.Short() {
 		nbnodes = nbnodes[:1]
@@ -65,7 +65,10 @@ func TestRelinearizationKeyLocal(t *testing.T) {
 
 func testLocalRKG(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string) {
 	defer local.CloseAll()
+	utils.QuietServers(local.Servers)
+
 	_, roster, tree := local.GenTree(N, true)
+
 	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +103,7 @@ func testLocalRKG(t *testing.T, params *bfv.Parameters, N int, local *onet.Local
 	log.Lvl1("**********Time elapsed :", elapsed, "***************")
 
 	sk := lt.IdealSecretKey0
-	pk := bfv.NewKeyGenerator(params).NewPublicKey(sk)
+	pk := bfv.NewKeyGenerator(params).GenPublicKey(sk)
 	encryptor_pk := bfv.NewEncryptorFromPk(params, pk)
 	encoder := bfv.NewEncoder(params)
 

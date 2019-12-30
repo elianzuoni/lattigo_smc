@@ -40,7 +40,7 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 				}
 				if tni.IsRoot() {
 					//init the plaintext ciphertext...
-					publicKey = *bfv.NewKeyGenerator(params).NewPublicKey(lt.IdealSecretKey1)
+					publicKey = *bfv.NewKeyGenerator(params).GenPublicKey(lt.IdealSecretKey1)
 					enc := bfv.NewEncryptorFromSk(params, lt.IdealSecretKey0)
 					ciphertext = *enc.EncryptNew(pt)
 				}
@@ -69,7 +69,10 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 func testLocalPCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, plaintext *bfv.Plaintext) {
 	log.Lvl1("Started to test collective public key switching with nodes amounts : ", N)
 	defer local.CloseAll()
+	utils.QuietServers(local.Servers)
+
 	_, roster, tree := local.GenTree(N, true)
+
 	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	if err != nil {
 		t.Fatal(err)

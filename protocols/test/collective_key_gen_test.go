@@ -72,9 +72,9 @@ func TestCollectiveKeyGeneration(t *testing.T) {
 func testLocalCKG(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string) {
 	log.Lvl1("Started to test key generation on a simulation with nodes amount : ", N)
 	defer local.CloseAll()
+	utils.QuietServers(local.Servers)
 
 	_, roster, tree := local.GenTree(N, true)
-
 	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	if err != nil {
 		t.Fatal(err)

@@ -126,7 +126,7 @@ func CreateDirIfNotExist(dir string) error {
 //Load a secret key. Will fail if the key does not exist.
 func LoadSecretKey(params bfv.Parameters, seed network.ServerIdentityID, directory string) (sk *bfv.SecretKey, err error) {
 	var data []byte
-	sk = bfv.NewKeyGenerator(&params).NewSecretKey()
+	sk = bfv.NewKeyGenerator(&params).GenSecretKey()
 
 	if data, err = ioutil.ReadFile(directory + seed.String() + ".sk"); err != nil {
 		return nil, fmt.Errorf("could not read key: %s", err)
@@ -141,7 +141,7 @@ func GetSecretKey(ctx *bfv.Parameters, seed network.ServerIdentityID, directory 
 	if sk, err = LoadSecretKey(*ctx, seed, directory); sk != nil {
 		return
 	}
-	sk = bfv.NewKeyGenerator(ctx).NewSecretKey()
+	sk = bfv.NewKeyGenerator(ctx).GenSecretKey()
 
 	return sk, SaveSecretKey(sk, seed, directory)
 }
@@ -269,4 +269,10 @@ func CompareArray(key [][2]*ring.Poly, key2 [][2]*ring.Poly) error {
 
 	return nil
 
+}
+
+func QuietServers(servers map[network.ServerIdentityID]*onet.Server) {
+	for _, s := range servers {
+		s.Quiet = true
+	}
 }

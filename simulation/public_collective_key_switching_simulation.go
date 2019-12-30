@@ -71,7 +71,7 @@ func (s *PublicKeySwitchingSim) Setup(dir string, hosts []string) (*onet.Simulat
 
 	enc.EncodeUint(coeffs.Coeffs[0], pt)
 	pt = bfv.NewPlaintext(s.Params)
-	pk := bfv.NewKeyGenerator(s.Params).NewPublicKey(s.lt.IdealSecretKey1)
+	pk := bfv.NewKeyGenerator(s.Params).GenPublicKey(s.lt.IdealSecretKey1)
 	enc1 := bfv.NewEncryptorFromPk(s.Params, pk)
 
 	s.Ciphertext = enc1.EncryptNew(pt)

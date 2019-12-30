@@ -18,7 +18,7 @@ import (
 func TestRefreshProtocol(t *testing.T) {
 	/**Variables for test ***/
 	var nbnodes = []int{3, 8, 16}
-	var paramsSets = bfv.DefaultParams
+	var paramsSets = bfv.DefaultParams[:3]
 
 	var storageDirectory = "/tmp/"
 	if testing.Short() {
@@ -75,7 +75,10 @@ func TestRefreshProtocol(t *testing.T) {
 
 func testLocalRefresh(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, plaintext *bfv.Plaintext) {
 	defer local.CloseAll()
+	utils.QuietServers(local.Servers)
+
 	_, roster, tree := local.GenTree(N, true)
+
 	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	//to clean up afterwards.
 	defer func() {
