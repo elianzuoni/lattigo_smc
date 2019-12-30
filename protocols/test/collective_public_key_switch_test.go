@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -13,126 +12,104 @@ import (
 	"time"
 )
 
-var PublicKeySwitchNbNodes = 5
-var SkHash = "sk0"
-var CPKSparams = bfv.DefaultParams[0]
-
 func TestCollectivePublicKeySwitching(t *testing.T) {
-	//to do this we need to have some keys already.
-	//for this we can set up with the collective key generation
+	var nbnodes = []int{3, 8, 16}
+	var paramsSets = bfv.DefaultParams
+	var storageDirectory = "tmp/"
+	if testing.Short() {
+		nbnodes = nbnodes[:1]
+		paramsSets = paramsSets[:1]
+	}
+
 	log.SetDebugVisible(1)
-	log.Lvl1("Started to test collective key switching locally with nodes amount : ", PublicKeySwitchNbNodes)
 
-	SkOutput := bfv.NewKeyGenerator(CPKSparams).NewSecretKey()
-	publickey := bfv.NewKeyGenerator(CPKSparams).NewPublicKey(SkOutput)
+	for _, params := range paramsSets {
+		pt := bfv.NewPlaintext(params)
+		var ciphertext bfv.Ciphertext
+		var publicKey bfv.PublicKey
+		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("CollectivePublicKeySwitchingTest-%d", params.LogN),
+			func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, err error) {
+				log.Lvl3("New Collective Public key switching instance for : ", tni.ServerIdentity())
+				instance, err = protocols.NewCollectivePublicKeySwitching(tni)
+				if err != nil {
+					return nil, err
+				}
+				lt, err := utils.GetLocalTestForRoster(tni.Roster(), params, storageDirectory)
+				if err != nil {
+					return nil, err
+				}
+				if tni.IsRoot() {
+					//init the plaintext ciphertext...
+					publicKey = *bfv.NewKeyGenerator(params).GenPublicKey(lt.IdealSecretKey1)
+					enc := bfv.NewEncryptorFromSk(params, lt.IdealSecretKey0)
+					ciphertext = *enc.EncryptNew(pt)
+				}
+				err = instance.(*protocols.CollectivePublicKeySwitchingProtocol).Init(*params, publicKey, *lt.SecretKeyShares0[tni.ServerIdentity().ID], &ciphertext)
 
-	CipherText := bfv.NewCiphertextRandom(CPKSparams, 1)
+				return
 
-	//Inject the parameters for each node
-	if _, err := onet.GlobalProtocolRegister("CollectivePublicKeySwitchingTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		//Use a local function so we can use ciphertext !
-		log.Lvl4("PCKS test protocol")
-		proto, err := protocols.NewCollectivePublicKeySwitching(tni)
-		if err != nil {
-			return nil, err
+			}); err != nil {
+			log.Error("Could not start Collective Public key switching : ", err)
+			t.Fail()
 		}
-		sk, err := utils.GetSecretKey(CPKSparams, SkHash+tni.ServerIdentity().String())
-		if err != nil {
-			log.Error("could not get secret key : ", err)
+
+		for _, N := range nbnodes {
+			t.Run(fmt.Sprintf("/local/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalPCKS(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")), storageDirectory, pt)
+			})
+			t.Run(fmt.Sprintf("/TCP/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalPCKS(t, params, N, onet.NewTCPTest(suites.MustFind("Ed25519")), storageDirectory, pt)
+			})
+
 		}
-		instance := proto.(*protocols.CollectivePublicKeySwitchingProtocol)
-		instance.Params = *CPKSparams
-		instance.PublicKey = *publickey
-		instance.Ciphertext = *CipherText
-		instance.Sk = *sk
-		return instance, nil
-
-	}); err != nil {
-		log.Error("Could not start CollectiveKeySwitchingTest : ", err)
-		t.Fail()
 
 	}
-
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
-	defer local.CloseAll()
-
-	_, _, tree := local.GenTree(PublicKeySwitchNbNodes, true)
-
-	pi, err := local.CreateProtocol("CollectivePublicKeySwitchingTest", tree)
-	if err != nil {
-		t.Fatal("Couldn't create new node:", err)
-	}
-
-	pcksp := pi.(*protocols.CollectivePublicKeySwitchingProtocol)
-
-	log.Lvl4("Starting cksp")
-	now := time.Now()
-	err = pcksp.Start()
-	if err != nil {
-		t.Fatal("Could not start the tree : ", err)
-	}
-	pcksp.Wait()
-	elapsed := time.Since(now)
-
-	log.Lvl1("*************Public Collective key switching done. ************")
-	log.Lvl1("*********** Time elaspsed ", elapsed, "***************")
-	if VerifyCorrectness {
-		VerifyMatches(err, t, tree, SkOutput, CipherText, pcksp)
-	}
-
-	pcksp.Done()
-
-	log.Lvl1("Success")
-
 }
 
-func VerifyMatches(err error, t *testing.T, tree *onet.Tree, SkOutput *bfv.SecretKey, CipherText *bfv.Ciphertext, pcksp *protocols.CollectivePublicKeySwitchingProtocol) {
-	i := 0
-	tmp0 := CPKSparams.NewPolyQ()
-	ctx, err := ring.NewContextWithParams(1<<CPKSparams.LogN, CPKSparams.Moduli.Qi)
+func testLocalPCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, plaintext *bfv.Plaintext) {
+	log.Lvl1("Started to test collective public key switching with nodes amounts : ", N)
+	defer local.CloseAll()
+	utils.QuietServers(local.Servers)
+
+	_, roster, tree := local.GenTree(N, true)
+
+	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i < PublicKeySwitchNbNodes {
-		si := tree.Roster.List[i].String()
-		sk0, err := utils.GetSecretKey(CPKSparams, SkHash+si)
+	defer func() {
+		err = lt.TearDown(false)
 		if err != nil {
-			fmt.Print("error : ", err)
 			t.Fatal(err)
 		}
+	}()
 
-		ctx.Add(tmp0, sk0.Get(), tmp0)
+	pi, err := local.CreateProtocol(fmt.Sprintf("CollectivePublicKeySwitchingTest-%d", params.LogN), tree)
+	if err != nil {
+		t.Fatal("Could not start new node : ", err)
 
-		i++
 	}
-	SkInput := new(bfv.SecretKey)
-	SkInput.Set(tmp0)
-	DecryptorOutput := bfv.NewDecryptor(CPKSparams, SkOutput)
-	DecryptorInput := bfv.NewDecryptor(CPKSparams, SkInput)
-	encoder := bfv.NewEncoder(CPKSparams)
-	//Get expected result.
-	decrypted := DecryptorInput.DecryptNew(CipherText)
-	expected := encoder.DecodeUint(decrypted)
-	i = 0
-	for i < PublicKeySwitchNbNodes {
-		newCipher := (<-pcksp.ChannelCiphertext).Ciphertext
-		d, _ := newCipher.MarshalBinary()
-		log.Lvl4("Got cipher : ", d[0:25])
-		res := bfv.NewPlaintext(CPKSparams)
-		DecryptorOutput.Decrypt(&newCipher, res)
-
-		log.Lvl2("Comparing a cipher..")
-		decoded := encoder.DecodeUint(res)
-		ok := utils.Equalslice(decoded, expected)
-
-		if !ok {
-			log.Print("Plaintext do not match ")
-			t.Fail()
-			return
-		}
-		i++
+	pcks := pi.(*protocols.CollectivePublicKeySwitchingProtocol)
+	log.Lvl1("Start PCKS")
+	now := time.Now()
+	err = pcks.Start()
+	if err != nil {
+		t.Fatal(err)
 	}
-	log.Lvl1("Got all matches on ciphers.")
+	pcks.Wait()
+	elapsed := time.Since(now)
+	log.Lvl1("*************Public Collective key switching done. ************")
+	log.Lvl1("*********** Time elaspsed ", elapsed, "***************")
 
-	return
+	//now check if correct...
+	encoder := bfv.NewEncoder(params)
+	DecryptorOutput := bfv.NewDecryptor(params, lt.IdealSecretKey1)
+
+	expected := encoder.DecodeUint(plaintext)
+	decoded := encoder.DecodeUint(DecryptorOutput.DecryptNew(&pcks.CiphertextOut))
+	if !utils.Equalslice(expected, decoded) {
+		t.Fatal("Decryption failed")
+	}
+
+	log.Lvl1("Success")
 }

@@ -13,14 +13,22 @@ import (
 //CollectiveKeyGenerationProtocol structure encapsulating a key gen protocol for onet.
 type CollectiveKeyGenerationProtocol struct {
 	*onet.TreeNodeInstance
+	*dbfv.CKGProtocol
+	*sync.Cond
 
 	//Params parameters of the protocol
-	Params bfv.Parameters
+	Params *bfv.Parameters
 	//Secret key of the protocol
-	Sk bfv.SecretKey
+	Sk *bfv.SecretKey
+
+	// Public key CRP
+	CKG1 *ring.Poly
+
+	// Public key share in the protocol
+	CKGShare dbfv.CKGShare
+
 	//Public key generated in the protocol
-	Pk bfv.PublicKey
-	*sync.Cond
+	Pk *bfv.PublicKey
 
 	//ChannelPublicKeyShares to send the public key shares
 	ChannelPublicKeyShares chan StructPublicKeyShare
@@ -33,11 +41,12 @@ type CollectiveKeyGenerationProtocol struct {
 //CollectiveKeySwitchingProtocol struct for onet
 type CollectiveKeySwitchingProtocol struct {
 	*onet.TreeNodeInstance
-
-	//Params used for the key switching
-	Params SwitchingParameters
-
+	*dbfv.CKSProtocol
 	*sync.Cond
+	//Params used for the key switching
+	Params        SwitchingParameters
+	CKSShare      dbfv.CKSShare
+	CiphertextOut *bfv.Ciphertext
 
 	//ChannelCiphertext to send the ciphertext in the end - for testing
 	ChannelCiphertext chan StructCiphertext
@@ -61,6 +70,10 @@ type CollectivePublicKeySwitchingProtocol struct {
 
 	bfv.Ciphertext
 
+	PublicKeySwitchProtocol *dbfv.PCKSProtocol
+	PCKSShare               dbfv.PCKSShare
+	CiphertextOut           bfv.Ciphertext
+
 	*sync.Cond
 
 	//ChannelCiphertext to send the ciphertext in the end
@@ -76,13 +89,18 @@ type RelinearizationKeyProtocol struct {
 	*onet.TreeNodeInstance
 	//Params the bfv parameters
 	Params bfv.Parameters
-	//Todo have better variable names once its coded.
 	//CRP the random ring used during the round 1
 	Crp CRP
 	//SK the secret key of the party
 	Sk bfv.SecretKey
 
 	*sync.Cond
+	RelinProto      *dbfv.RKGProtocol
+	RoundOneShare   dbfv.RKGShareRoundOne
+	RoundTwoShare   dbfv.RKGShareRoundTwo
+	RoundThreeShare dbfv.RKGShareRoundThree
+	U               *ring.Poly
+	EvaluationKey   *bfv.EvaluationKey
 
 	//ChannelRoundOne to send the different parts of the key
 	ChannelRoundOne chan StructRelinKeyRoundOne
@@ -108,10 +126,33 @@ type RefreshKeyProtocol struct {
 	FinalCiphertext bfv.Ciphertext
 	CRS             ring.Poly
 	Params          bfv.Parameters
+	RShare          dbfv.RefreshShare
+
+	RefreshProto *dbfv.RefreshProtocol
 
 	ChannelCiphertext chan StructCiphertext
 	ChannelRShare     chan StructRShare
 	ChannelStart      chan StructStart
+}
+
+type RotationKeyProtocol struct {
+	*onet.TreeNodeInstance
+	*sync.Cond
+
+	Params           bfv.Parameters
+	RotationProtocol *dbfv.RTGProtocol
+	RTShare          dbfv.RTGShare
+	RotKey           bfv.RotationKeys
+
+	Crp []*ring.Poly
+
+	ChannelRTShare chan StructRTShare
+	ChannelStart   chan StructStart
+}
+
+type StructRTShare struct {
+	*onet.TreeNode
+	dbfv.RTGShare
 }
 
 /********MESSSAGE STRUCTURES ***/
@@ -172,11 +213,8 @@ type StructSwitchParameters struct {
 //SwitchingParameters contains the public parameters for CKS
 type SwitchingParameters struct {
 	//Params parameters bfv
-	Params bfv.Parameters
-	//SkInputHash the hash of secret key under which ciphertext is *currently* encrypted
-	SkInput bfv.SecretKey
-	//SkOutputHash the hash of secretkey under which ciphertext will be encrypted *after* running CKS
-	SkOutput bfv.SecretKey
+	Params *bfv.Parameters
+
 	bfv.Ciphertext
 }
 

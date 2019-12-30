@@ -1,9 +1,9 @@
 package test
 
 import (
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -14,54 +14,80 @@ import (
 )
 
 //Global variables to modify tests.
-var RPNobes = 3
 
 func TestRefreshProtocol(t *testing.T) {
-	//to do this we need to have some keys already.
-	//for this we can set up with the collective key generation
-	log.SetDebugVisible(1)
+	/**Variables for test ***/
+	var nbnodes = []int{3, 8, 16}
+	var paramsSets = bfv.DefaultParams[:3]
 
-	log.Lvl1("Setting up context and plaintext/ciphertext of reference")
-	params := bfv.DefaultParams[0]
-
-	CipherText := bfv.NewCiphertextRandom(params, 1)
-
-	crp := dbfv.NewCRPGenerator(params, nil)
-	crp.Seed([]byte{})
-	crs := *crp.ClockNew() //crp.ClockNew() is not thread safe ?
-
-	log.Lvl1("Set up done - Starting protocols")
-	//register the test protocol
-	if _, err := onet.GlobalProtocolRegister("CollectiveRefreshKeyTest", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		//Use a local function so we can use ciphertext !
-		proto, err := protocols.NewCollectiveRefresh(tni)
-		if err != nil {
-			return nil, err
-		}
-		SkInput, err := utils.GetSecretKey(params, SkInputHash+tni.ServerIdentity().String())
-		if err != nil {
-			return nil, err
-		}
-
-		instance := proto.(*protocols.RefreshKeyProtocol)
-		instance.Ciphertext = *CipherText
-		instance.CRS = crs
-		instance.Sk = *SkInput
-		instance.Params = *params
-		return instance, nil
-
-	}); err != nil {
-		log.Error("Could not start RefreshKeyTest : ", err)
-		t.Fail()
-
+	var storageDirectory = "/tmp/"
+	if testing.Short() {
+		nbnodes = nbnodes[:1]
+		paramsSets = paramsSets[:1]
 	}
 
-	//can start protocol
-	log.Lvl1("Started to test refresh key locally with nodes amount : ", RPNobes)
-	local := onet.NewLocalTest(suites.MustFind("Ed25519"))
+	log.SetDebugVisible(1)
+
+	for _, params := range paramsSets {
+		plaintext := bfv.NewPlaintext(params)
+		var ciphertext bfv.Ciphertext
+		//register the test protocols for each params set
+		if _, err := onet.GlobalProtocolRegister(fmt.Sprintf("CollectiveRefreshTest-%d", params.LogN),
+			func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
+				log.Lvl3("new collective refresh protocol instance for", tni.ServerIdentity())
+				instance, err := protocols.NewCollectiveRefresh(tni)
+				if err != nil {
+					return nil, err
+				}
+
+				lt, err := utils.GetLocalTestForRoster(tni.Roster(), params, storageDirectory)
+
+				if err != nil {
+					return nil, err
+				}
+
+				if tni.IsRoot() {
+					ciphertext = *bfv.NewEncryptorFromSk(params, lt.IdealSecretKey0).EncryptNew(plaintext)
+				}
+				crsGen := dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+				crp := crsGen.ClockNew()
+
+				e = instance.(*protocols.RefreshKeyProtocol).Init(*params, lt.SecretKeyShares0[tni.ServerIdentity().ID], ciphertext, *crp)
+				return
+			}); err != nil {
+			log.Error("Could not start Collective Refresh Protocol  : ", err)
+			t.Fail()
+		}
+
+		for _, N := range nbnodes {
+			t.Run(fmt.Sprintf("/local/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalRefresh(t, params, N, onet.NewLocalTest(suites.MustFind("Ed25519")), storageDirectory, plaintext)
+			})
+			t.Run(fmt.Sprintf("/TCP/params=%d/nbnodes=%d", 1<<params.LogN, N), func(t *testing.T) {
+				testLocalRefresh(t, params, N, onet.NewTCPTest(suites.MustFind("Ed25519")), storageDirectory, plaintext)
+
+			})
+
+		}
+	}
+
+}
+
+func testLocalRefresh(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, plaintext *bfv.Plaintext) {
 	defer local.CloseAll()
-	_, _, tree := local.GenTree(RPNobes, true)
-	pi, err := local.CreateProtocol("CollectiveRefreshKeyTest", tree)
+	utils.QuietServers(local.Servers)
+
+	_, roster, tree := local.GenTree(N, true)
+
+	lt, err := utils.GetLocalTestForRoster(roster, params, storageDirectory)
+	//to clean up afterwards.
+	defer func() {
+		err = lt.TearDown(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+	pi, err := local.CreateProtocol(fmt.Sprintf("CollectiveRefreshTest-%d", params.LogN), tree)
 	if err != nil {
 		t.Fatal("Couldn't create new node:", err)
 	}
@@ -79,73 +105,16 @@ func TestRefreshProtocol(t *testing.T) {
 	log.Lvl1("*****************Refresh key done.******************")
 	log.Lvl1("*****************Time elapsed : ", elapsed, "*******************")
 
-	//From here check that Original ciphertext decrypted under SkInput === Resulting ciphertext decrypted under SkOutput
-	if VerifyCorrectness {
-		CheckCorrectnessRefresh(err, t, local, CipherText, rkp)
-	}
-	rkp.Done()
-
 	//check if the resulting cipher text decrypted with SkOutput works
-
-	log.Lvl1("Test over.")
-	/*TODO - make closing more "clean" as here we force to close it once the key exchange is done.
-			Will be better once we ca have all the suites of protocol rolling out. We can know when to stop this protocol.
-	Ideally id like to call this vvv so it can all shutdown outside of the collectivekeygen
-	//local.CloseAll()
-	*/
-
-}
-
-func CheckCorrectnessRefresh(err error, t *testing.T, local *onet.LocalTest, CipherText *bfv.Ciphertext, rkp *protocols.RefreshKeyProtocol) {
-	tmp0 := params.NewPolyQ()
-	ctx, err := ring.NewContextWithParams(1<<params.LogN, params.Moduli.Qi)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, server := range local.Overlays {
-
-		si := server.ServerIdentity().String()
-		log.Lvl1("name : ", si)
-
-		sk0, err := utils.GetSecretKey(params, SkInputHash+si)
-		if err != nil {
-			log.Error("error : ", err)
-			t.Fatal(err)
-		}
-
-		ctx.Add(tmp0, sk0.Get(), tmp0)
-	}
-	SkInput := new(bfv.SecretKey)
-	SkInput.Set(tmp0)
-	d, _ := SkInput.MarshalBinary()
-	log.Lvl1("Master key : ", d[0:25])
 	encoder := bfv.NewEncoder(params)
-	DecryptorInput := bfv.NewDecryptor(params, SkInput)
-	//expected
-	ReferencePlaintext := DecryptorInput.DecryptNew(CipherText)
-	expected := encoder.DecodeUint(ReferencePlaintext)
-	log.Lvl1("test is downloading the ciphertext..expected pt: ", expected[0:25])
-	i := 0
-	for i < RPNobes {
-		newCipher := (<-rkp.ChannelCiphertext).Ciphertext
-		res := DecryptorInput.DecryptNew(&newCipher)
-
-		decoded := encoder.DecodeUint(res)
-
-		log.Lvl1("Comparing a pt.. have : ", decoded[0:25])
-		ok := utils.Equalslice(decoded, expected)
-
-		if !ok {
-			log.Print("Plaintext do not match ")
-			t.Fail()
-			return
-
-		}
-		i++
+	DecryptorInput := bfv.NewDecryptor(params, lt.IdealSecretKey0)
+	//Expected result
+	expected := encoder.DecodeUint(plaintext)
+	decoded := encoder.DecodeUint(DecryptorInput.DecryptNew(&rkp.FinalCiphertext))
+	if !utils.Equalslice(expected, decoded) {
+		t.Fatal("Decryption failed")
 	}
 
-	if !t.Failed() {
-		log.Lvl1("Got all matches on ciphers.")
+	log.Lvl1("Success")
 
-	}
 }

@@ -4,17 +4,28 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
 	proto "lattigo-smc/protocols"
 	"lattigo-smc/utils"
+	"time"
 )
 
 type KeyGenerationSim struct {
 	onet.SimulationBFTree
+
+	lt *utils.LocalTest
+
+	sk        *bfv.SecretKey
+	crp       *ring.Poly
+	ParamsIdx int
+	Params    *bfv.Parameters
 }
 
 func init() {
@@ -23,6 +34,9 @@ func init() {
 
 var VerifyCorrectness = false
 
+var storageDir = "tmp/"
+var lt *utils.LocalTest
+
 func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 	sim := &KeyGenerationSim{}
 
@@ -30,16 +44,25 @@ func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 	if err != nil {
 		return nil, err
 	}
+	sim.Params = bfv.DefaultParams[sim.ParamsIdx]
 
 	return sim, nil
 }
 
 func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//setup following the config file.
-	log.Lvl4("Setting up the simulations")
+	log.Lvl1("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
-	err := s.CreateTree(sc)
+
+	var err error
+	s.lt, err = utils.GetLocalTestForRoster(sc.Roster, s.Params, storageDir)
+	if err != nil {
+		return nil, err
+	}
+	lt = s.lt
+
+	err = s.CreateTree(sc)
 	if err != nil {
 		return nil, err
 	}
@@ -53,40 +76,52 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 	}); err != nil {
 		return errors.New("Error when registering CollectiveKeyGeneration instance " + err.Error())
 	}
-	log.Lvl4("Node setup OK")
+	s.lt = lt
 
+	// Pre-loading of the secret key at the node
+	var found bool
+	s.sk, found = s.lt.SecretKeyShares0[config.Server.ServerIdentity.ID]
+	if !found {
+		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
+	}
+
+	// Pre-initialize the CRP generator
+	crsGen := dbfv.NewCRPGenerator(s.Params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	s.crp = crsGen.ClockNew()
+
+	log.Lvl3("Node setup OK")
 	return s.SimulationBFTree.Node(config)
 }
 
 func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (onet.ProtocolInstance, error) {
 	//This part allows to injec the data to the node ~ we don't need the messy channels.
 	protocol, err := proto.NewCollectiveKeyGeneration(tni)
-
 	if err != nil {
 		return nil, err
 	}
 
-	//cast
+	// Injects simulation parameters
 	colkeygen := protocol.(*proto.CollectiveKeyGenerationProtocol)
 
-	if proto.AssignParametersBeforeStart {
-		params := bfv.DefaultParams[0]
-		sk, err := utils.GetSecretKey(params, tni.ServerIdentity().String())
-		if err != nil {
-			return nil, err
-		}
-		colkeygen.Params = *params
-
-		colkeygen.Sk = *sk
+	err = colkeygen.Init(sim.Params, sim.sk, sim.crp)
+	if err != nil {
+		return nil, err
 	}
+
 	return colkeygen, nil
 
 }
 
 func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
+	defer func() {
+		err := s.lt.TearDown(true)
+		if err != nil {
+			log.Error("Could not tear down the test. ")
+		}
+	}()
 
-	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
+	log.Lvl3("Size : ", size, " rounds : ", s.Rounds)
 
 	pi, err := config.Overlay.CreateProtocol("CollectiveKeyGenerationSimul", config.Tree, onet.NilServiceID)
 	if err != nil {
@@ -95,42 +130,30 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 	round := monitor.NewTimeMeasure("round")
 	ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
 	log.Lvl2("Starting Collective Key Generation simulation")
+	now := time.Now()
 	if err = ckgp.Start(); err != nil {
 		return err
 	}
 
 	ckgp.Wait()
+	elapsed := time.Since(now)
 	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.")
-
+	log.Lvl1("Elapsed time : ", elapsed)
 	//check if we have all the same polys ckg_0
 	round.Record()
 
-	if VerifyCorrectness {
-		CheckKeys(ckgp, err)
-		if err != nil {
-			log.Fatal("Could not start the tree : ", err)
-		}
-
+	//check for correctness here.
+	encoder := bfv.NewEncoder(s.Params)
+	enc := bfv.NewEncryptorFromPk(s.Params, ckgp.Pk)
+	dec := bfv.NewDecryptor(s.Params, s.lt.IdealSecretKey0)
+	pt := bfv.NewPlaintext(s.Params)
+	ct := enc.EncryptNew(pt)
+	ptp := dec.DecryptNew(ct)
+	msgp := encoder.DecodeUint(ptp)
+	if !utils.Equalslice(pt.Value()[0].Coeffs[0], msgp) {
+		log.Error("Decryption failed")
 	}
 
 	return nil
 
-}
-
-/*****************UTILITY FOR VERIFYING KEYS *****/
-func CheckKeys(ckgp *proto.CollectiveKeyGenerationProtocol, err error) {
-	keys := make([]bfv.PublicKey, len(ckgp.Roster().List))
-	for i := 0; i < len(ckgp.Roster().List); i++ {
-
-		keys[i] = (<-ckgp.ChannelPublicKey).PublicKey
-	}
-
-	for _, k1 := range keys {
-		for _, k2 := range keys {
-			err := utils.CompareKeys(k1, k2)
-			if err != nil {
-				log.Error("Error in polynomial comparison : ", err)
-			}
-		}
-	}
 }
