@@ -1,6 +1,6 @@
 Simulation = "CollectiveKeyGeneration"
 BF = 2
-Rounds = 1
+Rounds = 10
 Suite = "Ed25519"
 
 # SingleHost = True

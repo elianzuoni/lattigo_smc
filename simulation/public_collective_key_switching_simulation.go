@@ -137,38 +137,40 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	//defer local.CloseAll()
 
 	log.Lvl3("Starting Public collective key switching simul")
+	for i := 0; i < s.Rounds; i++ {
 
-	pi, err := config.Overlay.CreateProtocol("CollectivePublicKeySwitchingSimul", config.Tree, onet.NilServiceID)
-	if err != nil {
-		log.Fatal("Couldn't create new node:", err)
-		return err
-	}
+		pi, err := config.Overlay.CreateProtocol("CollectivePublicKeySwitchingSimul", config.Tree, onet.NilServiceID)
+		if err != nil {
+			log.Fatal("Couldn't create new node:", err)
+			return err
+		}
 
-	pcksp := pi.(*proto.CollectivePublicKeySwitchingProtocol)
-	round := monitor.NewTimeMeasure("round")
-	now := time.Now()
-	err = pcksp.Start()
-	if err != nil {
-		log.Error(err)
-		return err
-	}
-	pcksp.Wait()
-	elapsed := time.Since(now)
-	round.Record()
+		pcksp := pi.(*proto.CollectivePublicKeySwitchingProtocol)
+		round := monitor.NewTimeMeasure("round")
+		now := time.Now()
+		err = pcksp.Start()
+		if err != nil {
+			log.Error(err)
+			return err
+		}
+		pcksp.Wait()
+		elapsed := time.Since(now)
+		round.Record()
 
-	log.Lvl1("Public Collective key switching done.")
-	log.Lvl1("Elapsed time :", elapsed)
+		log.Lvl1("Public Collective key switching done.")
+		log.Lvl1("Elapsed time :", elapsed)
 
-	//Check if correct.
-	encoder := bfv.NewEncoder(s.Params)
-	DecryptorOutput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey1)
-	DecryptorInput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
-	plaintext := DecryptorInput.DecryptNew(Cipher)
-	expected := encoder.DecodeUint(plaintext)
-	decoded := encoder.DecodeUint(DecryptorOutput.DecryptNew(&pcksp.CiphertextOut))
+		//Check if correct.
+		encoder := bfv.NewEncoder(s.Params)
+		DecryptorOutput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey1)
+		DecryptorInput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
+		plaintext := DecryptorInput.DecryptNew(Cipher)
+		expected := encoder.DecodeUint(plaintext)
+		decoded := encoder.DecodeUint(DecryptorOutput.DecryptNew(&pcksp.CiphertextOut))
 
-	if !utils.Equalslice(expected, decoded) {
-		log.Error("Decryption failed")
+		if !utils.Equalslice(expected, decoded) {
+			log.Error("Decryption failed")
+		}
 	}
 
 	return nil

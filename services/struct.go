@@ -5,12 +5,14 @@ import (
 	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/network"
+	uuid "gopkg.in/satori/go.uuid.v1"
 )
 
 const ServiceName = "LattigoSMC"
 
 type ServiceState struct {
-	QueryID QueryID
+	Id      uuid.UUID
+	Pending bool
 }
 
 type ServiceResult struct {
@@ -22,13 +24,13 @@ type ServiceResult struct {
 
 //The query for the result.
 type QueryResult struct {
-	QueryID *QueryID
-	public  kyber.Point
+	Id     uuid.UUID
+	public kyber.Point
 }
 
 //QueryData contains the information server side for the query.
 type QueryData struct {
-	QueryID      QueryID
+	Id           uuid.UUID
 	Roster       onet.Roster
 	ClientPubKey kyber.Point
 	Source       *network.ServerIdentity
@@ -42,16 +44,18 @@ type QueryData struct {
 type SetupRequest struct {
 	Roster onet.Roster
 
-	GenerateEvaluationKey bool //it was available in gomomorphic hence it may have some uses.
+	ParamsIdx             uint64
+	Seed                  []byte
+	GenerateEvaluationKey bool
 }
 
 type StoreQuery struct {
-	Id uint64
+	Id uuid.UUID
 	bfv.Ciphertext
 }
 
 type StoreReply struct {
-	Id   uint64
+	Id   uuid.UUID
 	Done bool
 }
 

@@ -32,8 +32,6 @@ func init() {
 	onet.SimulationRegister("CollectiveKeyGeneration", NewSimulationKeyGen)
 }
 
-var VerifyCorrectness = false
-
 var storageDir = "tmp/"
 var lt *utils.LocalTest
 
@@ -123,35 +121,41 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 
 	log.Lvl3("Size : ", size, " rounds : ", s.Rounds)
 
-	pi, err := config.Overlay.CreateProtocol("CollectiveKeyGenerationSimul", config.Tree, onet.NilServiceID)
-	if err != nil {
-		log.Fatal("Couldn't create new node:", err)
-	}
-	round := monitor.NewTimeMeasure("round")
-	ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
-	log.Lvl2("Starting Collective Key Generation simulation")
-	now := time.Now()
-	if err = ckgp.Start(); err != nil {
-		return err
-	}
+	for i := 0; i < s.Rounds; i++ {
+		pi, err := config.Overlay.CreateProtocol("CollectiveKeyGenerationSimul", config.Tree, onet.NilServiceID)
+		if err != nil {
+			log.Fatal("Couldn't create new node:", err)
+		}
+		round := monitor.NewTimeMeasure("alpha")
+		ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
+		log.Lvl1("Starting Collective Key Generation simulation")
+		now := time.Now()
+		go func() {
+			if err = ckgp.Start(); err != nil {
+				log.Fatal("Error in dispatch : ", err)
+			}
+		}()
 
-	ckgp.Wait()
-	elapsed := time.Since(now)
-	log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.")
-	log.Lvl1("Elapsed time : ", elapsed)
-	//check if we have all the same polys ckg_0
-	round.Record()
+		log.Lvl1("waiting..")
+		ckgp.Wait()
+		elapsed := time.Since(now)
+		log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.")
+		log.Lvl1("Elapsed time : ", elapsed)
+		//check if we have all the same polys ckg_0
+		round.Record()
 
-	//check for correctness here.
-	encoder := bfv.NewEncoder(s.Params)
-	enc := bfv.NewEncryptorFromPk(s.Params, ckgp.Pk)
-	dec := bfv.NewDecryptor(s.Params, s.lt.IdealSecretKey0)
-	pt := bfv.NewPlaintext(s.Params)
-	ct := enc.EncryptNew(pt)
-	ptp := dec.DecryptNew(ct)
-	msgp := encoder.DecodeUint(ptp)
-	if !utils.Equalslice(pt.Value()[0].Coeffs[0], msgp) {
-		log.Error("Decryption failed")
+		//check for correctness here.
+		encoder := bfv.NewEncoder(s.Params)
+		enc := bfv.NewEncryptorFromPk(s.Params, ckgp.Pk)
+		dec := bfv.NewDecryptor(s.Params, s.lt.IdealSecretKey0)
+		pt := bfv.NewPlaintext(s.Params)
+		ct := enc.EncryptNew(pt)
+		ptp := dec.DecryptNew(ct)
+		msgp := encoder.DecodeUint(ptp)
+		if !utils.Equalslice(pt.Value()[0].Coeffs[0], msgp) {
+			log.Error("Decryption failed")
+		}
+
 	}
 
 	return nil

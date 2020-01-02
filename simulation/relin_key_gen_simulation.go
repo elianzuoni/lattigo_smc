@@ -116,56 +116,59 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
 
-	pi, err := config.Overlay.CreateProtocol("RelinearizationKeyProtocolSimul", config.Tree, onet.NilServiceID)
-	if err != nil {
-		log.Error(err)
-		return err
-	}
+	for i := 0; i < s.Rounds; i++ {
 
-	RelinProtocol := pi.(*proto.RelinearizationKeyProtocol)
+		pi, err := config.Overlay.CreateProtocol("RelinearizationKeyProtocolSimul", config.Tree, onet.NilServiceID)
+		if err != nil {
+			log.Error(err)
+			return err
+		}
 
-	//Now we can start the protocol
-	round := monitor.NewTimeMeasure("round")
-	now := time.Now()
-	err = RelinProtocol.Start()
-	defer RelinProtocol.Done()
-	if err != nil {
-		log.Error("Could not start relinearization protocol : ", err)
-		return err
-	}
+		RelinProtocol := pi.(*proto.RelinearizationKeyProtocol)
 
-	RelinProtocol.Wait()
-	elapsed := time.Since(now)
-	round.Record()
+		//Now we can start the protocol
+		round := monitor.NewTimeMeasure("round")
+		now := time.Now()
+		err = RelinProtocol.Start()
+		defer RelinProtocol.Done()
+		if err != nil {
+			log.Error("Could not start relinearization protocol : ", err)
+			return err
+		}
 
-	log.Lvl1("Relinearization key generated for ", size)
-	log.Lvl1("Elapsed time :", elapsed)
+		RelinProtocol.Wait()
+		elapsed := time.Since(now)
+		round.Record()
 
-	sk := lt.IdealSecretKey0
-	pk := bfv.NewKeyGenerator(s.Params).GenPublicKey(sk)
-	encryptor_pk := bfv.NewEncryptorFromPk(s.Params, pk)
-	encoder := bfv.NewEncoder(s.Params)
+		log.Lvl1("Relinearization key generated for ", size)
+		log.Lvl1("Elapsed time :", elapsed)
 
-	pt := bfv.NewPlaintext(s.Params)
-	expected := s.Params.NewPolyQP()
-	encoder.EncodeUint(expected.Coeffs[0], pt)
-	CipherText := encryptor_pk.EncryptNew(pt)
-	//multiply it !
-	evaluator := bfv.NewEvaluator(s.Params)
-	MulCiphertext := evaluator.MulNew(CipherText, CipherText)
-	//we want to relinearize MulCiphertexts
-	ExpectedCoeffs := s.Params.NewPolyQP()
-	ctxPQ, _ := ring.NewContextWithParams(1<<s.Params.LogN, append(s.Params.Moduli.Qi, s.Params.Moduli.Pi...))
-	ctxPQ.MulCoeffs(expected, expected, ExpectedCoeffs)
-	evalkey := RelinProtocol.EvaluationKey
-	ResCipher := evaluator.RelinearizeNew(MulCiphertext, evalkey)
+		sk := lt.IdealSecretKey0
+		pk := bfv.NewKeyGenerator(s.Params).GenPublicKey(sk)
+		encryptor_pk := bfv.NewEncryptorFromPk(s.Params, pk)
+		encoder := bfv.NewEncoder(s.Params)
 
-	decryptor := bfv.NewDecryptor(s.Params, sk)
-	resDecrypted := decryptor.DecryptNew(ResCipher)
-	resDecoded := encoder.DecodeUint(resDecrypted)
-	if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
-		log.Error("Decryption failed")
-		return errors.New("decryption failed")
+		pt := bfv.NewPlaintext(s.Params)
+		expected := s.Params.NewPolyQP()
+		encoder.EncodeUint(expected.Coeffs[0], pt)
+		CipherText := encryptor_pk.EncryptNew(pt)
+		//multiply it !
+		evaluator := bfv.NewEvaluator(s.Params)
+		MulCiphertext := evaluator.MulNew(CipherText, CipherText)
+		//we want to relinearize MulCiphertexts
+		ExpectedCoeffs := s.Params.NewPolyQP()
+		ctxPQ, _ := ring.NewContextWithParams(1<<s.Params.LogN, append(s.Params.Moduli.Qi, s.Params.Moduli.Pi...))
+		ctxPQ.MulCoeffs(expected, expected, ExpectedCoeffs)
+		evalkey := RelinProtocol.EvaluationKey
+		ResCipher := evaluator.RelinearizeNew(MulCiphertext, evalkey)
+
+		decryptor := bfv.NewDecryptor(s.Params, sk)
+		resDecrypted := decryptor.DecryptNew(ResCipher)
+		resDecoded := encoder.DecodeUint(resDecrypted)
+		if !utils.Equalslice(ExpectedCoeffs.Coeffs[0], resDecoded) {
+			log.Error("Decryption failed")
+			return errors.New("decryption failed")
+		}
 	}
 
 	return nil

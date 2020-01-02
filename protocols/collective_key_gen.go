@@ -62,7 +62,10 @@ func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 //Dispatch is called at each node to then run the protocol
 func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 
-	log.Lvl2(ckgp.ServerIdentity(), " Dispatching ; is root = ", ckgp.IsRoot())
+	log.Lvl3(ckgp.ServerIdentity(), " Dispatching ; is root = ", ckgp.IsRoot())
+	if &ckgp.CKGShare == nil {
+		return nil
+	}
 
 	//When running a simulation we need to send a wake up message to the children so all nodes can run!
 	log.Lvl3("Sending wake up message")
@@ -75,7 +78,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	if !ckgp.IsLeaf() {
 		for i := 0; i < len(ckgp.Children()); i++ {
 			child := <-ckgp.ChannelPublicKeyShares
-			log.Lvl3(ckgp.ServerIdentity(), "Got from shared from child ")
+			log.Lvl3(ckgp.ServerIdentity(), "Got share from child ")
 			ckgp.AggregateShares(child.CKGShare, ckgp.CKGShare, ckgp.CKGShare)
 
 		}

@@ -110,66 +110,69 @@ func (s *RotationKeySim) Run(config *onet.SimulationConfig) error {
 		}
 	}()
 
-	pi, err := config.Overlay.CreateProtocol("RotationKeySimulation", config.Tree, onet.NilServiceID)
-	if err != nil {
-		return err
-	}
+	for i := 0; i < s.Rounds; i++ {
 
-	rotation := pi.(*protocols.RotationKeyProtocol)
-	round := monitor.NewTimeMeasure("round")
-	now := time.Now()
-	err = rotation.Start()
-	defer rotation.Done()
-	if err != nil {
-		log.Error("Could not start rotation key protocol : ", err)
-		return err
-	}
-
-	rotation.Wait()
-	elapsed := time.Since(now)
-	round.Record()
-
-	log.Lvl1("Roation key generated for ", size, " nodes ")
-	log.Lvl1("Elapsed time :", elapsed)
-
-	//check for correctness...
-	rotkey := rotation.RotKey
-	ctxT, _ := ring.NewContextWithParams(1<<s.Params.LogN, []uint64{s.Params.T})
-	coeffs := ctxT.NewUniformPoly().Coeffs[0]
-	pt := bfv.NewPlaintext(s.Params)
-	enc := bfv.NewEncoder(s.Params)
-	enc.EncodeUint(coeffs, pt)
-	ciphertext := bfv.NewEncryptorFromSk(s.Params, lt.IdealSecretKey0).EncryptNew(pt)
-	evaluator := bfv.NewEvaluator(s.Params)
-	n := 1 << s.Params.LogN
-	mask := uint64(n>>1) - 1
-	expected := make([]uint64, n)
-
-	switch s.Rotation {
-	case bfv.RotationRow:
-		evaluator.RotateRows(ciphertext, &rotkey, ciphertext)
-		expected = append(coeffs[n>>1:], coeffs[:n>>1]...)
-
-		break
-	case bfv.RotationRight:
-
-		log.Fatal("Not implemented correctness verification. ")
-
-	case bfv.RotationLeft:
-		evaluator.RotateColumns(ciphertext, uint64(s.K), &rotkey, ciphertext)
-		for i := uint64(0); i < uint64(n)>>1; i++ {
-			expected[i] = coeffs[(i+uint64(s.K))&mask]
-			expected[i+uint64(n>>1)] = coeffs[((i+uint64(s.K))&mask)+uint64(n>>1)]
+		pi, err := config.Overlay.CreateProtocol("RotationKeySimulation", config.Tree, onet.NilServiceID)
+		if err != nil {
+			return err
 		}
-		break
-	}
-	resultingPt := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0).DecryptNew(ciphertext)
 
-	decoded := enc.DecodeUint(resultingPt)
+		rotation := pi.(*protocols.RotationKeyProtocol)
+		round := monitor.NewTimeMeasure("round")
+		now := time.Now()
+		err = rotation.Start()
+		defer rotation.Done()
+		if err != nil {
+			log.Error("Could not start rotation key protocol : ", err)
+			return err
+		}
 
-	if !utils.Equalslice(expected, decoded) {
-		log.Error("Decryption failed")
-		return errors.New("decryption failed ")
+		rotation.Wait()
+		elapsed := time.Since(now)
+		round.Record()
+
+		log.Lvl1("Roation key generated for ", size, " nodes ")
+		log.Lvl1("Elapsed time :", elapsed)
+
+		//check for correctness...
+		rotkey := rotation.RotKey
+		ctxT, _ := ring.NewContextWithParams(1<<s.Params.LogN, []uint64{s.Params.T})
+		coeffs := ctxT.NewUniformPoly().Coeffs[0]
+		pt := bfv.NewPlaintext(s.Params)
+		enc := bfv.NewEncoder(s.Params)
+		enc.EncodeUint(coeffs, pt)
+		ciphertext := bfv.NewEncryptorFromSk(s.Params, lt.IdealSecretKey0).EncryptNew(pt)
+		evaluator := bfv.NewEvaluator(s.Params)
+		n := 1 << s.Params.LogN
+		mask := uint64(n>>1) - 1
+		expected := make([]uint64, n)
+
+		switch s.Rotation {
+		case bfv.RotationRow:
+			evaluator.RotateRows(ciphertext, &rotkey, ciphertext)
+			expected = append(coeffs[n>>1:], coeffs[:n>>1]...)
+
+			break
+		case bfv.RotationRight:
+
+			log.Fatal("Not implemented correctness verification. ")
+
+		case bfv.RotationLeft:
+			evaluator.RotateColumns(ciphertext, uint64(s.K), &rotkey, ciphertext)
+			for i := uint64(0); i < uint64(n)>>1; i++ {
+				expected[i] = coeffs[(i+uint64(s.K))&mask]
+				expected[i+uint64(n>>1)] = coeffs[((i+uint64(s.K))&mask)+uint64(n>>1)]
+			}
+			break
+		}
+		resultingPt := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0).DecryptNew(ciphertext)
+
+		decoded := enc.DecodeUint(resultingPt)
+
+		if !utils.Equalslice(expected, decoded) {
+			log.Error("Decryption failed")
+			return errors.New("decryption failed ")
+		}
 	}
 
 	log.Lvl1("Success")

@@ -11,4 +11,5 @@ require (
 	go.dedis.ch/kyber/v3 v3.0.4
 	go.dedis.ch/onet/v3 v3.0.21
 	golang.org/x/text v0.3.2 // indirect
+	gopkg.in/satori/go.uuid.v1 v1.2.0
 )

@@ -24,16 +24,16 @@ type RefreshSimulation struct {
 }
 
 func init() {
-	onet.SimulationRegister("CollectiveRefresh", NewSImulationRefresh)
+	onet.SimulationRegister("CollectiveRefresh", NewSimulationRefresh)
 }
 
-func NewSImulationRefresh(config string) (onet.Simulation, error) {
+func NewSimulationRefresh(config string) (onet.Simulation, error) {
 	sim := &RefreshSimulation{}
 	_, err := toml.Decode(config, sim)
 	if err != nil {
 		return nil, err
 	}
-	log.Lvl1("New Refresh protocol with params :", sim.ParamsIdx)
+	log.Lvl2("New Refresh protocol with params :", sim.ParamsIdx)
 	sim.Params = bfv.DefaultParams[sim.ParamsIdx]
 
 	return sim, nil
@@ -108,31 +108,34 @@ func (s *RefreshSimulation) Run(config *onet.SimulationConfig) error {
 		}
 	}()
 
-	pi, err := config.Overlay.CreateProtocol("CollectiveRefreshSimul", config.Tree, onet.NilServiceID)
-	if err != nil {
-		log.Fatal("Could not create protocol for refresh", err)
-	}
+	for i := 0; i < s.Rounds; i++ {
 
-	round := monitor.NewTimeMeasure("round")
-	rp := pi.(*protocols.RefreshKeyProtocol)
-	now := time.Now()
-	err = rp.Start()
-	defer rp.Done()
-	rp.Wait()
-	elapsed := time.Since(now)
-	round.Record()
-	log.Lvl1("Collective Refresh done for  ", len(rp.Roster().List), " nodes")
-	log.Lvl1("Elapsed time : ", elapsed)
+		pi, err := config.Overlay.CreateProtocol("CollectiveRefreshSimul", config.Tree, onet.NilServiceID)
+		if err != nil {
+			log.Fatal("Could not create protocol for refresh", err)
+		}
 
-	//check for correcteness.
-	encoder := bfv.NewEncoder(s.Params)
-	DecryptorInput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
-	//Expected result
-	expected := encoder.DecodeUint(DecryptorInput.DecryptNew(Cipher))
-	decoded := encoder.DecodeUint(DecryptorInput.DecryptNew(&rp.FinalCiphertext))
-	if !utils.Equalslice(expected, decoded) {
-		log.Error("Decryption failed")
-		return errors.New("decryption failed")
+		round := monitor.NewTimeMeasure("round")
+		rp := pi.(*protocols.RefreshKeyProtocol)
+		now := time.Now()
+		err = rp.Start()
+		defer rp.Done()
+		rp.Wait()
+		elapsed := time.Since(now)
+		round.Record()
+		log.Lvl1("Collective Refresh done for  ", len(rp.Roster().List), " nodes")
+		log.Lvl1("Elapsed time : ", elapsed)
+
+		//check for correcteness.
+		encoder := bfv.NewEncoder(s.Params)
+		DecryptorInput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
+		//Expected result
+		expected := encoder.DecodeUint(DecryptorInput.DecryptNew(Cipher))
+		decoded := encoder.DecodeUint(DecryptorInput.DecryptNew(&rp.FinalCiphertext))
+		if !utils.Equalslice(expected, decoded) {
+			log.Error("Decryption failed")
+			return errors.New("decryption failed")
+		}
 	}
 
 	log.Lvl1("Success!")

@@ -3,16 +3,17 @@ package services
 import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
-	"math/rand"
+	"time"
 )
 
 //ID of query. Should be unique
-type QueryID string
 
 //Service is the service of lattigoSMC - allows to compute the different HE operations
 type Service struct {
@@ -24,9 +25,10 @@ type Service struct {
 	*bfv.PublicKey
 	*bfv.SecretKey
 	*bfv.EvaluationKey
+	Params           *bfv.Parameters
 	pubKeyGenerated  bool
 	evalKeyGenerated bool
-	DataBase         []*bfv.Ciphertext
+	DataBase         map[uuid.UUID]*bfv.Ciphertext
 }
 
 //MsgTypes different messages that can be used for the service.
@@ -102,7 +104,8 @@ func (s *Service) Process(msg *network.Envelope) {
 		//query to store data..
 		log.Lvl1(s.ServerIdentity(), "got a request to store a cipher")
 		tmp := (msg.Msg).(*StoreQuery)
-		s.DataBase = append(s.DataBase, &tmp.Ciphertext)
+		id := uuid.NewV1()
+		s.DataBase[id] = &tmp.Ciphertext
 		//send an acknowledgement of storing..
 		sender := msg.ServerIdentity
 		Ack := StoreReply{tmp.Id, true}
@@ -121,6 +124,8 @@ func (s *Service) Process(msg *network.Envelope) {
 		log.Lvl1("Got a store reply")
 		tmp := (msg.Msg).(*StoreReply)
 		log.Lvl1("ID : ", tmp.Id, "Done :", tmp.Done)
+		//Send it back to the client.
+
 	}
 
 }
@@ -148,8 +153,8 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 				ckgp.Wait()
 				log.Lvl1(tn.ServerIdentity(), " : done with collective key gen ! ")
 
-				s.SecretKey = &ckgp.Sk
-				s.PublicKey = &ckgp.Pk
+				s.SecretKey = ckgp.Sk
+				s.PublicKey = ckgp.Pk
 				s.pubKeyGenerated = true
 			}()
 
@@ -197,12 +202,12 @@ func (s *Service) HandleQueryData(query *QueryData) (network.Message, error) {
 	cipher := encryptorPk.EncryptNew(pt)
 	//now we can send this to the root
 	tree := query.Roster.GenerateBinaryTree()
-	random := rand.Int()
-	err = s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{uint64(random), *cipher})
+
+	err = s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{uuid.UUID{}, *cipher})
 	if err != nil {
 		log.Error("could not send cipher to the root. ")
 	}
-	return &ServiceState{""}, nil
+	return &ServiceState{uuid.UUID{}, true}, nil
 }
 
 func (s *Service) HandleStoreQuery(storeQuery *StoreQuery) (network.Message, error) {
@@ -224,15 +229,24 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 	tree := request.Roster.GenerateBinaryTree()
 	log.Lvl1("Begin new setup with ", tree.Size(), " parties")
 
-	//check if the request comes from root ~ maybe not necessary.
-	if !tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
-		return nil, errors.New("ClientSetup request should be sent to a server of the roster.")
-	}
-	s.Roster = request.Roster
-
 	//Collective Key Generation
 	if !s.pubKeyGenerated {
-		err := s.genPublicKey(tree)
+		//send the information to the childrens.
+		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
+			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
+			if err != nil {
+				return &SetupReply{-1}, err
+			}
+		}
+
+		s.Roster = request.Roster
+		s.Params = bfv.DefaultParams[request.ParamsIdx]
+		s.SecretKey = bfv.NewSecretKey(s.Params)
+
+		seed := &request.Seed
+		<-time.After(3 * time.Second)
+		err := s.genPublicKey(tree, *seed)
+
 		if err != nil {
 			return &SetupReply{-1}, err
 		}
@@ -276,7 +290,7 @@ func (s *Service) genEvalKey(tree *onet.Tree) error {
 	return nil
 }
 
-func (s *Service) genPublicKey(tree *onet.Tree) error {
+func (s *Service) genPublicKey(tree *onet.Tree, seed []byte) error {
 	log.Lvl1("Starting collective key generation!")
 	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveKeyGenerationProtocolName)
 	protocol, err := s.NewProtocol(tni, nil)
@@ -284,24 +298,27 @@ func (s *Service) genPublicKey(tree *onet.Tree) error {
 		panic(err)
 	}
 	ckgp := protocol.(*protocols.CollectiveKeyGenerationProtocol)
+
+	//init
+	crpGen := dbfv.NewCRPGenerator(s.Params, seed)
+	crp := crpGen.ClockNew()
+
+	err = ckgp.Init(s.Params, s.SecretKey, crp)
+	if err != nil {
+		panic(err)
+	}
+
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
 		log.ErrFatal(err, "Could not register protocol instance")
 	}
-
-	ckgp.Params = *bfv.DefaultParams[0]
-	err = ckgp.Start()
 	go ckgp.Dispatch()
-	if err != nil {
-		log.ErrFatal(err, "Could not start collective key generation protocol")
 
-	}
 	//we should wait until the above is done.
 	log.Lvl1("Waiting for the protocol to be finished...")
 	ckgp.Wait()
-	ckgp.Done()
-	s.SecretKey = &ckgp.Sk
-	s.PublicKey = &ckgp.Pk
+	s.SecretKey = ckgp.Sk
+	s.PublicKey = ckgp.Pk
 	s.pubKeyGenerated = true
 	log.Lvl1(s.ServerIdentity(), " got public key!")
 	return nil

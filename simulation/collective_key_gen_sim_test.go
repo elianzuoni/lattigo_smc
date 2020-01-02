@@ -9,8 +9,8 @@ import (
 
 //Simulate the collective key generation. With a test.
 func TestSimulationCollectiveKeyGen(t *testing.T) {
-	log.SetDebugVisible(1)
 	//turn off test variable
+	log.Lvl1("Test !! ")
 	protocols.TurnOffTest()
 
 	simul.Start("runconfigs/key_gen_config.toml")

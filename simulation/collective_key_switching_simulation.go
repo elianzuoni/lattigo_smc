@@ -111,7 +111,6 @@ func NewKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (one
 	}
 
 	//cast
-
 	colkeyswitch := protocol.(*proto.CollectiveKeySwitchingProtocol)
 	sim.Ciphertext = Cipher
 	err = colkeyswitch.Init(sim.Params, sim.lt.SecretKeyShares0[tni.ServerIdentity().ID], sim.lt.SecretKeyShares1[tni.ServerIdentity().ID], sim.Ciphertext)
@@ -130,41 +129,42 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	}()
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
+	for i := 0; i < s.Rounds; i++ {
+		pi, err := config.Overlay.CreateProtocol("CollectiveKeySwitchingSimul", config.Tree, onet.NilServiceID)
+		if err != nil {
+			log.Fatal("Couldn't create Protocol CollectiveKeySwitchingSimul:", err)
+		}
+		round := monitor.NewTimeMeasure("round")
+		cksp := pi.(*proto.CollectiveKeySwitchingProtocol)
 
-	pi, err := config.Overlay.CreateProtocol("CollectiveKeySwitchingSimul", config.Tree, onet.NilServiceID)
-	if err != nil {
-		log.Fatal("Couldn't create Protocol CollectiveKeySwitchingSimul:", err)
-	}
-	round := monitor.NewTimeMeasure("round")
-	cksp := pi.(*proto.CollectiveKeySwitchingProtocol)
+		log.Lvl4("Starting collective key switching protocol")
+		now := time.Now()
+		err = cksp.Start()
+		defer cksp.Done()
 
-	log.Lvl4("Starting collective key switching protocol")
-	now := time.Now()
-	err = cksp.Start()
-	defer cksp.Done()
+		cksp.Wait()
+		elapsed := time.Since(now)
 
-	cksp.Wait()
-	elapsed := time.Since(now)
+		round.Record()
 
-	round.Record()
+		log.Lvl1("Collective key switch done for  ", len(cksp.Roster().List), " nodes")
+		log.Lvl1("Elapsed time : ", elapsed)
 
-	log.Lvl1("Collective key switch done for  ", len(cksp.Roster().List), " nodes")
-	log.Lvl1("Elapsed time : ", elapsed)
+		//Check if correct...
 
-	//Check if correct...
+		encoder := bfv.NewEncoder(s.Params)
+		Decryptor1 := bfv.NewDecryptor(s.Params, lt.IdealSecretKey1)
+		Decryptor0 := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
+		//expected
 
-	encoder := bfv.NewEncoder(s.Params)
-	Decryptor1 := bfv.NewDecryptor(s.Params, lt.IdealSecretKey1)
-	Decryptor0 := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
-	//expected
-
-	expected := encoder.DecodeUint(Decryptor0.DecryptNew(s.Ciphertext))
-	decoded := encoder.DecodeUint(Decryptor1.DecryptNew(cksp.CiphertextOut))
-	log.Lvl2("Expected :", expected[0:25])
-	log.Lvl2("Decoded : ", decoded[0:25])
-	if !utils.Equalslice(expected, decoded) {
-		log.Error("Decryption failed")
-		return errors.New("decryption failed")
+		expected := encoder.DecodeUint(Decryptor0.DecryptNew(s.Ciphertext))
+		decoded := encoder.DecodeUint(Decryptor1.DecryptNew(cksp.CiphertextOut))
+		log.Lvl2("Expected :", expected[0:25])
+		log.Lvl2("Decoded : ", decoded[0:25])
+		if !utils.Equalslice(expected, decoded) {
+			log.Error("Decryption failed")
+			return errors.New("decryption failed")
+		}
 	}
 
 	return nil

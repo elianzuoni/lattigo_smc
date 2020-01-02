@@ -6,6 +6,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/utils"
 )
 
@@ -40,8 +41,7 @@ func (c *API) String() string {
 	return "[Client " + c.clientID + "]"
 }
 
-func (c *API) SendWriteQuery(roster *onet.Roster, qID QueryID, data []byte) (*QueryID, error) {
-	var queryID QueryID
+func (c *API) SendWriteQuery(roster *onet.Roster, data []byte) (*uuid.UUID, error) {
 
 	result := ServiceState{}
 	query := QueryData{}
@@ -53,18 +53,22 @@ func (c *API) SendWriteQuery(roster *onet.Roster, qID QueryID, data []byte) (*Qu
 	}
 
 	log.Lvl1(c, "sent a query to the server.")
-	queryID = result.QueryID
-	return &queryID, nil
+	id := result.Id
+	pending := result.Pending
+	if pending {
+		log.Warn("Pending transaction")
+	}
+	return &id, nil
 }
 
 func (c *API) SendMultiplyQuery() {
 
 }
 
-func (c *API) GetWriteResult(id *QueryID) ([]byte, error) {
+func (c *API) GetWriteResult(id *uuid.UUID) ([]byte, error) {
 	log.Lvl1(c, "request result of write :", id)
 	resp := ServiceResult{}
-	err := c.SendProtobuf(c.entryPoint, &QueryResult{id, c.public}, &resp)
+	err := c.SendProtobuf(c.entryPoint, &QueryResult{*id, c.public}, &resp)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -75,10 +79,10 @@ func (c *API) GetWriteResult(id *QueryID) ([]byte, error) {
 	return data, nil
 }
 
-func (c *API) SendSetupQuery(entities *onet.Roster, generateEvaluationKey bool) error {
+func (c *API) SendSetupQuery(entities *onet.Roster, generateEvaluationKey bool, paramsIdx uint64, seed []byte) error {
 	log.Lvl1(c, "Sending a setup query to the roster")
 
-	setupQuery := SetupRequest{*entities, generateEvaluationKey}
+	setupQuery := SetupRequest{*entities, paramsIdx, seed, generateEvaluationKey}
 	resp := SetupReply{}
 	err := c.SendProtobuf(c.entryPoint, &setupQuery, &resp)
 	if err != nil {

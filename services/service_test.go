@@ -19,7 +19,8 @@ func TestSetupCollectiveKey(t *testing.T) {
 	_, el, _ := local.GenTree(size, true)
 	client := NewLattigoSMCClient(el.List[0], "0")
 	//First the client needs to ask the parties to generate the keys.
-	err := client.SendSetupQuery(el, false)
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+	err := client.SendSetupQuery(el, false, 0, seed)
 	if err != nil {
 		t.Fatal("Could not setup the roster", err)
 	}
@@ -34,7 +35,9 @@ func TestWrite(t *testing.T) {
 	_, el, _ := local.GenTree(size, true)
 
 	client := NewLattigoSMCClient(el.List[0], "0")
-	err := client.SendSetupQuery(el, false)
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+
+	err := client.SendSetupQuery(el, false, 0, seed)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -42,7 +45,7 @@ func TestWrite(t *testing.T) {
 	<-time.After(2 * time.Second)
 	client1 := NewLattigoSMCClient(el.List[1], "1")
 
-	queryID, err := client1.SendWriteQuery(el, "", []byte("lattigood"))
+	queryID, err := client1.SendWriteQuery(el, []byte("lattigood"))
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 

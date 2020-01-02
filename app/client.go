@@ -60,10 +60,10 @@ func parseGroupToml(s string) (*onet.Roster, error) {
 }
 
 func writeQuery(el *onet.Roster, data string) error {
-	entryPoint := el.List[0] //todo why is it [0] not something else ?
+	entryPoint := el.List[0]
 	client := services.NewLattigoSMCClient(entryPoint, "0")
 
-	queryID, err := client.SendWriteQuery(el, services.QueryID(""), "")
+	queryID, err := client.SendWriteQuery(el, []byte{' '})
 	if err != nil {
 		return err
 	}

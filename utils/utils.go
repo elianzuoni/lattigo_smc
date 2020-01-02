@@ -15,6 +15,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 type LocalTest struct {
@@ -313,4 +314,24 @@ func BytesToUint64(data []byte) ([]uint64, error) {
 		return []uint64{}, err
 	}
 	return result, nil
+}
+
+//From Unlynx ( https://github.com/ldsec/unlynx )
+// SendISMOthers sends a message to all other services
+func SendISMOthers(s *onet.ServiceProcessor, el *onet.Roster, msg interface{}) error {
+	var errStrs []string
+	for _, e := range el.List {
+		if !e.ID.Equal(s.ServerIdentity().ID) {
+			log.Lvl3("Sending to", e)
+			err := s.SendRaw(e, msg)
+			if err != nil {
+				errStrs = append(errStrs, err.Error())
+			}
+		}
+	}
+	var err error
+	if len(errStrs) > 0 {
+		err = errors.New(strings.Join(errStrs, "\n"))
+	}
+	return err
 }
