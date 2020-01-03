@@ -10,11 +10,11 @@ import (
 )
 
 func TestSetupCollectiveKey(t *testing.T) {
-	log.SetDebugVisible(3)
+	log.SetDebugVisible(1)
 	log.Lvl1("Testing if setup is done properly for the service")
 	//turning off test.
 	protocols.TurnOffTest()
-	size := 5
+	size := 3
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
 	client := NewLattigoSMCClient(el.List[0], "0")
@@ -24,7 +24,6 @@ func TestSetupCollectiveKey(t *testing.T) {
 	if err != nil {
 		t.Fatal("Could not setup the roster", err)
 	}
-	<-time.After(10 * time.Second)
 
 }
 

@@ -30,6 +30,8 @@ type CollectiveKeyGenerationProtocol struct {
 	//Public key generated in the protocol
 	Pk *bfv.PublicKey
 
+	Initialized chan bool
+
 	//ChannelPublicKeyShares to send the public key shares
 	ChannelPublicKeyShares chan StructPublicKeyShare
 	//ChannelPublicKey send the key at the end.
@@ -173,7 +175,8 @@ type StructStart struct {
 }
 
 //Start This message is used to wake up the children
-type Start struct{}
+type Start struct {
+}
 
 /***USED FOR KEY GEN ***/
 

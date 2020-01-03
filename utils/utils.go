@@ -335,3 +335,13 @@ func SendISMOthers(s *onet.ServiceProcessor, el *onet.Roster, msg interface{}) e
 	}
 	return err
 }
+
+func GetParametersIdx(params *bfv.Parameters) int {
+	for i, other := range bfv.DefaultParams {
+		if params.Equals(other) {
+			return i
+		}
+	}
+
+	return -1
+}

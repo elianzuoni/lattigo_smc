@@ -32,7 +32,7 @@ func init() {
 }
 
 func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bfv.SecretKey, crp *ring.Poly) error {
-
+	defer func() { go func() { ckgp.Initialized <- true; log.Lvl1(ckgp.ServerIdentity(), "Init ok") }() }()
 	//Set up the parameters - context and the crp
 	ckgp.Params = params.Copy()
 	ckgp.Sk = sk
@@ -46,7 +46,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bf
 	//generate p0,i
 	ckgp.CKGShare = ckgp.AllocateShares()
 	ckgp.GenShare(sk.Get(), ckgp.CKG1, ckgp.CKGShare)
-
+	log.Lvl1(ckgp.ServerIdentity(), "PIIIIIING")
 	return nil
 }
 
@@ -61,15 +61,20 @@ func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 
 //Dispatch is called at each node to then run the protocol
 func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
+	<-ckgp.Initialized
 
 	log.Lvl3(ckgp.ServerIdentity(), " Dispatching ; is root = ", ckgp.IsRoot())
-	if &ckgp.CKGShare == nil {
+	if &ckgp.Sk == nil {
 		return nil
 	}
 
 	//When running a simulation we need to send a wake up message to the children so all nodes can run!
 	log.Lvl3("Sending wake up message")
-	err := ckgp.SendToChildren(&Start{})
+	tosend := Start{
+		//ParamsIdx: utils.GetParametersIdx(ckgp.Params),
+		//Poly:      ckgp.CKG1,
+	}
+	err := ckgp.SendToChildren(&tosend)
 	if err != nil {
 		log.ErrFatal(err, "Could not send wake up message ")
 	}
@@ -117,6 +122,7 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 	p := &CollectiveKeyGenerationProtocol{
 		TreeNodeInstance: n,
 		Cond:             sync.NewCond(&sync.Mutex{}),
+		Initialized:      make(chan bool),
 	}
 
 	if e := p.RegisterChannels(&p.ChannelPublicKeyShares, &p.ChannelPublicKey, &p.ChannelStart); e != nil {
