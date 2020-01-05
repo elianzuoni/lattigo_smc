@@ -29,6 +29,7 @@ func TestSetupCollectiveKey(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	protocols.TurnOffTest()
+	log.SetDebugVisible(4)
 	size := 5
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
@@ -51,7 +52,6 @@ func TestWrite(t *testing.T) {
 	}
 
 	log.Lvl2("Query id : ", queryID)
-
-	<-time.After(10 * time.Second)
+	<-time.After(10000 * time.Second)
 
 }

@@ -72,8 +72,6 @@ func (c *API) GetWriteResult(id *uuid.UUID) ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
-	//todo ask if we need to have client <-> node encryption.
-	//ideally yes
 	data := resp.Data
 
 	return data, nil

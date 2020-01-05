@@ -4,7 +4,6 @@ import (
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/network"
 	uuid "gopkg.in/satori/go.uuid.v1"
 )
 
@@ -17,9 +16,6 @@ type ServiceState struct {
 
 type ServiceResult struct {
 	Data []byte
-	//the restuls of a query encrypted with elgamal.
-	K kyber.Point
-	C kyber.Point
 }
 
 //The query for the result.
@@ -30,15 +26,12 @@ type QueryResult struct {
 
 //QueryData contains the information server side for the query.
 type QueryData struct {
-	Id           uuid.UUID
-	Roster       onet.Roster
-	ClientPubKey kyber.Point
-	Source       *network.ServerIdentity
+	Id     uuid.UUID
+	Roster onet.Roster
 
 	//what is in the query
-	Sum      bool
-	Multiply bool
-	Data     []byte
+
+	Data []byte
 }
 
 type SetupRequest struct {
@@ -49,22 +42,42 @@ type SetupRequest struct {
 	GenerateEvaluationKey bool
 }
 
-type StoreQuery struct {
-	Id uuid.UUID
-	bfv.Ciphertext
+type KeyRequest struct {
+	PublicKey     bool
+	EvaluationKey bool
+	RotationKey   bool
 }
 
+//KeyReply containing different requested keys.
+type KeyReply struct {
+	bfv.PublicKey
+	//EvaluationKey bfv.EvaluationKey
+	//RotationKeys bfv.RotationKeys
+
+}
+
+type StoreQuery struct {
+	Ciphertext bfv.Ciphertext
+	uuid.UUID
+}
+
+type Id struct {
+	uuid.UUID
+}
 type StoreReply struct {
-	Id   uuid.UUID
-	Done bool
+	Local  uuid.UUID
+	Remote uuid.UUID
+	Done   bool
 }
 
 type SumQuery struct {
-	Amt uint32
+	Id1 uuid.UUID
+	Id2 uuid.UUID
 }
 
 type MultiplyQuery struct {
-	Amt uint32
+	Id1 uuid.UUID
+	Id2 uuid.UUID
 }
 
 type SetupReply struct {

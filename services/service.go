@@ -3,7 +3,6 @@ package services
 import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -11,10 +10,7 @@ import (
 	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
-	"time"
 )
-
-//ID of query. Should be unique
 
 //Service is the service of lattigoSMC - allows to compute the different HE operations
 type Service struct {
@@ -26,51 +22,37 @@ type Service struct {
 	*bfv.PublicKey
 	*bfv.SecretKey
 	*bfv.EvaluationKey
-	Params           *bfv.Parameters
-	pubKeyGenerated  bool
-	evalKeyGenerated bool
-	DataBase         map[uuid.UUID]*bfv.Ciphertext
-	Ckgp             *protocols.CollectiveKeyGenerationProtocol
-	crpGen           ring.CRPGenerator
+	Params             *bfv.Parameters
+	pubKeyGenerated    bool
+	evalKeyGenerated   bool
+	DataBase           map[uuid.UUID]*bfv.Ciphertext
+	LocalUUID          map[uuid.UUID]uuid.UUID
+	LocalData          map[uuid.UUID]*Transaction
+	PendingTransaction chan *Transaction
+	KeyReceived        chan bool
+	Ckgp               *protocols.CollectiveKeyGenerationProtocol
+	crpGen             ring.CRPGenerator
 }
 
-//MsgTypes different messages that can be used for the service.
-type MsgTypes struct {
-	msgQueryData     network.MessageTypeID
-	msgSetupRequest  network.MessageTypeID
-	msgQuery         network.MessageTypeID
-	msgSumQuery      network.MessageTypeID
-	msgMultiplyQuery network.MessageTypeID
-	msgStoreReply    network.MessageTypeID
-}
-
-var msgTypes = MsgTypes{}
-
-func init() {
-	_, err := onet.RegisterNewService(ServiceName, NewLattigoSMCService)
-	if err != nil {
-		log.Error("Could not start the service")
-		panic(err)
-	}
-
-	//Register the messages
-	log.Lvl1("Registering messages")
-	msgTypes.msgQuery = network.RegisterMessage(&StoreQuery{})
-	msgTypes.msgQueryData = network.RegisterMessage(&QueryData{})
-	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
-	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{})
-	msgTypes.msgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{})
-
-	msgTypes.msgStoreReply = network.RegisterMessage(&StoreReply{})
+type Transaction struct {
+	uuid.UUID
+	*bfv.Plaintext
+	Pending bool
 }
 
 func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 	log.Lvl1(c.ServerIdentity(), "Starting lattigo smc service")
+
 	newLattigo := &Service{
-		ServiceProcessor: onet.NewServiceProcessor(c),
+		ServiceProcessor:   onet.NewServiceProcessor(c),
+		DataBase:           make(map[uuid.UUID]*bfv.Ciphertext),
+		LocalUUID:          make(map[uuid.UUID]uuid.UUID),
+		LocalData:          make(map[uuid.UUID]*Transaction),
+		PendingTransaction: make(chan *Transaction, 10),
+		KeyReceived:        make(chan bool),
 	}
 	//registering the handlers
-	if err := newLattigo.RegisterHandler(newLattigo.HandleQueryData); err != nil {
+	if err := newLattigo.RegisterHandler(newLattigo.HandleSendData); err != nil {
 		return nil, errors.New("Wrong handler 1:" + err.Error())
 	}
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSumQuery); err != nil {
@@ -79,9 +61,7 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 	if err := newLattigo.RegisterHandler(newLattigo.HandleMultiplyQuery); err != nil {
 		return nil, errors.New("Wrong handler 3:" + err.Error())
 	}
-	if err := newLattigo.RegisterHandler(newLattigo.HandleStoreQuery); err != nil {
-		return nil, errors.New("Wrong handler 4:" + err.Error())
-	}
+
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSetupQuery); err != nil {
 		return nil, errors.New("Wrong handler 5: " + err.Error())
 	}
@@ -89,7 +69,11 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 	c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
 	c.RegisterProcessor(newLattigo, msgTypes.msgQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgSetupRequest)
+	c.RegisterProcessor(newLattigo, msgTypes.msgKeyRequest)
+	c.RegisterProcessor(newLattigo, msgTypes.msgKeyReply)
 
+	c.RegisterProcessor(newLattigo, msgTypes.msgStoreReply)
+	go newLattigo.TransactionLoop()
 	return newLattigo, nil
 }
 
@@ -112,12 +96,15 @@ func (s *Service) Process(msg *network.Envelope) {
 		s.DataBase[id] = &tmp.Ciphertext
 		//send an acknowledgement of storing..
 		sender := msg.ServerIdentity
-		Ack := StoreReply{tmp.Id, true}
+		log.Lvl1("Id of cipher : ", tmp.UUID)
+
+		Ack := StoreReply{tmp.UUID, id, true}
 		err := s.SendRaw(sender, &Ack)
 		if err != nil {
 			log.Error("Could not send acknowledgement")
 		}
 		log.Lvl1("Sent an acknowledgement to  ", sender.String())
+
 	} else if msg.MsgType.Equal(msgTypes.msgQueryData) {
 
 	} else if msg.MsgType.Equal(msgTypes.msgMultiplyQuery) {
@@ -127,9 +114,54 @@ func (s *Service) Process(msg *network.Envelope) {
 	} else if msg.MsgType.Equal(msgTypes.msgStoreReply) {
 		log.Lvl1("Got a store reply")
 		tmp := (msg.Msg).(*StoreReply)
-		log.Lvl1("ID : ", tmp.Id, "Done :", tmp.Done)
-		//Send it back to the client.
+		log.Lvl1("ID Local , ", tmp.Local, "ID Remote: ", tmp.Remote, "Done :", tmp.Done)
+		//Update the local values.
+		s.LocalData[tmp.Local].Pending = false
+		s.LocalUUID[tmp.Local] = tmp.Remote
+		log.Lvl1("Updated value of the ciphertext. ")
 
+	} else if msg.MsgType.Equal(msgTypes.msgKeyRequest) {
+		log.Lvl1("Got a key request")
+		reply := KeyReply{}
+		tmp := (msg.Msg).(*KeyRequest)
+		if tmp.PublicKey && s.pubKeyGenerated {
+			reply.PublicKey = *bfv.NewPublicKey(s.Params)
+			reply.PublicKey.Set(s.PublicKey.Get())
+		}
+		//if tmp.EvaluationKey && s.evalKeyGenerated{
+		//	reply.EvaluationKey = *s.EvaluationKey
+		//	reply.Flags |= 2
+		//
+		//}
+		//if tmp.RotationKey{
+		//	//TODO
+		//	reply.Flags |= 4
+		//}
+
+		//Send the result.
+		err := s.SendRaw(msg.ServerIdentity, &reply)
+		if err != nil {
+			log.Error("Could not send reply : ", err)
+		}
+
+	} else if msg.MsgType.Equal(msgTypes.msgKeyReply) {
+		log.Lvl1("Got a key reply")
+		tmp := (msg.Msg).(*KeyReply)
+		if tmp.PublicKey.Get()[0] != nil {
+			s.PublicKey = &tmp.PublicKey
+			s.KeyReceived <- true
+		}
+		//if tmp.Flags & 2 > 0 {
+		//	s.EvaluationKey = &tmp.EvaluationKey
+		//}
+		//if tmp.Flags & 4 > 0 {
+		//	//todo
+		//}
+
+		log.Lvl1("Got the public keys !")
+
+	} else {
+		log.Error("Unknown message type :", msg.MsgType)
 	}
 
 }
@@ -190,151 +222,47 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 	return protocol, nil
 }
 
-//------------HANDLES-QUERIES ---------------
-func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, error) {
-	log.Lvl1(s.ServerIdentity(), "new setup request")
-	tree := request.Roster.GenerateBinaryTree()
-
-	log.Lvl1("Begin new setup with ", tree.Size(), " parties")
-	s.Roster = request.Roster
-	s.Params = bfv.DefaultParams[request.ParamsIdx]
-	s.SecretKey = bfv.NewKeyGenerator(s.Params).GenSecretKey()
-
-	s.crpGen = *dbfv.NewCRPGenerator(s.Params, request.Seed)
-
-	//Collective Key Generation
-	if !s.pubKeyGenerated {
-		//send the information to the childrens.
-		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
-
-			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
-			if err != nil {
-				return &SetupReply{-1}, err
-			}
-
-			err = s.genPublicKey(tree)
-
-			if err != nil {
-				return &SetupReply{-1}, err
-			}
-
-		}
-
-	}
-
-	if !request.GenerateEvaluationKey {
-		log.Lvl1("Did not request for evaluation key. returning..")
-		return &SetupReply{1}, nil
-
-	}
-	//Eval key generation
-	if !s.evalKeyGenerated {
-		err := s.genEvalKey(tree)
-		if err != nil {
-			return &SetupReply{-1}, err
-		}
-	}
-
-	log.Lvl1(s.ServerIdentity(), "out ")
-	return &SetupReply{1}, nil
-
-}
-
-func (s *Service) genEvalKey(tree *onet.Tree) error {
-	//TODO
-	log.Lvl1("Starting relinearization key protocol")
-	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
-	protocol, err := s.NewProtocol(tni, nil)
-	if err != nil {
-		panic(err)
-	}
-	rkg := protocol.(*protocols.RelinearizationKeyProtocol)
-	err = s.RegisterProtocolInstance(protocol)
-	if err != nil {
-		panic(err)
-	}
-	//inject the parameters.
-	rkg.Sk = *s.SecretKey
-	rkg.Params = *bfv.DefaultParams[0]
-	//rkg.Crp = nil
-	return nil
-}
-
-func (s *Service) genPublicKey(tree *onet.Tree) error {
-	log.Lvl1(s.ServerIdentity(), "Starting collective key generation!")
-
-	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveKeyGenerationProtocolName)
-	protocol, err := s.NewProtocol(tni, nil)
-	if err != nil {
-		panic(err)
-	}
-	err = s.RegisterProtocolInstance(protocol)
-	if err != nil {
-		log.ErrFatal(err, "Could not register protocol instance")
-	}
-
-	ckgp := protocol.(*protocols.CollectiveKeyGenerationProtocol)
-
-	<-time.After(1 * time.Second) //dirty hack...
-
-	//if ckgp.IsRoot(){
-	err = ckgp.Start()
-	if err != nil {
-		log.ErrFatal(err, "Could not start collective key generation protocol")
-	}
-	go ckgp.Dispatch()
-	//}
-
-	//we should wait until the above is done.
-	log.Lvl1(ckgp.ServerIdentity(), "Waiting for the protocol to be finished :x")
-	ckgp.Wait()
-	s.SecretKey = ckgp.Sk
-	s.PublicKey = ckgp.Pk
-	s.pubKeyGenerated = true
-	log.Lvl1(s.ServerIdentity(), " got public key!")
-	return nil
-}
-
-//HandleQueryData is called by the service when the client makes a request to write some data.
-func (s *Service) HandleQueryData(query *QueryData) (network.Message, error) {
+//HandleSendData is called by the service when the client makes a request to write some data.
+func (s *Service) HandleSendData(query *QueryData) (network.Message, error) {
 	log.Lvl1(s.ServerIdentity(), " received query data ")
 
 	data := query.Data
+	tree := query.Roster.GenerateBinaryTree()
+
 	if !s.pubKeyGenerated {
 		//here we can not yet do the answer
 		return nil, errors.New("Key has not yet been generated.")
 	}
-	params := bfv.DefaultParams[0]
-	encoder := bfv.NewEncoder(params)
+	if s.PublicKey == nil {
+		log.Lvl1("Querying public key to the server")
+
+		keyreq := KeyRequest{PublicKey: true}
+		err := s.SendRaw(tree.Root.ServerIdentity, &keyreq)
+		if err != nil {
+			log.Error("Could not send key request to the root : ", err)
+			return nil, err
+		}
+
+	}
+
+	encoder := bfv.NewEncoder(s.Params)
 	coeffs, err := utils.BytesToUint64(data)
 	if err != nil {
 		return nil, err
 	}
-	pt := bfv.NewPlaintext(params)
+	pt := bfv.NewPlaintext(s.Params)
 	encoder.EncodeUint(coeffs, pt)
-	encryptorPk := bfv.NewEncryptorFromPk(params, s.PublicKey)
-	cipher := encryptorPk.EncryptNew(pt)
-	//now we can send this to the root
-	tree := query.Roster.GenerateBinaryTree()
 
-	err = s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{uuid.UUID{}, *cipher})
-	if err != nil {
-		log.Error("could not send cipher to the root. ")
+	id := uuid.NewV1()
+	tx := Transaction{
+		UUID:      id,
+		Plaintext: pt,
+		Pending:   true,
 	}
-	return &ServiceState{uuid.UUID{}, true}, nil
-}
+	s.LocalData[id] = &tx
+	s.PendingTransaction <- &tx
 
-func (s *Service) HandleStoreQuery(storeQuery *StoreQuery) (network.Message, error) {
-	log.Lvl1(s.ServerIdentity(), ": got a query to store data")
-	return nil, nil
-}
-
-func (s *Service) HandleSumQuery(sumQuery *SumQuery) (network.Message, error) {
-	return nil, nil
-}
-
-func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, error) {
-	return nil, nil
+	return &ServiceState{id, true}, nil
 }
 
 //Setup is done when the processes join the network. Need to generate Collective public key, Collective relin key,
@@ -368,4 +296,40 @@ func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
 	}(name)
 
 	return protocol, nil
+}
+
+func (s *Service) TransactionLoop() {
+	<-s.KeyReceived
+	log.Lvl1("Key received starting transaction loop.")
+	tree := s.Roster.GenerateBinaryTree()
+	//Start the loop only when the public key is done
+	for {
+		select {
+		case tx := <-s.PendingTransaction:
+
+			pt := tx.Plaintext
+			//Send it to the server
+			encryptorPk := bfv.NewEncryptorFromPk(s.Params, s.PublicKey)
+			cipher := encryptorPk.EncryptNew(pt)
+			//now we can send this to the root
+
+			err := s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{*cipher, tx.UUID})
+			if err != nil {
+				log.Error("could not send cipher to the root. ")
+			}
+
+			break
+
+		}
+	}
+}
+
+//TODO Method below
+
+func (s *Service) HandleSumQuery(sumQuery *SumQuery) (network.Message, error) {
+	return nil, nil
+}
+
+func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, error) {
+	return nil, nil
 }
