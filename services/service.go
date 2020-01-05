@@ -66,6 +66,10 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		return nil, errors.New("Wrong handler 5: " + err.Error())
 	}
 
+	if err := newLattigo.RegisterHandler(newLattigo.HandleRemoteIDQuery); err != nil {
+		return nil, errors.New("wrong handler 6: " + err.Error())
+	}
+
 	c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
 	c.RegisterProcessor(newLattigo, msgTypes.msgQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgSetupRequest)
@@ -322,6 +326,26 @@ func (s *Service) TransactionLoop() {
 
 		}
 	}
+}
+
+func (s *Service) HandleRemoteIDQuery(id *QueryRemoteID) (network.Message, error) {
+	log.Lvl1("Received a query for remote id of : ", id.ID)
+	remote, ok := s.LocalUUID[id.ID]
+	if !ok {
+		//Note finished
+		local, ok := s.LocalData[id.ID]
+		if !ok {
+			return &RemoteID{id.ID, uuid.UUID{}, true}, nil
+		}
+
+		if local.Pending {
+			return &RemoteID{id.ID, uuid.UUID{}, true}, nil
+		}
+
+	}
+
+	return &RemoteID{id.ID, remote, false}, nil
+
 }
 
 //TODO Method below

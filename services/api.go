@@ -65,14 +65,15 @@ func (c *API) SendMultiplyQuery() {
 
 }
 
-func (c *API) GetWriteResult(id *uuid.UUID) ([]byte, error) {
+func (c *API) GetRemoteId(id *uuid.UUID) (uuid.UUID, error) {
 	log.Lvl1(c, "request result of write :", id)
-	resp := ServiceResult{}
-	err := c.SendProtobuf(c.entryPoint, &QueryResult{*id, c.public}, &resp)
+	resp := RemoteID{}
+	err := c.SendProtobuf(c.entryPoint, &QueryRemoteID{*id, true}, &resp)
 	if err != nil {
-		return []byte{}, err
+		return uuid.UUID{}, err
 	}
-	data := resp.Data
+
+	data := resp.Remote
 
 	return data, nil
 }

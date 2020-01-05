@@ -2,7 +2,6 @@ package services
 
 import (
 	"github.com/ldsec/lattigo/bfv"
-	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/onet/v3"
 	uuid "gopkg.in/satori/go.uuid.v1"
 )
@@ -14,14 +13,16 @@ type ServiceState struct {
 	Pending bool
 }
 
-type ServiceResult struct {
-	Data []byte
+//The query for the result.
+type QueryRemoteID struct {
+	ID    uuid.UUID
+	Local bool
 }
 
-//The query for the result.
-type QueryResult struct {
-	Id     uuid.UUID
-	public kyber.Point
+type RemoteID struct {
+	Local   uuid.UUID
+	Remote  uuid.UUID
+	Pending bool
 }
 
 //QueryData contains the information server side for the query.

@@ -67,7 +67,7 @@ func writeQuery(el *onet.Roster, data string) error {
 	if err != nil {
 		return err
 	}
-	result, err := client.GetWriteResult(queryID)
+	result, err := client.GetRemoteId(queryID)
 
 	return nil
 }

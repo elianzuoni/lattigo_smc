@@ -29,7 +29,7 @@ func TestSetupCollectiveKey(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	protocols.TurnOffTest()
-	log.SetDebugVisible(4)
+	log.SetDebugVisible(1)
 	size := 5
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
@@ -51,7 +51,15 @@ func TestWrite(t *testing.T) {
 
 	}
 
-	log.Lvl2("Query id : ", queryID)
-	<-time.After(10000 * time.Second)
+	log.Lvl2("Query Local Id : ", queryID)
+	<-time.After(500 * time.Millisecond)
+	log.Lvl1("Querying for remote ID")
+
+	remoteID, err := client1.GetRemoteId(queryID)
+	if err != nil {
+		t.Fatal("Could not get remote ID : ", err)
+	}
+
+	log.Lvl1("Remote ID is : ", remoteID)
 
 }
