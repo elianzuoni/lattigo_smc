@@ -1,7 +1,6 @@
 package services
 
 import (
-	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/kyber/v3/util/key"
 	"go.dedis.ch/onet/v3"
@@ -11,6 +10,7 @@ import (
 	"lattigo-smc/utils"
 )
 
+//API represents a client
 type API struct {
 	*onet.Client
 	clientID   string
@@ -21,6 +21,7 @@ type API struct {
 	private kyber.Scalar
 }
 
+//NewLattigoSMCClient creates a new client for lattigo-smc
 func NewLattigoSMCClient(entryPoint *network.ServerIdentity, clientID string) *API {
 	keys := key.NewKeyPair(utils.SUITE)
 	client := &API{
@@ -34,18 +35,22 @@ func NewLattigoSMCClient(entryPoint *network.ServerIdentity, clientID string) *A
 	return client
 }
 
+//SendSumQuery sends a query to sum up to ciphertext.
 func (c *API) SendSumQuery() {
 
 }
 
-func (c *API) String() string {
-	return "[Client " + c.clientID + "]"
+//SendMultiplyQuery sends a query to multiply 2 ciphertext.
+func (c *API) SendMultiplyQuery() {
+
 }
 
+//SendWriteQuery send a query to write the data in the array. returns the UUID of the corresponding ciphertext.
 func (c *API) SendWriteQuery(roster *onet.Roster, data []byte) (*uuid.UUID, error) {
 
 	result := ServiceState{}
 	query := QueryData{}
+	//query.UUID = uuid.UUID{}
 	query.Data = data
 	query.Roster = *roster
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
@@ -62,10 +67,7 @@ func (c *API) SendWriteQuery(roster *onet.Roster, data []byte) (*uuid.UUID, erro
 	return &id, nil
 }
 
-func (c *API) SendMultiplyQuery() {
-
-}
-
+//SendKeyRequest sends a request for the server to retrieve the keys needed.
 func (c *API) SendKeyRequest(publickey, evaluationkey, rotationkey bool) (int, error) {
 	kr := KeyRequest{
 		PublicKey:     publickey,
@@ -79,6 +81,7 @@ func (c *API) SendKeyRequest(publickey, evaluationkey, rotationkey bool) (int, e
 	return resp.Done, err
 }
 
+//SendSetupQuery sends a query for the roster to set up to generate the keys needed.
 func (c *API) SendSetupQuery(entities *onet.Roster, generateEvaluationKey bool, paramsIdx uint64, seed []byte) error {
 	log.Lvl1(c, "Sending a setup query to the roster")
 
@@ -94,22 +97,10 @@ func (c *API) SendSetupQuery(entities *onet.Roster, generateEvaluationKey bool, 
 
 }
 
-type QueryPlaintext struct {
-	uuid.UUID
-	Innermessage bool
-	PublicKey    bfv.PublicKey
-	Ciphertext   bfv.Ciphertext
-	Origin       *network.ServerIdentity
-}
-
-type ReplyPlaintext struct {
-	uuid.UUID
-	Ciphertext bfv.Ciphertext
-}
-
+//GetPlaintext send a request to retrieve the plaintext of the ciphertetx encrypted under id
 func (c *API) GetPlaintext(roster *onet.Roster, id *uuid.UUID) ([]byte, error) {
-	query := QueryPlaintext{UUID: *id, Innermessage: true}
-	response := QueryData{}
+	query := QueryPlaintext{UUID: *id}
+	response := PlaintextReply{}
 	err := c.SendProtobuf(c.entryPoint, &query, &response)
 	if err != nil {
 		log.Lvl1("Error while sending : ", err)
@@ -118,4 +109,9 @@ func (c *API) GetPlaintext(roster *onet.Roster, id *uuid.UUID) ([]byte, error) {
 
 	data := response.Data
 	return data, nil
+}
+
+//String returns the string representation of the client
+func (c *API) String() string {
+	return "[Client " + c.clientID + "]"
 }

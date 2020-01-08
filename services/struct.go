@@ -3,6 +3,7 @@ package services
 import (
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
+	"go.dedis.ch/onet/v3/network"
 	uuid "gopkg.in/satori/go.uuid.v1"
 )
 
@@ -13,12 +14,6 @@ type ServiceState struct {
 	Pending bool
 }
 
-//The query for the result.
-type QueryRemoteID struct {
-	ID    uuid.UUID
-	Local bool
-}
-
 type RemoteID struct {
 	Local   uuid.UUID
 	Remote  uuid.UUID
@@ -27,12 +22,15 @@ type RemoteID struct {
 
 //QueryData contains the information server side for the query.
 type QueryData struct {
-	Id     uuid.UUID
 	Roster onet.Roster
-
 	//what is in the query
-
 	Data []byte
+	UUID uuid.UUID
+}
+
+type PlaintextReply struct {
+	Data []byte
+	uuid.UUID
 }
 
 type SetupRequest struct {
@@ -68,16 +66,44 @@ type StoreReply struct {
 	Done   bool
 }
 
+//Sum UUID with Other
 type SumQuery struct {
-	Id1 uuid.UUID
-	Id2 uuid.UUID
+	uuid.UUID
+	Other uuid.UUID
 }
 
+//Multiply UUID with other
 type MultiplyQuery struct {
-	Id1 uuid.UUID
-	Id2 uuid.UUID
+	uuid.UUID
+	Other uuid.UUID
 }
 
+//RefreshQuery query for UUID to be refreshed.
+type RefreshQuery struct {
+	uuid.UUID
+}
+
+//RelinQuery query for UUID to be relinearized
+type RelinQuery struct {
+	uuid.UUID
+}
+
+//SetupReply reply of the setup. if < 0 then it failed.
 type SetupReply struct {
 	Done int
+}
+
+//TODO discuss issue - its impossible to send this structure on the network. it says its BinaryMarshaller compliant but it only serializes the UUID nothing else.
+//QueryPlaintext query for a ciphertext represented by UUID to be switched under publickey
+type QueryPlaintext struct {
+	PublicKey *bfv.PublicKey
+	bfv.Ciphertext
+	network.ServerIdentity
+	uuid.UUID
+}
+
+//ReplyPlaintext contains the ciphertext switched under the key requested.
+type ReplyPlaintext struct {
+	uuid.UUID
+	Ciphertext bfv.Ciphertext
 }

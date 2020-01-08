@@ -64,7 +64,6 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 }
 
 func (s *Service) genEvalKey(tree *onet.Tree) error {
-	//TODO
 	log.Lvl1("Starting relinearization key protocol")
 	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
 	protocol, err := s.NewProtocol(tni, nil)
@@ -76,10 +75,19 @@ func (s *Service) genEvalKey(tree *onet.Tree) error {
 	if err != nil {
 		panic(err)
 	}
-	//inject the parameters.
-	rkg.Sk = *s.SecretKey
-	rkg.Params = *bfv.DefaultParams[0]
-	//rkg.Crp = nil
+	<-time.After(1 * time.Second)
+	err = rkg.Start()
+	if err != nil {
+		return err
+	}
+
+	go rkg.Dispatch()
+
+	rkg.Wait()
+	log.Lvl1("Finished relin protocol")
+
+	s.EvaluationKey = rkg.EvaluationKey
+	s.evalKeyGenerated = true
 	return nil
 }
 
@@ -115,6 +123,34 @@ func (s *Service) genPublicKey(tree *onet.Tree) error {
 	s.MasterPublicKey = ckgp.Pk
 	s.pubKeyGenerated = true
 	log.Lvl1(s.ServerIdentity(), " got public key!")
+	return nil
+}
+
+func (s *Service) genRotKey(tree *onet.Tree, k int, rotIdx int) error {
+	log.Lvl1("Starting rotation key protocol")
+	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RotationProtocolName)
+	protocol, err := s.NewProtocol(tni, nil)
+	if err != nil {
+		panic(err)
+	}
+	rotkeygen := protocol.(*protocols.RotationKeyProtocol)
+	err = s.RegisterProtocolInstance(protocol)
+	if err != nil {
+		panic(err)
+	}
+	<-time.After(1 * time.Second)
+	err = rotkeygen.Start()
+	if err != nil {
+		return err
+	}
+
+	go rotkeygen.Dispatch()
+
+	rotkeygen.Wait()
+	log.Lvl1("Finished relin protocol")
+
+	s.RotationKey[rotIdx] = rotkeygen.RotKey
+	s.rotKeyGenerated[rotIdx] = true
 	return nil
 }
 

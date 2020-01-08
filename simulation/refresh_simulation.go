@@ -95,7 +95,7 @@ func NewRefreshSimul(tni *onet.TreeNodeInstance, sim *RefreshSimulation) (onet.P
 		return nil, err
 	}
 
-	refresh := protocol.(*protocols.RefreshKeyProtocol)
+	refresh := protocol.(*protocols.RefreshProtocol)
 	err = refresh.Init(*sim.Params, sim.lt.SecretKeyShares0[tni.ServerIdentity().ID], *Cipher, *sim.lt.Crs)
 	return refresh, err
 }
@@ -116,7 +116,7 @@ func (s *RefreshSimulation) Run(config *onet.SimulationConfig) error {
 		}
 
 		round := monitor.NewTimeMeasure("round")
-		rp := pi.(*protocols.RefreshKeyProtocol)
+		rp := pi.(*protocols.RefreshProtocol)
 		now := time.Now()
 		err = rp.Start()
 		defer rp.Done()

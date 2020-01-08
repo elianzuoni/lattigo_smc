@@ -8,59 +8,6 @@ import (
 	"github.com/ldsec/lattigo/ring"
 )
 
-/*
-//MarshalBinary creates a data array from the switching parameters sp
-func (sp SwitchingParameters) MarshalBinary() (data []byte, err error) {
-	var buffer strings.Builder
-
-	data = make([]byte, 0)
-	param, err := sp.Params.MarshalBinary()
-	lenParam := len(param)
-	data = append(data, byte(lenParam))
-	buffer.WriteByte(byte(lenParam))
-	buffer.Write(param)
-	//add the secretkeys...
-	hashes := []byte(sp.SkInputHash + "," + sp.SkOutputHash)
-	buffer.WriteByte(byte(len(hashes)))
-	buffer.Write(hashes)
-
-	//add the cipher..
-	cipher, err := sp.Ciphertext.MarshalBinary()
-
-	buffer.Write(cipher)
-
-	return []byte(buffer.String()), nil
-
-}
-
-//UnmarshalBinary loads the data into the switching parameters.
-func (sp *SwitchingParameters) UnmarshalBinary(data []byte) (err error) {
-	ptr := data[0]
-	byteParam := data[1 : ptr+1]
-	err = sp.Params.UnmarshalBinary(byteParam)
-
-	//then get the hashes..
-	ptr++
-	lenHashes := data[ptr]
-	hashes := data[ptr+1 : ptr+lenHashes+1]
-	ptr += lenHashes + 1
-	xs := strings.Split(string(hashes), ",")
-	if len(xs) != 2 {
-		return errors.New("Error on hashes")
-
-	}
-	sp.SkInputHash = xs[0]
-	sp.SkOutputHash = xs[1]
-
-	sp.Ciphertext = *new(bfv.Ciphertext)
-	err = sp.Ciphertext.UnmarshalBinary(data[ptr:])
-	if err != nil {
-		return err
-	}
-	return nil
-
-}
-*/
 //MarshalBinary creates a data array from the CRP
 func (crp *CRP) MarshalBinary() ([]byte, error) {
 	if len(crp.A) == 0 {

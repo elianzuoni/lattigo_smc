@@ -23,6 +23,7 @@ func init() {
 	_, _ = onet.GlobalProtocolRegister(CollectivePublicKeySwitchingProtocolName, NewCollectivePublicKeySwitching)
 }
 
+//Init initializes the protocol and prepares the variable. Should be called before dispatch
 func (pcks *CollectivePublicKeySwitchingProtocol) Init(params bfv.Parameters, publicKey bfv.PublicKey, sk bfv.SecretKey, ciphertext *bfv.Ciphertext) error {
 	pcks.Params = params
 	pcks.Sk = sk
@@ -53,8 +54,6 @@ func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 
 	return p, nil
 }
-
-/*********ONET HANDLERS*************/
 
 //Start starts the protocol only at root
 func (pcks *CollectivePublicKeySwitchingProtocol) Start() error {
@@ -100,6 +99,7 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Dispatch() error {
 
 }
 
+//Wait blocks until protocol completes
 func (pcks *CollectivePublicKeySwitchingProtocol) Wait() {
 	pcks.Cond.L.Lock()
 	pcks.Cond.Wait()

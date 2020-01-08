@@ -28,6 +28,7 @@ func init() {
 	_, _ = onet.GlobalProtocolRegister(RelinearizationKeyProtocolName, NewRelinearizationKey)
 }
 
+//Init initializes the variable for the protocol. Should be called before dispatch
 func (rkp *RelinearizationKeyProtocol) Init(params bfv.Parameters, sk bfv.SecretKey, crp []*ring.Poly) error {
 	rkp.Params = params
 	rkp.Sk = sk
@@ -146,6 +147,7 @@ func (rlp *RelinearizationKeyProtocol) Dispatch() error {
 	return nil
 }
 
+//Wait blocks until the protocol completes.
 func (rlp *RelinearizationKeyProtocol) Wait() {
 	rlp.Cond.L.Lock()
 	rlp.Cond.Wait()

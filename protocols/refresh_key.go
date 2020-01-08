@@ -21,7 +21,8 @@ func init() {
 
 }
 
-func (rkp *RefreshKeyProtocol) Init(params bfv.Parameters, sk *bfv.SecretKey, ciphertext bfv.Ciphertext, crs ring.Poly) error {
+//Init initializes the variables for the protocol. Should be called before the dispatch
+func (rkp *RefreshProtocol) Init(params bfv.Parameters, sk *bfv.SecretKey, ciphertext bfv.Ciphertext, crs ring.Poly) error {
 	rkp.Sk = *sk
 	rkp.Ciphertext = ciphertext
 	rkp.FinalCiphertext = *bfv.NewCiphertext(&params, ciphertext.Degree())
@@ -36,11 +37,11 @@ func (rkp *RefreshKeyProtocol) Init(params bfv.Parameters, sk *bfv.SecretKey, ci
 	return nil
 }
 
-//NewCollectiveKeyGeneration is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
+//NewCollectiveRefresh is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
 func NewCollectiveRefresh(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	log.Lvl4("NewCollectiveRefresh called")
 
-	p := &RefreshKeyProtocol{
+	p := &RefreshProtocol{
 		TreeNodeInstance: n,
 		Cond:             sync.NewCond(&sync.Mutex{}),
 	}
@@ -52,16 +53,15 @@ func NewCollectiveRefresh(n *onet.TreeNodeInstance) (onet.ProtocolInstance, erro
 	return p, nil
 }
 
-/****************ONET HANDLERS ******************/
 //Start starts the protocol only at root
-func (rkp *RefreshKeyProtocol) Start() error {
+func (rkp *RefreshProtocol) Start() error {
 	log.Lvl2(rkp.ServerIdentity(), "Started refresh key protocol")
 
 	return nil
 }
 
 //Dispatch is called at each node to then run the protocol
-func (rkp *RefreshKeyProtocol) Dispatch() error {
+func (rkp *RefreshProtocol) Dispatch() error {
 
 	log.Lvl2(rkp.ServerIdentity(), " Dispatching ; is root = ", rkp.IsRoot())
 	defer rkp.Cond.Broadcast()
@@ -102,7 +102,8 @@ func (rkp *RefreshKeyProtocol) Dispatch() error {
 	return nil
 }
 
-func (rkp *RefreshKeyProtocol) Wait() {
+//Wait block until the protocol completes.
+func (rkp *RefreshProtocol) Wait() {
 	rkp.Cond.L.Lock()
 	rkp.Cond.Wait()
 	rkp.Cond.L.Unlock()

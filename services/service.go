@@ -30,12 +30,14 @@ type Service struct {
 
 	pubKeyGenerated     bool
 	evalKeyGenerated    bool
+	rotKeyGenerated     []bool
 	DataBase            map[uuid.UUID]*bfv.Ciphertext
 	LocalUUID           map[uuid.UUID]chan uuid.UUID
 	Ckgp                *protocols.CollectiveKeyGenerationProtocol
 	crpGen              ring.CRPGenerator
 	SwitchedCiphertext  map[uuid.UUID]chan bfv.Ciphertext
 	SwitchingParameters chan SwitchingParamters
+	RotationKey         []bfv.RotationKeys
 }
 
 type SwitchingParamters struct {
@@ -61,6 +63,8 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		//KeyReceived:        make(chan bool),
 		SwitchedCiphertext:  make(map[uuid.UUID]chan bfv.Ciphertext),
 		SwitchingParameters: make(chan SwitchingParamters, 10),
+		RotationKey:         make([]bfv.RotationKeys, 3),
+		rotKeyGenerated:     make([]bool, 3),
 	}
 	//registering the handlers
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSendData); err != nil {
@@ -154,7 +158,7 @@ func (s *Service) Process(msg *network.Envelope) {
 		//
 		//}
 		//if tmp.RotationKey{
-		//	//TODO
+		//
 		//	reply.Flags |= 4
 		//}
 
@@ -183,6 +187,42 @@ func (s *Service) Process(msg *network.Envelope) {
 		log.Lvl1("Got a ciphertext switched")
 		tmp := (msg.Msg).(*ReplyPlaintext)
 		s.SwitchedCiphertext[tmp.UUID] <- tmp.Ciphertext
+	} else if msg.MsgType.Equal(msgTypes.msgQueryPlaintext) {
+		log.Lvl1("Got a query for ciphertext switching ")
+		//it comes from either the initiator or the root.
+		tree := s.Roster.GenerateBinaryTree()
+		query := (msg.Msg).(*QueryPlaintext)
+		if s.ServerIdentity().Equal(tree.Root.ServerIdentity) {
+			//The root has to propagate to all members the ciphertext and the public key...
+			//Get the ciphertext.
+			cipher := s.DataBase[query.UUID]
+			query.Ciphertext = *cipher
+			//Send to all
+
+			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, query)
+			if err != nil {
+				return
+			}
+			//Start the key switch
+			reply, err := s.switchKeys(tree, &query.ServerIdentity, query.UUID)
+			if err != nil {
+				log.Error("Could not switch key : ", err)
+			}
+
+			//reply to the origin of the queries
+			err = s.SendRaw(&query.ServerIdentity, reply)
+			if err != nil {
+				log.Error("Could not send reply to the server :", err)
+			}
+		} else {
+			//Initialize all of the values and return
+			params := SwitchingParamters{
+				PublicKey:  *query.PublicKey,
+				Ciphertext: query.Ciphertext,
+			}
+			s.SwitchingParameters <- params
+
+		}
 	} else {
 		log.Error("Unknown message type :", msg.MsgType)
 	}
@@ -250,12 +290,56 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		if err != nil {
 			return nil, err
 		}
-		if tn.IsRoot() {
-			//has to generate the CRP for all other nodes.
+		rkp := (protocol).(*protocols.RelinearizationKeyProtocol)
+		modulus := s.Params.Moduli.Qi
+		crp := make([]*ring.Poly, len(modulus))
+		for j := 0; j < len(modulus); j++ {
+			crp[j] = s.crpGen.ClockNew()
+		}
+		err = rkp.Init(*s.Params, *s.SecretKey, crp)
+		if err != nil {
+			log.Error("Error while generating Relin key : ", err)
+		}
+
+		if !tn.IsRoot() {
+			go func() {
+
+				log.Lvl1(s.ServerIdentity(), "Waiting for the protocol to be finished...(Relin Protocol)")
+				rkp.Wait()
+				log.Lvl1(tn.ServerIdentity(), " : done with collective relinkey gen ! ")
+
+				s.evalKeyGenerated = true
+			}()
+
+		}
+	case protocols.RotationProtocolName:
+		protocol, err = protocols.NewRotationKey(tn)
+		if err != nil {
+			log.Error("Could not start rotation :", err)
+
+		}
+		rotkey := (protocol).(*protocols.RotationKeyProtocol)
+		modulus := s.Params.Moduli.Qi
+		crp := make([]*ring.Poly, len(modulus))
+		for j := 0; j < len(modulus); j++ {
+			crp[j] = s.crpGen.ClockNew()
+		}
+		var rotIdx int
+		var K uint64
+		err = rotkey.Init(s.Params, *s.SecretKey, bfv.Rotation(rotIdx), K, crp)
+		if err != nil {
+			log.Error("Could not start rotation : ", err)
 
 		}
 
+		if !tn.IsRoot() {
+			go func() {
+				rotkey.Wait()
+				s.rotKeyGenerated[rotIdx] = true
+			}()
+		}
 	}
+
 	return protocol, nil
 }
 
@@ -265,75 +349,35 @@ func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, 
 	//Initiate the CKS
 	log.Lvl1(s.ServerIdentity(), "got request for plaintext of id : ", query.UUID)
 	tree := s.GenerateBinaryTree()
-	inner := query.Innermessage
-	if query.Innermessage {
-		//From the client Send it to all the other peers so they can initate the PCKS
-		query.Innermessage = false
-		query.PublicKey = *s.PublicKey
-		query.Origin = s.ServerIdentity()
 
-		err := s.SendRaw(tree.Root.ServerIdentity, query)
+	//From the client Send it to all the other peers so they can initate the PCKS
+	query.PublicKey = bfv.NewPublicKey(s.Params)
+	query.PublicKey.Set(s.PublicKey.Get())
 
-		if err != nil {
-			log.Error("Could not send the initation message to all other peers")
-			return nil, err
-		}
+	query.ServerIdentity = *s.ServerIdentity()
 
+	err := s.SendRaw(tree.Root.ServerIdentity, query)
+
+	if err != nil {
+		log.Error("Could not send the initation message to the root.")
+		return nil, err
 	}
 
-	//it comes from either the initiator or the root.
-	if s.ServerIdentity().Equal(tree.Root.ServerIdentity) {
-		//The root has to propagate to all members the ciphertext and the public key...
-		//Get the ciphertext.
-		cipher := s.DataBase[query.UUID]
-		query.Ciphertext = *cipher
-		//Send to all
+	//Wait for CKS to complete
 
-		err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, &query)
-		if err != nil {
-			return nil, err
-		}
-		//Start the key switch
-		reply, err := s.switchKeys(tree, query.Origin, query.UUID)
-		if err != nil {
-			log.Error("Could not switch key : ", err)
-		}
-		return reply, err
+	cipher := <-s.SwitchedCiphertext[query.UUID]
 
-	} else if !inner {
-		//Initialize all of the values and return
-		params := SwitchingParamters{
-			PublicKey:  query.PublicKey,
-			Ciphertext: query.Ciphertext,
-		}
-		s.SwitchingParameters <- params
-		return &SetupReply{1}, nil
+	plain := s.Decryptor.DecryptNew(&cipher)
 
-	} else {
-		//Wait for CKS to complete
-
-		cipher := <-s.SwitchedCiphertext[query.UUID]
-
-		plain := s.Decryptor.DecryptNew(&cipher)
-
-		data64 := s.Encoder.DecodeUint(plain)
-		bytes, err := utils.Uint64ToBytes(data64)
-		if err != nil {
-			log.Error("Could not retrieve byte array : ", err)
-		}
-		response := &QueryData{Id: query.UUID, Data: bytes}
-
-		return response, nil
+	data64 := s.Encoder.DecodeUint(plain)
+	bytes, err := utils.Uint64ToBytes(data64)
+	if err != nil {
+		log.Error("Could not retrieve byte array : ", err)
 	}
+	response := &PlaintextReply{UUID: query.UUID, Data: bytes}
 
-}
+	return response, nil
 
-func (s *Service) HandleSumQuery(sumQuery *SumQuery) (network.Message, error) {
-	return nil, nil
-}
-
-func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, error) {
-	return nil, nil
 }
 
 /*************UNUSED FOR NOW ******************/

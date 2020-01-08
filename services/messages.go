@@ -1,3 +1,4 @@
+//Contains the various messages used by the service and client architecture.
 package services
 
 import (

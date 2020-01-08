@@ -31,6 +31,7 @@ func init() {
 
 }
 
+//Init initialize the variables needed for the protocol. Should be done before dispatching
 func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bfv.SecretKey, crp *ring.Poly) error {
 	//Set up the parameters - context and the crp
 	ckgp.Params = params.Copy()
@@ -105,13 +106,13 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	return nil
 }
 
+//Wait blocks until the dispatch is finished
 func (ckgp *CollectiveKeyGenerationProtocol) Wait() {
 	ckgp.Cond.L.Lock()
 	ckgp.Cond.Wait()
 	ckgp.Cond.L.Unlock()
 }
 
-/********PROTOCOL****************/
 //NewCollectiveKeyGeneration is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
 func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	log.Lvl3("NewCollectiveKeyGen called")

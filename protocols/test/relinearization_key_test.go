@@ -27,6 +27,7 @@ func TestRelinearizationKeyLocal(t *testing.T) {
 	for _, params := range paramsSets {
 		ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 		crpGenerator := ring.NewCRPGenerator(nil, ctxPQ)
+
 		modulus := params.Moduli.Qi
 		crp := make([]*ring.Poly, len(modulus))
 		for j := 0; j < len(modulus); j++ {

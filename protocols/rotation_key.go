@@ -16,6 +16,7 @@ func init() {
 	_, _ = onet.GlobalProtocolRegister(RotationProtocolName, NewRotationKey)
 }
 
+//Init initializes the variable for the protocol. Should be called before dispatch
 func (rkp *RotationKeyProtocol) Init(params *bfv.Parameters, sk bfv.SecretKey, rottype bfv.Rotation, k uint64, crp []*ring.Poly) error {
 	rkp.Params = *params
 	rkp.Crp = crp
@@ -29,6 +30,7 @@ func (rkp *RotationKeyProtocol) Init(params *bfv.Parameters, sk bfv.SecretKey, r
 	return nil
 }
 
+//NewRotationKey creates a new rotation key and register the channels
 func NewRotationKey(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	//prepare the protocol
 	p := &RotationKeyProtocol{
@@ -42,11 +44,13 @@ func NewRotationKey(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	return p, nil
 }
 
+//Start starts the protocol at the root
 func (rkp *RotationKeyProtocol) Start() error {
 	log.Lvl3("Starting new rotation key protocol ! ")
 	return nil
 }
 
+//Dispatch runs the protocol
 func (rkp *RotationKeyProtocol) Dispatch() error {
 	err := rkp.SendToChildren(&Start{})
 	if err != nil {
@@ -82,6 +86,7 @@ func (rkp *RotationKeyProtocol) Dispatch() error {
 
 }
 
+//Wait blocks until the protocol completes
 func (rkp *RotationKeyProtocol) Wait() {
 	rkp.Cond.L.Lock()
 	rkp.Cond.Wait()

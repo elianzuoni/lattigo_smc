@@ -28,6 +28,7 @@ func init() {
 	}
 }
 
+//Init initialize the variables needed for the protocol. Should be called before dispatch
 func (cks *CollectiveKeySwitchingProtocol) Init(params *bfv.Parameters, skInput *bfv.SecretKey, skOutput *bfv.SecretKey, ciphertext *bfv.Ciphertext) error {
 	sp := SwitchingParameters{}
 	sp.Params = params.Copy()
@@ -58,7 +59,6 @@ func NewCollectiveKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolInstance,
 	return p, nil
 }
 
-/************ONET HANDLERS ********************/
 //Start starts the protocol only at root
 func (cks *CollectiveKeySwitchingProtocol) Start() error {
 	log.Lvl4(cks.ServerIdentity(), "Starting collective key switching for key : ", cks.Params)
@@ -117,6 +117,7 @@ func (cks *CollectiveKeySwitchingProtocol) Dispatch() error {
 
 }
 
+//Wait blocks until the protocol completes.
 func (cks *CollectiveKeySwitchingProtocol) Wait() {
 	cks.Cond.L.Lock()
 	cks.Cond.Wait()

@@ -52,7 +52,7 @@ func TestRefreshProtocol(t *testing.T) {
 				crsGen := dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
 				crp := crsGen.ClockNew()
 
-				e = instance.(*protocols.RefreshKeyProtocol).Init(*params, lt.SecretKeyShares0[tni.ServerIdentity().ID], ciphertext, *crp)
+				e = instance.(*protocols.RefreshProtocol).Init(*params, lt.SecretKeyShares0[tni.ServerIdentity().ID], ciphertext, *crp)
 				return
 			}); err != nil {
 			log.Error("Could not start Collective Refresh Protocol  : ", err)
@@ -92,7 +92,7 @@ func testLocalRefresh(t *testing.T, params *bfv.Parameters, N int, local *onet.L
 		t.Fatal("Couldn't create new node:", err)
 	}
 
-	rkp := pi.(*protocols.RefreshKeyProtocol)
+	rkp := pi.(*protocols.RefreshProtocol)
 	now := time.Now()
 	log.Lvl4("Starting rkp")
 	err = rkp.Start()

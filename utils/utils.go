@@ -13,8 +13,6 @@ import (
 	"go.dedis.ch/onet/v3/network"
 	"io/ioutil"
 	"os"
-	"reflect"
-	"strconv"
 	"strings"
 )
 
@@ -176,50 +174,6 @@ func LoadPublicKey(ctx *bfv.Parameters, seed network.ServerIdentityID) (pk *bfv.
 	return
 }
 
-//check for errors.
-func Check(err error) {
-	if err != nil {
-		fmt.Printf("error : %v", err)
-		return
-	}
-}
-
-//Compare two polys by marshalling them
-func ComparePolys(poly ring.Poly, poly2 ring.Poly) error {
-
-	marsh1, err1 := poly.MarshalBinary()
-	if err1 != nil {
-		return err1
-	}
-	marsh2, err2 := poly2.MarshalBinary()
-	if err2 != nil {
-		return err2
-	}
-
-	if !reflect.DeepEqual(marsh1, marsh2) {
-		return errors.New("Marshalling of polynoms %v and %v not equal.")
-	}
-	return nil
-}
-
-//Compare two keys by marshalling them.
-func CompareKeys(k1 bfv.PublicKey, k2 bfv.PublicKey) error {
-	//find more optimal way...
-	marsh1, err1 := k1.MarshalBinary()
-	if err1 != nil {
-		return err1
-	}
-	marsh2, err2 := k2.MarshalBinary()
-	if err2 != nil {
-		return err2
-	}
-
-	if !reflect.DeepEqual(marsh1, marsh2) {
-		return errors.New("Marshalling of polynoms %v and %v not equal.")
-	}
-	return nil
-}
-
 // equalslice compares two slices of uint64 values, and return true if they are equal, else false.
 func Equalslice(a, b []uint64) bool {
 
@@ -233,51 +187,6 @@ func Equalslice(a, b []uint64) bool {
 		}
 	}
 	return true
-}
-
-func CompareEvalKeys(keys []bfv.EvaluationKey) error {
-	for _, k1 := range keys {
-		for _, k2 := range keys {
-			for _, e1 := range k1.Get() {
-				for _, e2 := range k2.Get() {
-					err := CompareArray(e1.Get(), e2.Get())
-					if err != nil {
-						return err
-					}
-				}
-			}
-
-		}
-	}
-
-	return nil
-}
-
-func CompareArray(key [][2]*ring.Poly, key2 [][2]*ring.Poly) error {
-	if len(key) != len(key2) {
-		return errors.New("Non matching length of switching keys")
-	}
-	for i, _ := range key {
-		err := ComparePolys(*key[i][0], *key2[i][0])
-		if err != nil {
-
-			return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + "0")
-		}
-		err = ComparePolys(*key[i][1], *key2[i][1])
-		if err != nil {
-			return errors.New("Switching key do not match on index : " + strconv.Itoa(i) + "1")
-		}
-
-	}
-
-	return nil
-
-}
-
-func QuietServers(servers map[network.ServerIdentityID]*onet.Server) {
-	for _, s := range servers {
-		s.Quiet = true
-	}
 }
 
 func Uint64ToBytes(data []uint64) ([]byte, error) {
@@ -334,14 +243,4 @@ func SendISMOthers(s *onet.ServiceProcessor, el *onet.Roster, msg interface{}) e
 		err = errors.New(strings.Join(errStrs, "\n"))
 	}
 	return err
-}
-
-func GetParametersIdx(params *bfv.Parameters) int {
-	for i, other := range bfv.DefaultParams {
-		if params.Equals(other) {
-			return i
-		}
-	}
-
-	return -1
 }

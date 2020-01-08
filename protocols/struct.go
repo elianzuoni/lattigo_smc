@@ -118,7 +118,8 @@ type RelinearizationKeyProtocol struct {
 	ChannelStart chan StructStart
 }
 
-type RefreshKeyProtocol struct {
+//RefreshProtocol handler for onet for the refresh protocol
+type RefreshProtocol struct {
 	*onet.TreeNodeInstance
 
 	*sync.Cond
@@ -137,6 +138,7 @@ type RefreshKeyProtocol struct {
 	ChannelStart      chan StructStart
 }
 
+//RotationKeyProtocol handler for onet for the rotaiton key protocol
 type RotationKeyProtocol struct {
 	*onet.TreeNodeInstance
 	*sync.Cond
@@ -148,18 +150,15 @@ type RotationKeyProtocol struct {
 
 	Crp []*ring.Poly
 
-	ChannelRTShare chan StructRTShare
+	ChannelRTShare chan StructRTGShare
 	ChannelStart   chan StructStart
 }
 
-type StructRTShare struct {
+//StructRTGShare handler for onet
+type StructRTGShare struct {
 	*onet.TreeNode
 	dbfv.RTGShare
 }
-
-/********MESSSAGE STRUCTURES ***/
-
-/**USED FOR ALL ***/
 
 //StructParameters handler for onet
 type StructParameters struct {
@@ -175,10 +174,7 @@ type StructStart struct {
 }
 
 //Start This message is used to wake up the children
-type Start struct {
-}
-
-/***USED FOR KEY GEN ***/
+type Start struct{}
 
 //StructPublicKey handler for onet
 type StructPublicKey struct {
@@ -192,20 +188,17 @@ type StructPublicKeyShare struct {
 	dbfv.CKGShare
 }
 
+//StructRSahre handler for the refresh share.
 type StructRShare struct {
 	*onet.TreeNode
 	dbfv.RefreshShare
 }
-
-/*****USED FOR BOTH CKS AND PCKS ***/
 
 //StructCiphertext handler for onet
 type StructCiphertext struct {
 	*onet.TreeNode
 	bfv.Ciphertext
 }
-
-/***USED FOR CKS **/
 
 //StructSwitchParameters handler for onet
 type StructSwitchParameters struct {
@@ -227,15 +220,11 @@ type StructCKSShare struct {
 	dbfv.CKSShare
 }
 
-/***USED FOR PCKS ***/
-
 //StructPCKS handler for onet
 type StructPCKS struct {
 	*onet.TreeNode
 	dbfv.PCKSShare
 }
-
-//***USED FOR RLK ****/
 
 //StructEvalKey handler for onet
 type StructEvalKey struct {

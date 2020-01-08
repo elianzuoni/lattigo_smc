@@ -77,7 +77,9 @@ func TestSwitching(t *testing.T) {
 	}
 	<-time.After(2 * time.Second)
 	client1 := NewLattigoSMCClient(el.List[1], "1")
-
+	q, _ := client1.SendKeyRequest(true, false, false)
+	<-time.After(200 * time.Millisecond)
+	log.Lvl1("Reply of key request : ", q)
 	queryID, err := client1.SendWriteQuery(el, []byte("lattigood"))
 	if err != nil {
 		t.Fatal("Could not start client :", err)

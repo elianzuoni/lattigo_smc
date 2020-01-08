@@ -62,6 +62,7 @@ func (s *Service) HandleSendData(query *QueryData) (network.Message, error) {
 
 }
 
+//HandleKeyRequest handler for a client for the requests for the keys.
 func (s *Service) HandleKeyRequest(request *KeyRequest) (network.Message, error) {
 	tree := s.Roster.GenerateBinaryTree()
 	log.Lvl1("Querying for a key :", request)
