@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/kyber/v3"
 	"go.dedis.ch/kyber/v3/util/key"
 	"go.dedis.ch/onet/v3"
@@ -65,17 +66,17 @@ func (c *API) SendMultiplyQuery() {
 
 }
 
-func (c *API) GetRemoteId(id *uuid.UUID) (uuid.UUID, error) {
-	log.Lvl1(c, "request result of write :", id)
-	resp := RemoteID{}
-	err := c.SendProtobuf(c.entryPoint, &QueryRemoteID{*id, true}, &resp)
-	if err != nil {
-		return uuid.UUID{}, err
+func (c *API) SendKeyRequest(publickey, evaluationkey, rotationkey bool) (int, error) {
+	kr := KeyRequest{
+		PublicKey:     publickey,
+		EvaluationKey: evaluationkey,
+		RotationKey:   rotationkey,
 	}
 
-	data := resp.Remote
+	resp := SetupReply{}
+	err := c.SendProtobuf(c.entryPoint, &kr, &resp)
 
-	return data, nil
+	return resp.Done, err
 }
 
 func (c *API) SendSetupQuery(entities *onet.Roster, generateEvaluationKey bool, paramsIdx uint64, seed []byte) error {
@@ -91,4 +92,30 @@ func (c *API) SendSetupQuery(entities *onet.Roster, generateEvaluationKey bool, 
 	log.Lvl1(c, " sent a setup request")
 	return nil
 
+}
+
+type QueryPlaintext struct {
+	uuid.UUID
+	Innermessage bool
+	PublicKey    bfv.PublicKey
+	Ciphertext   bfv.Ciphertext
+	Origin       *network.ServerIdentity
+}
+
+type ReplyPlaintext struct {
+	uuid.UUID
+	Ciphertext bfv.Ciphertext
+}
+
+func (c *API) GetPlaintext(roster *onet.Roster, id *uuid.UUID) ([]byte, error) {
+	query := QueryPlaintext{UUID: *id, Innermessage: true}
+	response := QueryData{}
+	err := c.SendProtobuf(c.entryPoint, &query, &response)
+	if err != nil {
+		log.Lvl1("Error while sending : ", err)
+		return []byte{}, err
+	}
+
+	data := response.Data
+	return data, nil
 }

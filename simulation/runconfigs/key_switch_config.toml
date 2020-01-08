@@ -1,6 +1,6 @@
 Simulation = "CollectiveKeySwitching"
-BF = 2
-Rounds = 10
+BF = 7
+Rounds = 25
 Suite = "Ed25519"
 # SingleHost = True
 

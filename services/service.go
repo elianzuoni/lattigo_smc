@@ -17,21 +17,30 @@ type Service struct {
 	*onet.ServiceProcessor
 	onet.Roster
 
-	//todo here add more features.
 	*bfv.Ciphertext
-	*bfv.PublicKey
+	MasterPublicKey *bfv.PublicKey
 	*bfv.SecretKey
+	*bfv.PublicKey
 	*bfv.EvaluationKey
-	Params             *bfv.Parameters
-	pubKeyGenerated    bool
-	evalKeyGenerated   bool
-	DataBase           map[uuid.UUID]*bfv.Ciphertext
-	LocalUUID          map[uuid.UUID]uuid.UUID
-	LocalData          map[uuid.UUID]*Transaction
-	PendingTransaction chan *Transaction
-	KeyReceived        chan bool
-	Ckgp               *protocols.CollectiveKeyGenerationProtocol
-	crpGen             ring.CRPGenerator
+	Params *bfv.Parameters
+
+	Decryptor bfv.Decryptor
+	Encoder   bfv.Encoder
+	Encryptor bfv.Encryptor
+
+	pubKeyGenerated     bool
+	evalKeyGenerated    bool
+	DataBase            map[uuid.UUID]*bfv.Ciphertext
+	LocalUUID           map[uuid.UUID]chan uuid.UUID
+	Ckgp                *protocols.CollectiveKeyGenerationProtocol
+	crpGen              ring.CRPGenerator
+	SwitchedCiphertext  map[uuid.UUID]chan bfv.Ciphertext
+	SwitchingParameters chan SwitchingParamters
+}
+
+type SwitchingParamters struct {
+	bfv.PublicKey
+	bfv.Ciphertext
 }
 
 type Transaction struct {
@@ -44,12 +53,14 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 	log.Lvl1(c.ServerIdentity(), "Starting lattigo smc service")
 
 	newLattigo := &Service{
-		ServiceProcessor:   onet.NewServiceProcessor(c),
-		DataBase:           make(map[uuid.UUID]*bfv.Ciphertext),
-		LocalUUID:          make(map[uuid.UUID]uuid.UUID),
-		LocalData:          make(map[uuid.UUID]*Transaction),
-		PendingTransaction: make(chan *Transaction, 10),
-		KeyReceived:        make(chan bool),
+		ServiceProcessor: onet.NewServiceProcessor(c),
+		DataBase:         make(map[uuid.UUID]*bfv.Ciphertext),
+		LocalUUID:        make(map[uuid.UUID]chan uuid.UUID),
+		//LocalData:          make(map[uuid.UUID]*Transaction),
+		//PendingTransaction: make(chan *Transaction, 10),
+		//KeyReceived:        make(chan bool),
+		SwitchedCiphertext:  make(map[uuid.UUID]chan bfv.Ciphertext),
+		SwitchingParameters: make(chan SwitchingParamters, 10),
 	}
 	//registering the handlers
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSendData); err != nil {
@@ -66,8 +77,12 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		return nil, errors.New("Wrong handler 5: " + err.Error())
 	}
 
-	if err := newLattigo.RegisterHandler(newLattigo.HandleRemoteIDQuery); err != nil {
-		return nil, errors.New("wrong handler 6: " + err.Error())
+	if err := newLattigo.RegisterHandler(newLattigo.HandlePlaintextQuery); err != nil {
+		return nil, errors.New("Wrong handler 7 : " + err.Error())
+	}
+
+	if err := newLattigo.RegisterHandler(newLattigo.HandleKeyRequest); err != nil {
+		return nil, errors.New("Wrong handler 8 : " + err.Error())
 	}
 
 	c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
@@ -77,13 +92,14 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 	c.RegisterProcessor(newLattigo, msgTypes.msgKeyReply)
 
 	c.RegisterProcessor(newLattigo, msgTypes.msgStoreReply)
-	go newLattigo.TransactionLoop()
+
+	c.RegisterProcessor(newLattigo, msgTypes.msgQueryPlaintext)
+	c.RegisterProcessor(newLattigo, msgTypes.msgReplyPlaintext)
 	return newLattigo, nil
 }
 
 func (s *Service) Process(msg *network.Envelope) {
 	//Processor interface used to recognize messages between server
-	//idea is to make an if else and send it to the appropriate handler.
 	if msg.MsgType.Equal(msgTypes.msgSetupRequest) {
 		log.Lvl1(s.ServerIdentity(), "got a setup message! (in process) ")
 		tmp := (msg.Msg).(*SetupRequest)
@@ -120,8 +136,8 @@ func (s *Service) Process(msg *network.Envelope) {
 		tmp := (msg.Msg).(*StoreReply)
 		log.Lvl1("ID Local , ", tmp.Local, "ID Remote: ", tmp.Remote, "Done :", tmp.Done)
 		//Update the local values.
-		s.LocalData[tmp.Local].Pending = false
-		s.LocalUUID[tmp.Local] = tmp.Remote
+		s.LocalUUID[tmp.Local] = make(chan uuid.UUID, 1)
+		s.LocalUUID[tmp.Local] <- tmp.Remote
 		log.Lvl1("Updated value of the ciphertext. ")
 
 	} else if msg.MsgType.Equal(msgTypes.msgKeyRequest) {
@@ -130,7 +146,7 @@ func (s *Service) Process(msg *network.Envelope) {
 		tmp := (msg.Msg).(*KeyRequest)
 		if tmp.PublicKey && s.pubKeyGenerated {
 			reply.PublicKey = *bfv.NewPublicKey(s.Params)
-			reply.PublicKey.Set(s.PublicKey.Get())
+			reply.PublicKey.Set(s.MasterPublicKey.Get())
 		}
 		//if tmp.EvaluationKey && s.evalKeyGenerated{
 		//	reply.EvaluationKey = *s.EvaluationKey
@@ -152,8 +168,7 @@ func (s *Service) Process(msg *network.Envelope) {
 		log.Lvl1("Got a key reply")
 		tmp := (msg.Msg).(*KeyReply)
 		if tmp.PublicKey.Get()[0] != nil {
-			s.PublicKey = &tmp.PublicKey
-			s.KeyReceived <- true
+			s.MasterPublicKey = &tmp.PublicKey
 		}
 		//if tmp.Flags & 2 > 0 {
 		//	s.EvaluationKey = &tmp.EvaluationKey
@@ -164,6 +179,10 @@ func (s *Service) Process(msg *network.Envelope) {
 
 		log.Lvl1("Got the public keys !")
 
+	} else if msg.MsgType.Equal(msgTypes.msgReplyPlaintext) {
+		log.Lvl1("Got a ciphertext switched")
+		tmp := (msg.Msg).(*ReplyPlaintext)
+		s.SwitchedCiphertext[tmp.UUID] <- tmp.Ciphertext
 	} else {
 		log.Error("Unknown message type :", msg.MsgType)
 	}
@@ -200,7 +219,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 				log.Lvl1(tn.ServerIdentity(), " : done with collective key gen ! ")
 
 				s.SecretKey = ckgp.Sk
-				//s.PublicKey = ckgp.Pk
+				s.PublicKey = bfv.NewKeyGenerator(s.Params).GenPublicKey(s.SecretKey)
 				s.pubKeyGenerated = true
 			}()
 
@@ -210,6 +229,20 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 
 	case protocols.CollectivePublicKeySwitchingProtocolName:
 		log.Lvl1(s.ServerIdentity(), ": New protocol cpksp")
+		protocol, err = protocols.NewCollectivePublicKeySwitching(tn)
+		if err != nil {
+			return nil, err
+		}
+		pcks := protocol.(*protocols.CollectivePublicKeySwitchingProtocol)
+		var publickey bfv.PublicKey
+		var ciphertext *bfv.Ciphertext
+		sp := <-s.SwitchingParameters
+		publickey = sp.PublicKey
+		ciphertext = &sp.Ciphertext
+		err = pcks.Init(*s.Params, publickey, *s.SecretKey, ciphertext)
+		if err != nil {
+			return nil, err
+		}
 
 	case protocols.RelinearizationKeyProtocolName:
 		log.Lvl1(s.ServerIdentity(), ": New protocol rlkp")
@@ -226,50 +259,82 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 	return protocol, nil
 }
 
-//HandleSendData is called by the service when the client makes a request to write some data.
-func (s *Service) HandleSendData(query *QueryData) (network.Message, error) {
-	log.Lvl1(s.ServerIdentity(), " received query data ")
+//TODO Method below
 
-	data := query.Data
-	tree := query.Roster.GenerateBinaryTree()
+func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, error) {
+	//Initiate the CKS
+	log.Lvl1(s.ServerIdentity(), "got request for plaintext of id : ", query.UUID)
+	tree := s.GenerateBinaryTree()
+	inner := query.Innermessage
+	if query.Innermessage {
+		//From the client Send it to all the other peers so they can initate the PCKS
+		query.Innermessage = false
+		query.PublicKey = *s.PublicKey
+		query.Origin = s.ServerIdentity()
 
-	if !s.pubKeyGenerated {
-		//here we can not yet do the answer
-		return nil, errors.New("Key has not yet been generated.")
-	}
-	if s.PublicKey == nil {
-		log.Lvl1("Querying public key to the server")
+		err := s.SendRaw(tree.Root.ServerIdentity, query)
 
-		keyreq := KeyRequest{PublicKey: true}
-		err := s.SendRaw(tree.Root.ServerIdentity, &keyreq)
 		if err != nil {
-			log.Error("Could not send key request to the root : ", err)
+			log.Error("Could not send the initation message to all other peers")
 			return nil, err
 		}
 
 	}
 
-	encoder := bfv.NewEncoder(s.Params)
-	coeffs, err := utils.BytesToUint64(data)
-	if err != nil {
-		return nil, err
-	}
-	pt := bfv.NewPlaintext(s.Params)
-	encoder.EncodeUint(coeffs, pt)
+	//it comes from either the initiator or the root.
+	if s.ServerIdentity().Equal(tree.Root.ServerIdentity) {
+		//The root has to propagate to all members the ciphertext and the public key...
+		//Get the ciphertext.
+		cipher := s.DataBase[query.UUID]
+		query.Ciphertext = *cipher
+		//Send to all
 
-	id := uuid.NewV1()
-	tx := Transaction{
-		UUID:      id,
-		Plaintext: pt,
-		Pending:   true,
-	}
-	s.LocalData[id] = &tx
-	s.PendingTransaction <- &tx
+		err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, &query)
+		if err != nil {
+			return nil, err
+		}
+		//Start the key switch
+		reply, err := s.switchKeys(tree, query.Origin, query.UUID)
+		if err != nil {
+			log.Error("Could not switch key : ", err)
+		}
+		return reply, err
 
-	return &ServiceState{id, true}, nil
+	} else if !inner {
+		//Initialize all of the values and return
+		params := SwitchingParamters{
+			PublicKey:  query.PublicKey,
+			Ciphertext: query.Ciphertext,
+		}
+		s.SwitchingParameters <- params
+		return &SetupReply{1}, nil
+
+	} else {
+		//Wait for CKS to complete
+
+		cipher := <-s.SwitchedCiphertext[query.UUID]
+
+		plain := s.Decryptor.DecryptNew(&cipher)
+
+		data64 := s.Encoder.DecodeUint(plain)
+		bytes, err := utils.Uint64ToBytes(data64)
+		if err != nil {
+			log.Error("Could not retrieve byte array : ", err)
+		}
+		response := &QueryData{Id: query.UUID, Data: bytes}
+
+		return response, nil
+	}
+
 }
 
-//Setup is done when the processes join the network. Need to generate Collective public key, Collective relin key,
+func (s *Service) HandleSumQuery(sumQuery *SumQuery) (network.Message, error) {
+	return nil, nil
+}
+
+func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, error) {
+	return nil, nil
+}
 
 /*************UNUSED FOR NOW ******************/
 func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
@@ -300,60 +365,4 @@ func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
 	}(name)
 
 	return protocol, nil
-}
-
-func (s *Service) TransactionLoop() {
-	<-s.KeyReceived
-	log.Lvl1("Key received starting transaction loop.")
-	tree := s.Roster.GenerateBinaryTree()
-	//Start the loop only when the public key is done
-	for {
-		select {
-		case tx := <-s.PendingTransaction:
-
-			pt := tx.Plaintext
-			//Send it to the server
-			encryptorPk := bfv.NewEncryptorFromPk(s.Params, s.PublicKey)
-			cipher := encryptorPk.EncryptNew(pt)
-			//now we can send this to the root
-
-			err := s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{*cipher, tx.UUID})
-			if err != nil {
-				log.Error("could not send cipher to the root. ")
-			}
-
-			break
-
-		}
-	}
-}
-
-func (s *Service) HandleRemoteIDQuery(id *QueryRemoteID) (network.Message, error) {
-	log.Lvl1("Received a query for remote id of : ", id.ID)
-	remote, ok := s.LocalUUID[id.ID]
-	if !ok {
-		//Note finished
-		local, ok := s.LocalData[id.ID]
-		if !ok {
-			return &RemoteID{id.ID, uuid.UUID{}, true}, nil
-		}
-
-		if local.Pending {
-			return &RemoteID{id.ID, uuid.UUID{}, true}, nil
-		}
-
-	}
-
-	return &RemoteID{id.ID, remote, false}, nil
-
-}
-
-//TODO Method below
-
-func (s *Service) HandleSumQuery(sumQuery *SumQuery) (network.Message, error) {
-	return nil, nil
-}
-
-func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, error) {
-	return nil, nil
 }

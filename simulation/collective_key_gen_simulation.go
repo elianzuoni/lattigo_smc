@@ -120,7 +120,7 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 	}()
 
 	log.Lvl3("Size : ", size, " rounds : ", s.Rounds)
-
+	timings := make([]time.Duration, s.Rounds)
 	for i := 0; i < s.Rounds; i++ {
 		pi, err := config.Overlay.CreateProtocol("CollectiveKeyGenerationSimul", config.Tree, onet.NilServiceID)
 		if err != nil {
@@ -128,7 +128,7 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 		}
 		round := monitor.NewTimeMeasure("alpha")
 		ckgp := pi.(*proto.CollectiveKeyGenerationProtocol)
-		log.Lvl1("Starting Collective Key Generation simulation")
+		log.Lvl1("Starting Collective Key Generation simulation children amt : ", len(ckgp.Children()))
 		now := time.Now()
 		go func() {
 			if err = ckgp.Start(); err != nil {
@@ -139,6 +139,7 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 		log.Lvl1("waiting..")
 		ckgp.Wait()
 		elapsed := time.Since(now)
+		timings[i] = elapsed
 		log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.")
 		log.Lvl1("Elapsed time : ", elapsed)
 		//check if we have all the same polys ckg_0
@@ -149,14 +150,24 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 		enc := bfv.NewEncryptorFromPk(s.Params, ckgp.Pk)
 		dec := bfv.NewDecryptor(s.Params, s.lt.IdealSecretKey0)
 		pt := bfv.NewPlaintext(s.Params)
+
 		ct := enc.EncryptNew(pt)
 		ptp := dec.DecryptNew(ct)
 		msgp := encoder.DecodeUint(ptp)
 		if !utils.Equalslice(pt.Value()[0].Coeffs[0], msgp) {
 			log.Error("Decryption failed")
+		} else {
+			log.Lvl1("Sim ok ")
 		}
+		<-time.After(1 * time.Second)
 
 	}
+	avg := time.Duration(0)
+	for _, t := range timings {
+		avg += t
+	}
+	avg /= time.Duration(s.Rounds)
+	log.Lvl1("Average time : ", avg)
 
 	return nil
 

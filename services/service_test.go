@@ -29,8 +29,41 @@ func TestSetupCollectiveKey(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	protocols.TurnOffTest()
-	log.SetDebugVisible(1)
+	log.SetDebugVisible(4)
 	size := 5
+	local := onet.NewLocalTest(utils.SUITE)
+	_, el, _ := local.GenTree(size, true)
+
+	client := NewLattigoSMCClient(el.List[0], "0")
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+
+	err := client.SendSetupQuery(el, false, 0, seed)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	<-time.After(2 * time.Second)
+
+	client1 := NewLattigoSMCClient(el.List[1], "1")
+
+	q, err := client1.SendKeyRequest(true, false, false)
+	log.Lvl1("Response of query : ", q)
+
+	queryID, err := client1.SendWriteQuery(el, []byte("lattigood"))
+	if err != nil {
+		t.Fatal("Could not start client :", err)
+
+	}
+
+	log.Lvl2("Query Id : ", queryID)
+	<-time.After(1 * time.Second)
+
+}
+
+func TestSwitching(t *testing.T) {
+	protocols.TurnOffTest()
+	log.SetDebugVisible(4)
+	size := 3
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
 
@@ -53,13 +86,12 @@ func TestWrite(t *testing.T) {
 
 	log.Lvl2("Query Local Id : ", queryID)
 	<-time.After(500 * time.Millisecond)
-	log.Lvl1("Querying for remote ID")
 
-	remoteID, err := client1.GetRemoteId(queryID)
-	if err != nil {
-		t.Fatal("Could not get remote ID : ", err)
-	}
+	//Client 2 now requests to switch the key for him...
+	client2 := NewLattigoSMCClient(el.List[2], "2")
+	data, err := client2.GetPlaintext(el, queryID)
+	log.Lvl1("Client retrieved data : ", data)
 
-	log.Lvl1("Remote ID is : ", remoteID)
+	<-time.After(1000 * time.Second)
 
 }

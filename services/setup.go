@@ -6,6 +6,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"time"
@@ -19,8 +20,9 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 	log.Lvl1("Begin new setup with ", tree.Size(), " parties")
 	s.Roster = request.Roster
 	s.Params = bfv.DefaultParams[request.ParamsIdx]
-	s.SecretKey = bfv.NewKeyGenerator(s.Params).GenSecretKey()
-
+	keygen := bfv.NewKeyGenerator(s.Params)
+	s.SecretKey = keygen.GenSecretKey()
+	s.PublicKey = keygen.GenPublicKey(s.SecretKey)
 	s.crpGen = *dbfv.NewCRPGenerator(s.Params, request.Seed)
 
 	//Collective Key Generation
@@ -110,8 +112,39 @@ func (s *Service) genPublicKey(tree *onet.Tree) error {
 	log.Lvl1(ckgp.ServerIdentity(), "Waiting for the protocol to be finished :x")
 	ckgp.Wait()
 	s.SecretKey = ckgp.Sk
-	s.PublicKey = ckgp.Pk
+	s.MasterPublicKey = ckgp.Pk
 	s.pubKeyGenerated = true
 	log.Lvl1(s.ServerIdentity(), " got public key!")
 	return nil
+}
+
+func (s *Service) switchKeys(tree *onet.Tree, querier *network.ServerIdentity, id uuid.UUID) (network.Message, error) {
+	log.Lvl1(s.ServerIdentity(), " Switching keys")
+	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectivePublicKeySwitchingProtocolName)
+	protocol, err := s.NewProtocol(tni, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.RegisterProtocolInstance(protocol)
+	if err != nil {
+		return nil, err
+	}
+
+	pks := protocol.(*protocols.CollectivePublicKeySwitchingProtocol)
+	<-time.After(1 * time.Second)
+	err = pks.Start()
+	if err != nil {
+		log.ErrFatal(err, "Could not start collective public key switching")
+	}
+	go pks.Dispatch()
+	log.Lvl1(pks.ServerIdentity(), "waiting for protocol to be finished ")
+	pks.Wait()
+
+	//Send the ciphertext to the original asker.
+	reply := ReplyPlaintext{
+		UUID:       id,
+		Ciphertext: pks.CiphertextOut,
+	}
+	return reply, err
 }

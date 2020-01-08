@@ -62,9 +62,6 @@ type StoreQuery struct {
 	uuid.UUID
 }
 
-type Id struct {
-	uuid.UUID
-}
 type StoreReply struct {
 	Local  uuid.UUID
 	Remote uuid.UUID

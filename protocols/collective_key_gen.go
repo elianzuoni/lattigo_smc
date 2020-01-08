@@ -32,7 +32,6 @@ func init() {
 }
 
 func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bfv.SecretKey, crp *ring.Poly) error {
-	defer func() { go func() { ckgp.Initialized <- true; log.Lvl1(ckgp.ServerIdentity(), "Init ok") }() }()
 	//Set up the parameters - context and the crp
 	ckgp.Params = params.Copy()
 	ckgp.Sk = sk
@@ -46,7 +45,6 @@ func (ckgp *CollectiveKeyGenerationProtocol) Init(params *bfv.Parameters, sk *bf
 	//generate p0,i
 	ckgp.CKGShare = ckgp.AllocateShares()
 	ckgp.GenShare(sk.Get(), ckgp.CKG1, ckgp.CKGShare)
-	log.Lvl1(ckgp.ServerIdentity(), "PIIIIIING")
 	return nil
 }
 
@@ -61,7 +59,6 @@ func (ckgp *CollectiveKeyGenerationProtocol) Start() error {
 
 //Dispatch is called at each node to then run the protocol
 func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
-	<-ckgp.Initialized
 
 	log.Lvl3(ckgp.ServerIdentity(), " Dispatching ; is root = ", ckgp.IsRoot())
 	if &ckgp.Sk == nil {

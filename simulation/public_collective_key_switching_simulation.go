@@ -132,7 +132,7 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	}()
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
-
+	timings := make([]time.Duration, s.Rounds)
 	//local := onet.NewLocalTest(suites.MustFind("Ed25519"))
 	//defer local.CloseAll()
 
@@ -155,6 +155,7 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 		}
 		pcksp.Wait()
 		elapsed := time.Since(now)
+		timings[i] = elapsed
 		round.Record()
 
 		log.Lvl1("Public Collective key switching done.")
@@ -171,8 +172,14 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 		if !utils.Equalslice(expected, decoded) {
 			log.Error("Decryption failed")
 		}
+		<-time.After(time.Second)
 	}
-
+	avg := time.Duration(0)
+	for _, t := range timings {
+		avg += t
+	}
+	avg /= time.Duration(s.Rounds)
+	log.Lvl1("Average time : ", avg)
 	return nil
 
 }

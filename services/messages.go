@@ -16,6 +16,9 @@ type MsgTypes struct {
 	msgStoreReply    network.MessageTypeID
 	msgKeyRequest    network.MessageTypeID
 	msgKeyReply      network.MessageTypeID
+
+	msgQueryPlaintext network.MessageTypeID
+	msgReplyPlaintext network.MessageTypeID
 }
 
 var msgTypes = MsgTypes{}
@@ -38,4 +41,6 @@ func init() {
 
 	msgTypes.msgKeyRequest = network.RegisterMessage(&KeyRequest{})
 	msgTypes.msgKeyReply = network.RegisterMessage(&KeyReply{})
+	msgTypes.msgQueryPlaintext = network.RegisterMessage(&QueryPlaintext{})
+	msgTypes.msgReplyPlaintext = network.RegisterMessage(&ReplyPlaintext{})
 }

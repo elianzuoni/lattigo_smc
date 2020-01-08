@@ -127,6 +127,7 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 			log.Error(err)
 		}
 	}()
+	timings := make([]time.Duration, s.Rounds)
 
 	log.Lvl4("Size : ", size, " rounds : ", s.Rounds)
 	for i := 0; i < s.Rounds; i++ {
@@ -144,6 +145,7 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 
 		cksp.Wait()
 		elapsed := time.Since(now)
+		timings[i] = elapsed
 
 		round.Record()
 
@@ -165,7 +167,16 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 			log.Error("Decryption failed")
 			return errors.New("decryption failed")
 		}
+		<-time.After(time.Second * 1)
+
 	}
+
+	avg := time.Duration(0)
+	for _, t := range timings {
+		avg += t
+	}
+	avg /= time.Duration(s.Rounds)
+	log.Lvl1("Average time : ", avg)
 
 	return nil
 

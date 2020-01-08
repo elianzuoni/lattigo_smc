@@ -107,7 +107,7 @@ func (s *RefreshSimulation) Run(config *onet.SimulationConfig) error {
 			log.Error(err)
 		}
 	}()
-
+	timings := make([]time.Duration, s.Rounds)
 	for i := 0; i < s.Rounds; i++ {
 
 		pi, err := config.Overlay.CreateProtocol("CollectiveRefreshSimul", config.Tree, onet.NilServiceID)
@@ -122,6 +122,7 @@ func (s *RefreshSimulation) Run(config *onet.SimulationConfig) error {
 		defer rp.Done()
 		rp.Wait()
 		elapsed := time.Since(now)
+		timings[i] = elapsed
 		round.Record()
 		log.Lvl1("Collective Refresh done for  ", len(rp.Roster().List), " nodes")
 		log.Lvl1("Elapsed time : ", elapsed)
@@ -136,8 +137,15 @@ func (s *RefreshSimulation) Run(config *onet.SimulationConfig) error {
 			log.Error("Decryption failed")
 			return errors.New("decryption failed")
 		}
+		<-time.After(500 * time.Millisecond)
 	}
 
 	log.Lvl1("Success!")
+	avg := time.Duration(0)
+	for _, t := range timings {
+		avg += t
+	}
+	avg /= time.Duration(s.Rounds)
+	log.Lvl1("Average time : ", avg)
 	return nil
 }
