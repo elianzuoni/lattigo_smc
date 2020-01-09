@@ -1,6 +1,7 @@
 package services
 
 import (
+	"github.com/golangplus/testing/assert"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/utils"
@@ -90,6 +91,8 @@ func TestSwitching(t *testing.T) {
 	client2 := NewLattigoSMCClient(el.List[2], "2")
 	data, err := client2.GetPlaintext(el, queryID)
 	log.Lvl1("Client retrieved data : ", data)
+
+	assert.Equal(t, "Result", string(data), string(content))
 
 	<-time.After(1000 * time.Second)
 

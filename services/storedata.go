@@ -32,7 +32,7 @@ func (s *Service) HandleSendData(query *QueryData) (network.Message, error) {
 	}
 
 	encoder := bfv.NewEncoder(s.Params)
-	coeffs, err := utils.BytesToUint64(data)
+	coeffs, err := utils.BytesToUint64(data, true)
 	if err != nil {
 		return nil, err
 	}

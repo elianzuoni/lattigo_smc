@@ -189,7 +189,15 @@ func Equalslice(a, b []uint64) bool {
 	return true
 }
 
-func Uint64ToBytes(data []uint64) ([]byte, error) {
+func Uint64ToBytes(data []uint64, naive bool) ([]byte, error) {
+	if naive {
+		res := make([]byte, len(data))
+		for i, e := range data {
+			res[i] = byte(e)
+
+		}
+		return res, nil
+	}
 	padding := data[0]
 	//log.Lvl1(padding)
 	buf := new(bytes.Buffer)
@@ -206,7 +214,15 @@ func Uint64ToBytes(data []uint64) ([]byte, error) {
 	return result, nil
 }
 
-func BytesToUint64(data []byte) ([]uint64, error) {
+func BytesToUint64(data []byte, naive bool) ([]uint64, error) {
+	if naive {
+		res := make([]uint64, len(data))
+		for i, e := range data {
+			res[i] = uint64(e)
+		}
+
+		return res, nil
+	}
 
 	padding := 8 - (len(data) % 8)
 	if padding == 8 {

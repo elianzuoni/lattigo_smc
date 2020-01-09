@@ -15,13 +15,13 @@ func TestBytesToUint64(t *testing.T) {
 			t.Fatal("Could not read data in buffer")
 		}
 
-		uints, err := BytesToUint64(data)
+		uints, err := BytesToUint64(data, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 		//log.Lvl1(uints)
 
-		dataRes, err := Uint64ToBytes(uints)
+		dataRes, err := Uint64ToBytes(uints, true)
 		if err != nil {
 			t.Fatal(err)
 		}

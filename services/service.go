@@ -376,10 +376,11 @@ func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, 
 	for {
 		select {
 		case cipher := <-s.SwitchedCiphertext[query.UUID]:
+			log.Lvl1("Got my ciphertext : ", query.UUID)
 			plain := s.DecryptorSk.DecryptNew(&cipher)
 			//todo ask : when decoding the cipher text the values are not what is expected.
 			data64 := s.Encoder.DecodeUint(plain)
-			bytes, err := utils.Uint64ToBytes(data64)
+			bytes, err := utils.Uint64ToBytes(data64, true)
 			if err != nil {
 				log.Error("Could not retrieve byte array : ", err)
 			}

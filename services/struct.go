@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/binary"
+	"errors"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	uuid "gopkg.in/satori/go.uuid.v1"
@@ -31,6 +32,32 @@ type QueryData struct {
 type PlaintextReply struct {
 	Data []byte
 	uuid.UUID
+}
+
+func (rp *PlaintextReply) MarshalBinary() ([]byte, error) {
+	data := make([]byte, len(rp.Data)+16)
+	copy(data[0:len(rp.Data)], rp.Data)
+	id, err := rp.UUID.MarshalBinary()
+
+	if err != nil {
+		return []byte{}, err
+	}
+	copy(data[len(rp.Data):len(rp.Data)+16], id)
+
+	return data, nil
+}
+
+func (rp *PlaintextReply) UnmarshalBinary(data []byte) error {
+	if len(data) < 16 {
+		return errors.New("insufficient data size")
+	}
+	lenData := len(data) - 16
+	rp.Data = make([]byte, lenData)
+	copy(rp.Data, data[:lenData])
+	id := make([]byte, 16)
+	copy(id, data[len(data)-16:])
+	err := rp.UUID.UnmarshalBinary(data[lenData:])
+	return err
 }
 
 type SetupRequest struct {
