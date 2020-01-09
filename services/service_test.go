@@ -3,7 +3,6 @@ package services
 import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"testing"
 	"time"
@@ -13,7 +12,6 @@ func TestSetupCollectiveKey(t *testing.T) {
 	log.SetDebugVisible(1)
 	log.Lvl1("Testing if setup is done properly for the service")
 	//turning off test.
-	protocols.TurnOffTest()
 	size := 3
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
@@ -28,7 +26,6 @@ func TestSetupCollectiveKey(t *testing.T) {
 }
 
 func TestWrite(t *testing.T) {
-	protocols.TurnOffTest()
 	log.SetDebugVisible(4)
 	size := 5
 	local := onet.NewLocalTest(utils.SUITE)
@@ -61,7 +58,6 @@ func TestWrite(t *testing.T) {
 }
 
 func TestSwitching(t *testing.T) {
-	protocols.TurnOffTest()
 	log.SetDebugVisible(4)
 	size := 3
 	local := onet.NewLocalTest(utils.SUITE)
@@ -80,13 +76,14 @@ func TestSwitching(t *testing.T) {
 	q, _ := client1.SendKeyRequest(true, false, false)
 	<-time.After(200 * time.Millisecond)
 	log.Lvl1("Reply of key request : ", q)
-	queryID, err := client1.SendWriteQuery(el, []byte("lattigood"))
+	content := []byte("lattigood")
+	queryID, err := client1.SendWriteQuery(el, content)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
 	}
 
-	log.Lvl2("Query Local Id : ", queryID)
+	log.Lvl2("Query Local Id : ", queryID, " with content : ", content)
 	<-time.After(500 * time.Millisecond)
 
 	//Client 2 now requests to switch the key for him...

@@ -10,6 +10,7 @@ import (
 	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
+	"time"
 )
 
 //Service is the service of lattigoSMC - allows to compute the different HE operations
@@ -24,9 +25,9 @@ type Service struct {
 	*bfv.EvaluationKey
 	Params *bfv.Parameters
 
-	Decryptor bfv.Decryptor
-	Encoder   bfv.Encoder
-	Encryptor bfv.Encryptor
+	DecryptorSk bfv.Decryptor
+	Encoder     bfv.Encoder
+	Encryptor   bfv.Encryptor
 
 	pubKeyGenerated     bool
 	evalKeyGenerated    bool
@@ -117,7 +118,7 @@ func (s *Service) Process(msg *network.Envelope) {
 		log.Lvl1(s.ServerIdentity(), "got a request to store a cipher")
 		tmp := (msg.Msg).(*StoreQuery)
 		id := uuid.NewV1()
-		s.DataBase[id] = &tmp.Ciphertext
+		s.DataBase[id] = tmp.Ciphertext
 		//send an acknowledgement of storing..
 		sender := msg.ServerIdentity
 		log.Lvl1("Id of cipher : ", tmp.UUID)
@@ -184,19 +185,22 @@ func (s *Service) Process(msg *network.Envelope) {
 		log.Lvl1("Got the public keys !")
 
 	} else if msg.MsgType.Equal(msgTypes.msgReplyPlaintext) {
-		log.Lvl1("Got a ciphertext switched")
 		tmp := (msg.Msg).(*ReplyPlaintext)
-		s.SwitchedCiphertext[tmp.UUID] <- tmp.Ciphertext
+		log.Lvl1("Got a ciphertext switched with UUID : ", tmp.UUID)
+
+		s.SwitchedCiphertext[tmp.UUID] = make(chan bfv.Ciphertext, 1)
+		s.SwitchedCiphertext[tmp.UUID] <- *tmp.Ciphertext
 	} else if msg.MsgType.Equal(msgTypes.msgQueryPlaintext) {
 		log.Lvl1("Got a query for ciphertext switching ")
 		//it comes from either the initiator or the root.
 		tree := s.Roster.GenerateBinaryTree()
 		query := (msg.Msg).(*QueryPlaintext)
+
 		if s.ServerIdentity().Equal(tree.Root.ServerIdentity) {
 			//The root has to propagate to all members the ciphertext and the public key...
 			//Get the ciphertext.
 			cipher := s.DataBase[query.UUID]
-			query.Ciphertext = *cipher
+			query.Ciphertext = cipher
 			//Send to all
 
 			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, query)
@@ -204,24 +208,28 @@ func (s *Service) Process(msg *network.Envelope) {
 				return
 			}
 			//Start the key switch
-			reply, err := s.switchKeys(tree, &query.ServerIdentity, query.UUID)
+			params := SwitchingParamters{
+				PublicKey:  *query.PublicKey,
+				Ciphertext: *query.Ciphertext,
+			}
+			s.SwitchingParameters <- params
+
+			reply, err := s.switchKeys(tree, query.UUID)
 			if err != nil {
 				log.Error("Could not switch key : ", err)
 			}
-
+			log.Lvl1("Finished ciphertext switching. sending result to the querier ! ")
 			//reply to the origin of the queries
-			err = s.SendRaw(&query.ServerIdentity, reply)
+			err = s.SendRaw(msg.ServerIdentity, reply)
 			if err != nil {
 				log.Error("Could not send reply to the server :", err)
 			}
 		} else {
-			//Initialize all of the values and return
 			params := SwitchingParamters{
 				PublicKey:  *query.PublicKey,
-				Ciphertext: query.Ciphertext,
+				Ciphertext: *query.Ciphertext,
 			}
 			s.SwitchingParameters <- params
-
 		}
 	} else {
 		log.Error("Unknown message type :", msg.MsgType)
@@ -259,6 +267,8 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 				log.Lvl1(tn.ServerIdentity(), " : done with collective key gen ! ")
 
 				s.SecretKey = ckgp.Sk
+				s.DecryptorSk = bfv.NewDecryptor(s.Params, s.SecretKey)
+				s.Encoder = bfv.NewEncoder(s.Params)
 				s.PublicKey = bfv.NewKeyGenerator(s.Params).GenPublicKey(s.SecretKey)
 				s.pubKeyGenerated = true
 			}()
@@ -354,8 +364,6 @@ func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, 
 	query.PublicKey = bfv.NewPublicKey(s.Params)
 	query.PublicKey.Set(s.PublicKey.Get())
 
-	query.ServerIdentity = *s.ServerIdentity()
-
 	err := s.SendRaw(tree.Root.ServerIdentity, query)
 
 	if err != nil {
@@ -364,19 +372,26 @@ func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, 
 	}
 
 	//Wait for CKS to complete
+	log.Lvl1("Waiting for ciphertext UUID :", query.UUID)
+	for {
+		select {
+		case cipher := <-s.SwitchedCiphertext[query.UUID]:
+			plain := s.DecryptorSk.DecryptNew(&cipher)
+			//todo ask : when decoding the cipher text the values are not what is expected.
+			data64 := s.Encoder.DecodeUint(plain)
+			bytes, err := utils.Uint64ToBytes(data64)
+			if err != nil {
+				log.Error("Could not retrieve byte array : ", err)
+			}
+			response := &PlaintextReply{UUID: query.UUID, Data: bytes}
 
-	cipher := <-s.SwitchedCiphertext[query.UUID]
+			return response, nil
+		case <-time.After(time.Second):
+			log.Lvl1("Still waiting on ciphertext :", query.UUID)
+			break
+		}
 
-	plain := s.Decryptor.DecryptNew(&cipher)
-
-	data64 := s.Encoder.DecodeUint(plain)
-	bytes, err := utils.Uint64ToBytes(data64)
-	if err != nil {
-		log.Error("Could not retrieve byte array : ", err)
 	}
-	response := &PlaintextReply{UUID: query.UUID, Data: bytes}
-
-	return response, nil
 
 }
 

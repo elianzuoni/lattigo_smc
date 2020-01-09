@@ -1,9 +1,9 @@
 package services
 
 import (
+	"encoding/binary"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/network"
 	uuid "gopkg.in/satori/go.uuid.v1"
 )
 
@@ -56,8 +56,59 @@ type KeyReply struct {
 }
 
 type StoreQuery struct {
-	Ciphertext bfv.Ciphertext
+	Ciphertext *bfv.Ciphertext
 	uuid.UUID
+}
+
+func (sq *StoreQuery) MarshalBinary() ([]byte, error) {
+
+	ctD := make([]byte, 0)
+	if sq.Ciphertext != nil {
+		ctD, _ = sq.Ciphertext.MarshalBinary()
+
+	}
+
+	idD, err := sq.UUID.MarshalBinary()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	lenCt := len(ctD)
+	lenidD := len(idD) // should be 16
+
+	data := make([]byte, lenCt+lenidD+8*2) //last 16 bytes are for length of pk and ct
+	pointer := 0
+
+	binary.BigEndian.PutUint64(data[pointer:pointer+8], uint64(lenCt))
+	pointer += 8
+
+	copy(data[pointer:pointer+lenCt], ctD)
+	pointer += lenCt
+	copy(data[pointer:pointer+lenidD], idD)
+
+	return data, nil
+}
+func (sq *StoreQuery) UnmarshalBinary(data []byte) error {
+	pointer := 0
+	lenCt := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
+	pointer += 8
+
+	if lenCt > 0 {
+		sq.Ciphertext = new(bfv.Ciphertext)
+		err := sq.Ciphertext.UnmarshalBinary(data[pointer : pointer+lenCt])
+		if err != nil {
+			return err
+		}
+	}
+
+	pointer += lenCt
+
+	err := sq.UUID.UnmarshalBinary(data[pointer : pointer+16])
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type StoreReply struct {
@@ -96,14 +147,104 @@ type SetupReply struct {
 //TODO discuss issue - its impossible to send this structure on the network. it says its BinaryMarshaller compliant but it only serializes the UUID nothing else.
 //QueryPlaintext query for a ciphertext represented by UUID to be switched under publickey
 type QueryPlaintext struct {
-	PublicKey *bfv.PublicKey
-	bfv.Ciphertext
-	network.ServerIdentity
+	PublicKey  *bfv.PublicKey
+	Ciphertext *bfv.Ciphertext
 	uuid.UUID
+}
+
+func (qp *QueryPlaintext) MarshalBinary() ([]byte, error) {
+	pkD := make([]byte, 0)
+	if qp.PublicKey != nil {
+		pkD, _ = qp.PublicKey.MarshalBinary()
+
+	}
+
+	ctD := make([]byte, 0)
+	if qp.Ciphertext != nil {
+		ctD, _ = qp.Ciphertext.MarshalBinary()
+
+	}
+
+	idD, err := qp.UUID.MarshalBinary()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	lenPk := len(pkD)
+	lenCt := len(ctD)
+	lenidD := len(idD) // should be 16
+
+	data := make([]byte, lenPk+lenCt+lenidD+8*2) //last 16 bytes are for length of pk and ct
+	pointer := 0
+	binary.BigEndian.PutUint64(data[pointer:pointer+8], uint64(lenPk))
+	pointer += 8
+	binary.BigEndian.PutUint64(data[pointer:pointer+8], uint64(lenCt))
+	pointer += 8
+
+	copy(data[pointer:pointer+lenPk], pkD)
+	pointer += lenPk
+	copy(data[pointer:pointer+lenCt], ctD)
+	pointer += lenCt
+	copy(data[pointer:pointer+lenidD], idD)
+
+	return data, nil
+}
+
+func (qp *QueryPlaintext) UnmarshalBinary(data []byte) error {
+	pointer := 0
+	lenPk := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
+	pointer += 8
+	lenCt := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
+	pointer += 8
+	if lenPk > 0 {
+		qp.PublicKey = new(bfv.PublicKey)
+		err := qp.PublicKey.UnmarshalBinary(data[pointer : pointer+lenPk])
+		if err != nil {
+			return err
+		}
+
+	}
+
+	pointer += lenPk
+	if lenCt > 0 {
+		qp.Ciphertext = new(bfv.Ciphertext)
+		err := qp.Ciphertext.UnmarshalBinary(data[pointer : pointer+lenCt])
+		if err != nil {
+			return err
+		}
+	}
+
+	pointer += lenCt
+
+	err := qp.UUID.UnmarshalBinary(data[pointer : pointer+16])
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 //ReplyPlaintext contains the ciphertext switched under the key requested.
 type ReplyPlaintext struct {
 	uuid.UUID
-	Ciphertext bfv.Ciphertext
+	Ciphertext *bfv.Ciphertext
+}
+
+func (rp *ReplyPlaintext) MarshalBinary() ([]byte, error) {
+	sq := StoreQuery{
+		Ciphertext: rp.Ciphertext,
+		UUID:       rp.UUID,
+	}
+	return sq.MarshalBinary()
+}
+func (rp *ReplyPlaintext) UnmarshalBinary(data []byte) error {
+	var sq StoreQuery
+	err := sq.UnmarshalBinary(data)
+	if err != nil {
+		return err
+	}
+	rp.UUID = sq.UUID
+	rp.Ciphertext = sq.Ciphertext
+	return nil
 }

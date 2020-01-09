@@ -120,6 +120,8 @@ func (s *Service) genPublicKey(tree *onet.Tree) error {
 	log.Lvl1(ckgp.ServerIdentity(), "Waiting for the protocol to be finished :x")
 	ckgp.Wait()
 	s.SecretKey = ckgp.Sk
+	s.Encoder = bfv.NewEncoder(s.Params)
+	s.DecryptorSk = bfv.NewDecryptor(s.Params, s.SecretKey)
 	s.MasterPublicKey = ckgp.Pk
 	s.pubKeyGenerated = true
 	log.Lvl1(s.ServerIdentity(), " got public key!")
@@ -154,7 +156,7 @@ func (s *Service) genRotKey(tree *onet.Tree, k int, rotIdx int) error {
 	return nil
 }
 
-func (s *Service) switchKeys(tree *onet.Tree, querier *network.ServerIdentity, id uuid.UUID) (network.Message, error) {
+func (s *Service) switchKeys(tree *onet.Tree, id uuid.UUID) (*ReplyPlaintext, error) {
 	log.Lvl1(s.ServerIdentity(), " Switching keys")
 	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectivePublicKeySwitchingProtocolName)
 	protocol, err := s.NewProtocol(tni, nil)
@@ -180,7 +182,7 @@ func (s *Service) switchKeys(tree *onet.Tree, querier *network.ServerIdentity, i
 	//Send the ciphertext to the original asker.
 	reply := ReplyPlaintext{
 		UUID:       id,
-		Ciphertext: pks.CiphertextOut,
+		Ciphertext: &pks.CiphertextOut,
 	}
-	return reply, err
+	return &reply, err
 }

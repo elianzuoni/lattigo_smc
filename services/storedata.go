@@ -43,7 +43,7 @@ func (s *Service) HandleSendData(query *QueryData) (network.Message, error) {
 	//Send it to the server
 	encryptorPk := bfv.NewEncryptorFromPk(s.Params, s.MasterPublicKey)
 	cipher := encryptorPk.EncryptNew(pt)
-	err = s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{*cipher, id})
+	err = s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{cipher, id})
 	if err != nil {
 		log.Error("could not send cipher to the root. ")
 	}
