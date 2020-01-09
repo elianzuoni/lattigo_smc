@@ -39,6 +39,8 @@ type Service struct {
 	SwitchedCiphertext  map[uuid.UUID]chan bfv.Ciphertext
 	SwitchingParameters chan SwitchingParamters
 	RotationKey         []bfv.RotationKeys
+
+	SumReplies map[SumQuery]chan uuid.UUID
 }
 
 type SwitchingParamters struct {
@@ -66,6 +68,8 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		SwitchingParameters: make(chan SwitchingParamters, 10),
 		RotationKey:         make([]bfv.RotationKeys, 3),
 		rotKeyGenerated:     make([]bool, 3),
+
+		SumReplies: make(map[SumQuery]chan uuid.UUID),
 	}
 	//registering the handlers
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSendData); err != nil {
@@ -100,6 +104,10 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 
 	c.RegisterProcessor(newLattigo, msgTypes.msgQueryPlaintext)
 	c.RegisterProcessor(newLattigo, msgTypes.msgReplyPlaintext)
+
+	c.RegisterProcessor(newLattigo, msgTypes.msgSumQuery)
+	c.RegisterProcessor(newLattigo, msgTypes.msgSumReply)
+
 	return newLattigo, nil
 }
 
@@ -135,7 +143,33 @@ func (s *Service) Process(msg *network.Envelope) {
 	} else if msg.MsgType.Equal(msgTypes.msgMultiplyQuery) {
 
 	} else if msg.MsgType.Equal(msgTypes.msgSumQuery) {
+		log.Lvl1("Got request to sum up ciphertexts")
+		tmp := (msg.Msg).(*SumQuery)
+		log.Lvl1("Sum :", tmp.UUID, "+", tmp.Other)
+		eval := bfv.NewEvaluator(s.Params)
+		ct1, ok := s.DataBase[tmp.UUID]
+		if !ok {
+			log.Error("Ciphertext ", tmp.UUID, " does not exist.")
+			return
+		}
 
+		ct2, ok := s.DataBase[tmp.Other]
+		if !ok {
+			log.Error("Ciphertext ", tmp.UUID, " does not exist.")
+			return
+		}
+		id := uuid.NewV1()
+		s.DataBase[id] = eval.AddNew(ct1, ct2)
+		reply := SumReply{id, *tmp}
+		err := s.SendRaw(msg.ServerIdentity, &reply)
+		if err != nil {
+			log.Error("Could not reply to the server ", err)
+		}
+
+	} else if msg.MsgType.Equal(msgTypes.msgSumReply) {
+		log.Lvl1("Got message for sum reply")
+		tmp := (msg.Msg).(*SumReply)
+		s.SumReplies[tmp.SumQuery] <- tmp.UUID
 	} else if msg.MsgType.Equal(msgTypes.msgStoreReply) {
 		log.Lvl1("Got a store reply")
 		tmp := (msg.Msg).(*StoreReply)
@@ -352,8 +386,6 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 
 	return protocol, nil
 }
-
-//TODO Method below
 
 func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, error) {
 	//Initiate the CKS

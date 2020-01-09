@@ -67,7 +67,8 @@ func writeQuery(el *onet.Roster, data string) error {
 	if err != nil {
 		return err
 	}
-	result, err := client.GetRemoteId(queryID)
+
+	log.Lvl1("Result of data was written in ciphertext with UUID ", queryID)
 
 	return nil
 }

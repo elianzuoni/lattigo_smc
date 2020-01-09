@@ -20,6 +20,7 @@ type MsgTypes struct {
 
 	msgQueryPlaintext network.MessageTypeID
 	msgReplyPlaintext network.MessageTypeID
+	msgSumReply       network.MessageTypeID
 }
 
 var msgTypes = MsgTypes{}
@@ -37,6 +38,7 @@ func init() {
 	msgTypes.msgQueryData = network.RegisterMessage(&QueryData{})
 	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
 	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{})
+	msgTypes.msgSumReply = network.RegisterMessage(&SumReply{})
 	msgTypes.msgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{})
 	msgTypes.msgStoreReply = network.RegisterMessage(&StoreReply{})
 

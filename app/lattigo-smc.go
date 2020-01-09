@@ -3,9 +3,9 @@ package app
 import (
 	"errors"
 	"github.com/urfave/cli"
-	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3/app"
 	"go.dedis.ch/onet/v3/log"
+	"lattigo-smc/utils"
 	"os"
 )
 
@@ -31,7 +31,6 @@ func main() {
 		},
 		cli.BoolFlag{Name: "sum ,s", Usage: "Get sum of all data on the server"},
 		cli.BoolFlag{Name: "multiply ,m", Usage: "Get product of all data on the server"},
-		//todo see how we could do something like that.... maybe if the server has a trained vector
 		cli.BoolFlag{Name: "predict, p", Usage: "Predict a value based on the data in the server"},
 	}
 	serverFlags := []cli.Flag{

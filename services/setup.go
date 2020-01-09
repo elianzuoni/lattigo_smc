@@ -26,7 +26,7 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 	s.crpGen = *dbfv.NewCRPGenerator(s.Params, request.Seed)
 
 	//Collective Key Generation
-	if !s.pubKeyGenerated {
+	if !s.pubKeyGenerated && request.GeneratePublicKey {
 		//send the information to the childrens.
 		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
 
@@ -45,16 +45,41 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 
 	}
 
-	if !request.GenerateEvaluationKey {
-		log.Lvl1("Did not request for evaluation key. returning..")
-		return &SetupReply{1}, nil
-
-	}
 	//Eval key generation
-	if !s.evalKeyGenerated {
-		err := s.genEvalKey(tree)
-		if err != nil {
-			return &SetupReply{-1}, err
+	if request.GenerateEvaluationKey && !s.evalKeyGenerated {
+		log.Lvl1("Generate evalutation key ! ")
+		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
+
+			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
+			if err != nil {
+				return &SetupReply{-1}, err
+			}
+
+			err = s.genEvalKey(tree)
+
+			if err != nil {
+				return &SetupReply{-1}, err
+			}
+
+		}
+	}
+
+	if request.GenerateRotationKey && !s.rotKeyGenerated[request.RotIdx] {
+
+		log.Lvl1("Generate evalutation key ! ")
+		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
+
+			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
+			if err != nil {
+				return &SetupReply{-1}, err
+			}
+
+			err = s.genRotKey(tree, request.K, request.RotIdx)
+
+			if err != nil {
+				return &SetupReply{-1}, err
+			}
+
 		}
 	}
 
@@ -128,7 +153,7 @@ func (s *Service) genPublicKey(tree *onet.Tree) error {
 	return nil
 }
 
-func (s *Service) genRotKey(tree *onet.Tree, k int, rotIdx int) error {
+func (s *Service) genRotKey(tree *onet.Tree, k uint64, rotIdx int) error {
 	log.Lvl1("Starting rotation key protocol")
 	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RotationProtocolName)
 	protocol, err := s.NewProtocol(tni, nil)

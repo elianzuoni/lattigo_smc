@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestSetupCollectiveKey(t *testing.T) {
+func TestSetupCollectiveKeyGen(t *testing.T) {
 	log.SetDebugVisible(1)
 	log.Lvl1("Testing if setup is done properly for the service")
 	//turning off test.
@@ -19,11 +19,43 @@ func TestSetupCollectiveKey(t *testing.T) {
 	client := NewLattigoSMCClient(el.List[0], "0")
 	//First the client needs to ask the parties to generate the keys.
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
-	err := client.SendSetupQuery(el, false, 0, seed)
+	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
 	if err != nil {
 		t.Fatal("Could not setup the roster", err)
 	}
 
+}
+
+func TestSetupEvalKey(t *testing.T) {
+	log.SetDebugVisible(1)
+	log.Lvl1("Testing if setup for evaluation key is done properly for the service")
+	//turning off test.
+	size := 3
+	local := onet.NewLocalTest(utils.SUITE)
+	_, el, _ := local.GenTree(size, true)
+	client := NewLattigoSMCClient(el.List[0], "0")
+	//First the client needs to ask the parties to generate the keys.
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+	err := client.SendSetupQuery(el, false, true, false, 0, 0, 0, seed)
+	if err != nil {
+		t.Fatal("Could not setup the roster", err)
+	}
+}
+
+func TestSetupRotKey(t *testing.T) {
+	log.SetDebugVisible(4)
+	log.Lvl1("Testing if setup for rotation key is done properly for the service")
+	//turning off test.
+	size := 3
+	local := onet.NewLocalTest(utils.SUITE)
+	_, el, _ := local.GenTree(size, true)
+	client := NewLattigoSMCClient(el.List[0], "0")
+	//First the client needs to ask the parties to generate the keys.
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+	err := client.SendSetupQuery(el, false, false, true, 1, 0, 0, seed)
+	if err != nil {
+		t.Fatal("Could not setup the roster", err)
+	}
 }
 
 func TestWrite(t *testing.T) {
@@ -35,7 +67,7 @@ func TestWrite(t *testing.T) {
 	client := NewLattigoSMCClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(el, false, 0, seed)
+	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -67,7 +99,7 @@ func TestSwitching(t *testing.T) {
 	client := NewLattigoSMCClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(el, false, 0, seed)
+	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -95,5 +127,67 @@ func TestSwitching(t *testing.T) {
 	assert.Equal(t, "Result", string(data), string(content))
 
 	<-time.After(1000 * time.Second)
+
+}
+
+func TestSumQuery(t *testing.T) {
+	log.SetDebugVisible(4)
+	size := 5
+	local := onet.NewLocalTest(utils.SUITE)
+	_, el, _ := local.GenTree(size, true)
+
+	client := NewLattigoSMCClient(el.List[0], "0")
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+
+	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	<-time.After(2 * time.Second)
+
+	client1 := NewLattigoSMCClient(el.List[1], "1")
+
+	q, err := client1.SendKeyRequest(true, false, false)
+	log.Lvl1("Response of query : ", q)
+	d1 := []byte{1, 2, 3, 4, 5, 6}
+	queryID1, err := client1.SendWriteQuery(el, d1)
+	if err != nil {
+		t.Fatal("Could not start client :", err)
+
+	}
+
+	log.Lvl2("Query Id 1: ", queryID1)
+	<-time.After(1 * time.Second)
+
+	d2 := []byte{8, 9, 10, 11, 12, 13}
+	queryID2, err := client1.SendWriteQuery(el, d2)
+	if err != nil {
+		t.Fatal("Could not start client :", err)
+
+	}
+
+	log.Lvl2("Query Id 2: ", queryID2)
+	<-time.After(1 * time.Second)
+
+	log.Lvl1("oWo Now wee sum up our senpai cipher owo ")
+
+	result, err := client1.SendSumQuery(*queryID1, *queryID2)
+	log.Lvl1("Sum of ct1 and ct2 is stored in : ", result)
+
+	//Try to do a key switch on it!!!
+	<-time.After(1 * time.Second)
+	client2 := NewLattigoSMCClient(el.List[2], "2")
+	data, err := client2.GetPlaintext(el, &result)
+	log.Lvl1("Client retrieved data : ", data)
+
+	res := make([]byte, 6)
+	for i := range res {
+		res[i] = d1[i] + d2[i]
+	}
+
+	assert.Equal(t, "Result", data[:6], res)
+
+	return
 
 }

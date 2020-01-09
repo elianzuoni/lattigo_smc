@@ -36,12 +36,24 @@ func NewLattigoSMCClient(entryPoint *network.ServerIdentity, clientID string) *A
 }
 
 //SendSumQuery sends a query to sum up to ciphertext.
-func (c *API) SendSumQuery() {
+func (c *API) SendSumQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
+	query := SumQuery{
+		UUID:  id1,
+		Other: id2,
+	}
+	result := ServiceState{}
+	err := c.SendProtobuf(c.entryPoint, &query, &result)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	log.Lvl1("Got reply of sum query :", result.Id)
+	return result.Id, nil
 
 }
 
 //SendMultiplyQuery sends a query to multiply 2 ciphertext.
 func (c *API) SendMultiplyQuery() {
+	panic("not implemented")
 
 }
 
@@ -82,10 +94,10 @@ func (c *API) SendKeyRequest(publickey, evaluationkey, rotationkey bool) (int, e
 }
 
 //SendSetupQuery sends a query for the roster to set up to generate the keys needed.
-func (c *API) SendSetupQuery(entities *onet.Roster, generateEvaluationKey bool, paramsIdx uint64, seed []byte) error {
+func (c *API) SendSetupQuery(entities *onet.Roster, generatePublicKey, generateEvaluationKey, genRotationKey bool, K uint64, rotIdx int, paramsIdx uint64, seed []byte) error {
 	log.Lvl1(c, "Sending a setup query to the roster")
 
-	setupQuery := SetupRequest{*entities, paramsIdx, seed, generateEvaluationKey}
+	setupQuery := SetupRequest{*entities, paramsIdx, seed, generatePublicKey, generateEvaluationKey, genRotationKey, K, rotIdx}
 	resp := SetupReply{}
 	err := c.SendProtobuf(c.entryPoint, &setupQuery, &resp)
 	if err != nil {
