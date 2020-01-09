@@ -86,6 +86,11 @@ type MultiplyQuery struct {
 	Other uuid.UUID
 }
 
+type MultiplyReply struct {
+	uuid.UUID
+	MultiplyQuery
+}
+
 //RefreshQuery query for UUID to be refreshed.
 type RefreshQuery struct {
 	uuid.UUID

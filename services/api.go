@@ -52,8 +52,18 @@ func (c *API) SendSumQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
 }
 
 //SendMultiplyQuery sends a query to multiply 2 ciphertext.
-func (c *API) SendMultiplyQuery() {
-	panic("not implemented")
+func (c *API) SendMultiplyQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
+	query := MultiplyQuery{
+		UUID:  id1,
+		Other: id2,
+	}
+	result := ServiceState{}
+	err := c.SendProtobuf(c.entryPoint, &query, &result)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	log.Lvl1("Got reply of multiply query :", result.Id)
+	return result.Id, nil
 
 }
 
@@ -126,4 +136,17 @@ func (c *API) GetPlaintext(roster *onet.Roster, id *uuid.UUID) ([]byte, error) {
 //String returns the string representation of the client
 func (c *API) String() string {
 	return "[Client " + c.clientID + "]"
+}
+
+func (c *API) SendRelinQuery(uuids uuid.UUID) (uuid.UUID, error) {
+	query := RelinQuery{
+		UUID: uuids,
+	}
+	result := ServiceState{}
+	err := c.SendProtobuf(c.entryPoint, &query, &result)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	log.Lvl1("Got reply of relinearization query :", result.Id)
+	return result.Id, nil
 }

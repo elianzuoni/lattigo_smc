@@ -212,3 +212,41 @@ func (sr *SumReply) UnmarshalBinary(data []byte) error {
 	err = sr.UUID.UnmarshalBinary(data[2*uuid.Size:])
 	return err
 }
+
+func (mq *MultiplyQuery) MarshalBinary() ([]byte, error) {
+	data := make([]byte, 32)
+	copy(data[:uuid.Size], mq.UUID.Bytes())
+	copy(data[uuid.Size:], mq.Other.Bytes())
+	return data, nil
+}
+
+func (mq *MultiplyQuery) UnmarshalBinary(data []byte) error {
+	if len(data) != 32 {
+		return errors.New("unexpected data size")
+	}
+	err := mq.UUID.UnmarshalBinary(data[:uuid.Size])
+	if err != nil {
+		return err
+	}
+	err = mq.Other.UnmarshalBinary(data[uuid.Size:])
+	return err
+}
+
+func (mr *MultiplyReply) MarshalBinary() ([]byte, error) {
+	data, err := mr.MultiplyQuery.MarshalBinary()
+	if err != nil {
+		return []byte{}, err
+	}
+	data = append(data, mr.UUID.Bytes()...)
+	return data, nil
+
+}
+
+func (mr *MultiplyReply) UnmarshalBinary(data []byte) error {
+	err := mr.MultiplyQuery.UnmarshalBinary(data[:2*uuid.Size])
+	if err != nil {
+		return err
+	}
+	err = mr.UUID.UnmarshalBinary(data[2*uuid.Size:])
+	return err
+}

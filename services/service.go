@@ -40,7 +40,8 @@ type Service struct {
 	SwitchingParameters chan SwitchingParamters
 	RotationKey         []bfv.RotationKeys
 
-	SumReplies map[SumQuery]chan uuid.UUID
+	SumReplies      map[SumQuery]chan uuid.UUID
+	MultiplyReplies map[MultiplyQuery]chan uuid.UUID
 }
 
 type SwitchingParamters struct {
@@ -69,7 +70,8 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		RotationKey:         make([]bfv.RotationKeys, 3),
 		rotKeyGenerated:     make([]bool, 3),
 
-		SumReplies: make(map[SumQuery]chan uuid.UUID),
+		SumReplies:      make(map[SumQuery]chan uuid.UUID),
+		MultiplyReplies: make(map[MultiplyQuery]chan uuid.UUID),
 	}
 	//registering the handlers
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSendData); err != nil {
@@ -94,12 +96,16 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		return nil, errors.New("Wrong handler 8 : " + err.Error())
 	}
 
-	c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
-	c.RegisterProcessor(newLattigo, msgTypes.msgQuery)
+	if err := newLattigo.RegisterHandler(newLattigo.HandleRelinearizationQuery); err != nil {
+		return nil, errors.New("Wrong handler 9 : " + err.Error())
+	}
+
+	//c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
 	c.RegisterProcessor(newLattigo, msgTypes.msgSetupRequest)
 	c.RegisterProcessor(newLattigo, msgTypes.msgKeyRequest)
 	c.RegisterProcessor(newLattigo, msgTypes.msgKeyReply)
 
+	c.RegisterProcessor(newLattigo, msgTypes.msgQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgStoreReply)
 
 	c.RegisterProcessor(newLattigo, msgTypes.msgQueryPlaintext)
@@ -107,6 +113,9 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 
 	c.RegisterProcessor(newLattigo, msgTypes.msgSumQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgSumReply)
+	c.RegisterProcessor(newLattigo, msgTypes.msgMultiplyQuery)
+	c.RegisterProcessor(newLattigo, msgTypes.msgMultiplyReply)
+	c.RegisterProcessor(newLattigo, msgTypes.msgRelinQuery)
 
 	return newLattigo, nil
 }
@@ -138,9 +147,37 @@ func (s *Service) Process(msg *network.Envelope) {
 		}
 		log.Lvl1("Sent an acknowledgement to  ", sender.String())
 
-	} else if msg.MsgType.Equal(msgTypes.msgQueryData) {
+		//} else if msg.MsgType.Equal(msgTypes.msgQueryData) {
 
 	} else if msg.MsgType.Equal(msgTypes.msgMultiplyQuery) {
+
+		log.Lvl1("Got request to multiply two ciphertexts")
+		tmp := (msg.Msg).(*MultiplyQuery)
+		log.Lvl1("Multply :", tmp.UUID, "+", tmp.Other)
+		eval := bfv.NewEvaluator(s.Params)
+		ct1, ok := s.DataBase[tmp.UUID]
+		if !ok {
+			log.Error("Ciphertext ", tmp.UUID, " does not exist.")
+			return
+		}
+
+		ct2, ok := s.DataBase[tmp.Other]
+		if !ok {
+			log.Error("Ciphertext ", tmp.UUID, " does not exist.")
+			return
+		}
+		id := uuid.NewV1()
+		s.DataBase[id] = eval.MulNew(ct1, ct2)
+		reply := MultiplyReply{id, *tmp}
+		err := s.SendRaw(msg.ServerIdentity, &reply)
+		if err != nil {
+			log.Error("Could not reply to the server ", err)
+		}
+
+	} else if msg.MsgType.Equal(msgTypes.msgMultiplyReply) {
+		log.Lvl1("Got reply of multiply query ")
+		tmp := (msg.Msg).(*MultiplyReply)
+		s.MultiplyReplies[tmp.MultiplyQuery] <- tmp.UUID
 
 	} else if msg.MsgType.Equal(msgTypes.msgSumQuery) {
 		log.Lvl1("Got request to sum up ciphertexts")
@@ -170,6 +207,24 @@ func (s *Service) Process(msg *network.Envelope) {
 		log.Lvl1("Got message for sum reply")
 		tmp := (msg.Msg).(*SumReply)
 		s.SumReplies[tmp.SumQuery] <- tmp.UUID
+	} else if msg.MsgType.Equal(msgTypes.msgRelinQuery) {
+		log.Lvl1("Got relin query")
+		tmp := (msg.Msg).(*RelinQuery)
+		ct, ok := s.DataBase[tmp.UUID]
+		if !ok {
+			log.Error("query for ciphertext that does not exist : ", tmp.UUID)
+			return
+		}
+		if !s.evalKeyGenerated {
+			log.Error("evaluation key not generated aborting")
+			return
+		}
+
+		eval := bfv.NewEvaluator(s.Params)
+		ct = eval.RelinearizeNew(ct, s.EvaluationKey)
+		s.DataBase[tmp.UUID] = ct
+		log.Lvl1("Relinearization done")
+		return
 	} else if msg.MsgType.Equal(msgTypes.msgStoreReply) {
 		log.Lvl1("Got a store reply")
 		tmp := (msg.Msg).(*StoreReply)
@@ -426,35 +481,4 @@ func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, 
 
 	}
 
-}
-
-/*************UNUSED FOR NOW ******************/
-func (s *Service) StartProtocol(name string) (onet.ProtocolInstance, error) {
-	log.Lvl1(s.ServerIdentity(), ": starts protocol :", name)
-	tree := s.GenerateBigNaryTree(2, len(s.Roster.List))
-	tni := s.NewTreeNodeInstance(tree, tree.Root, name)
-	var conf onet.GenericConfig //todo what is the config ?
-	protocol, err := s.NewProtocol(tni, &conf)
-	if err != nil {
-		return nil, errors.New("Error runnning " + name + ": " + err.Error())
-	}
-	err = s.RegisterProtocolInstance(protocol)
-	if err != nil {
-		return nil, err
-	}
-	go func(protoname string) {
-		err := protocol.Dispatch()
-		if err != nil {
-			log.Error("Error in dispatch : ", err)
-		}
-	}(name)
-
-	go func(protoname string) {
-		err := protocol.Start()
-		if err != nil {
-			log.Error("Error on start :", err)
-		}
-	}(name)
-
-	return protocol, nil
 }

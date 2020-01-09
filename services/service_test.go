@@ -172,22 +172,86 @@ func TestSumQuery(t *testing.T) {
 
 	log.Lvl1("oWo Now wee sum up our senpai cipher owo ")
 
-	result, err := client1.SendSumQuery(*queryID1, *queryID2)
-	log.Lvl1("Sum of ct1 and ct2 is stored in : ", result)
+	resultSum, err := client1.SendSumQuery(*queryID1, *queryID2)
+	log.Lvl1("Sum of ct1 and ct2 is stored in : ", resultSum)
+
+	//Try to do a key switch on it!!!
+	<-time.After(1 * time.Second)
+	client2 := NewLattigoSMCClient(el.List[2], "2")
+	dataSum, err := client2.GetPlaintext(el, &resultSum)
+	log.Lvl1("Client retrieved data for sum : ", dataSum)
+
+	resSum := make([]byte, 6)
+	for i := range d1 {
+		resSum[i] = d1[i] + d2[i]
+	}
+
+	assert.Equal(t, "Sum", dataSum[:6], resSum)
+
+	return
+
+}
+
+func TestRelinearization(t *testing.T) {
+	log.Lvl1("Testing relinearization")
+	log.SetDebugVisible(1)
+	size := 5
+	local := onet.NewLocalTest(utils.SUITE)
+	_, el, _ := local.GenTree(size, true)
+
+	client := NewLattigoSMCClient(el.List[0], "0")
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+
+	err := client.SendSetupQuery(el, true, true, false, 0, 0, 0, seed)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	<-time.After(2 * time.Second)
+
+	client1 := NewLattigoSMCClient(el.List[1], "1")
+
+	q, err := client1.SendKeyRequest(true, false, false)
+	log.Lvl1("Response of query : ", q)
+	d1 := []byte{1, 2, 3, 4, 5, 6}
+	queryID1, err := client1.SendWriteQuery(el, d1)
+	if err != nil {
+		t.Fatal("Could not start client :", err)
+
+	}
+
+	log.Lvl2("Query Id 1: ", queryID1)
+	<-time.After(1 * time.Second)
+
+	d2 := []byte{8, 9, 10, 11, 12, 13}
+	queryID2, err := client1.SendWriteQuery(el, d2)
+	if err != nil {
+		t.Fatal("Could not start client :", err)
+
+	}
+
+	log.Lvl2("Query Id 2: ", queryID2)
+	<-time.After(1 * time.Second)
+
+	log.Lvl1("oWo Now wee sum up our senpai cipher owo ")
+
+	result, err := client1.SendMultiplyQuery(*queryID1, *queryID2)
+	log.Lvl1("Multiply of ct1 and ct2 is stored in : ", result)
+
+	log.Lvl1("Requesting for relinearization!")
+	result, err = client1.SendRelinQuery(result)
 
 	//Try to do a key switch on it!!!
 	<-time.After(1 * time.Second)
 	client2 := NewLattigoSMCClient(el.List[2], "2")
 	data, err := client2.GetPlaintext(el, &result)
-	log.Lvl1("Client retrieved data : ", data)
+	log.Lvl1("Client retrieved data for sum : ", data)
 
 	res := make([]byte, 6)
-	for i := range res {
-		res[i] = d1[i] + d2[i]
+	for i := range d1 {
+		res[i] = d1[i] * d2[i]
 	}
 
-	assert.Equal(t, "Result", data[:6], res)
-
-	return
+	assert.Equal(t, "Multiplication", data[:6], res)
 
 }
