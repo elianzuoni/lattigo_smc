@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/binary"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	uuid "gopkg.in/satori/go.uuid.v1"
@@ -52,10 +53,9 @@ type KeyRequest struct {
 
 //KeyReply containing different requested keys.
 type KeyReply struct {
-	bfv.PublicKey
-	//EvaluationKey bfv.EvaluationKey
-	//RotationKeys bfv.RotationKeys
-
+	*bfv.PublicKey
+	*bfv.EvaluationKey
+	*bfv.RotationKeys
 }
 
 type StoreQuery struct {
@@ -97,26 +97,6 @@ type RefreshQuery struct {
 	*bfv.Ciphertext
 }
 
-func (rq *RefreshQuery) MarshalBinary() ([]byte, error) {
-	cast := new(ReplyPlaintext)
-	cast.UUID = rq.UUID
-	cast.Ciphertext = rq.Ciphertext
-	return cast.MarshalBinary()
-
-}
-
-func (rq *RefreshQuery) UnmarshalBinary(data []byte) error {
-	var cast ReplyPlaintext
-	err := cast.UnmarshalBinary(data)
-	if err != nil {
-		return err
-	}
-
-	rq.UUID = cast.UUID
-	rq.Ciphertext = cast.Ciphertext
-	return nil
-}
-
 //RelinQuery query for UUID to be relinearized
 type RelinQuery struct {
 	uuid.UUID
@@ -138,4 +118,15 @@ type QueryPlaintext struct {
 type ReplyPlaintext struct {
 	uuid.UUID
 	Ciphertext *bfv.Ciphertext
+}
+
+type RotationQuery struct {
+	uuid.UUID
+	RotIdx int
+	K      uint64
+}
+
+type RotationReply struct {
+	Old uuid.UUID
+	New uuid.UUID
 }

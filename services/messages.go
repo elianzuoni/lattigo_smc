@@ -30,6 +30,8 @@ type MsgTypes struct {
 	msgMultiplyReply network.MessageTypeID
 	msgRelinQuery    network.MessageTypeID
 	msgRefreshQuery  network.MessageTypeID
+	msgRotationReply network.MessageTypeID
+	msgRotationQuery network.MessageTypeID
 }
 
 var msgTypes = MsgTypes{}
@@ -62,4 +64,7 @@ func init() {
 
 	msgTypes.msgRelinQuery = network.RegisterMessage(&RelinQuery{})
 	msgTypes.msgRefreshQuery = network.RegisterMessage(&RefreshQuery{})
+
+	msgTypes.msgRotationQuery = network.RegisterMessage(&RotationQuery{})
+	msgTypes.msgRotationReply = network.RegisterMessage(&RotationReply{})
 }

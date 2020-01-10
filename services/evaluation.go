@@ -122,3 +122,18 @@ func (s *Service) HandleRelinearizationQuery(query *RelinQuery) (network.Message
 	return &ServiceState{query.UUID, false}, nil
 
 }
+
+func (s *Service) HandleRotationQuery(query *RotationQuery) (network.Message, error) {
+	log.Lvl1("Got rotation request : ", query.UUID)
+	tree := s.Roster.GenerateBinaryTree()
+	err := s.SendRaw(tree.Root.ServerIdentity, query)
+	if err != nil {
+		return nil, err
+	}
+
+	s.RotationReplies[query.UUID] = make(chan uuid.UUID)
+	res := <-s.RotationReplies[query.UUID]
+
+	return &ServiceState{res, false}, nil
+
+}

@@ -250,3 +250,145 @@ func (mr *MultiplyReply) UnmarshalBinary(data []byte) error {
 	err = mr.UUID.UnmarshalBinary(data[2*uuid.Size:])
 	return err
 }
+
+func (rq *RefreshQuery) MarshalBinary() ([]byte, error) {
+	cast := new(ReplyPlaintext)
+	cast.UUID = rq.UUID
+	cast.Ciphertext = rq.Ciphertext
+	return cast.MarshalBinary()
+
+}
+
+func (rq *RefreshQuery) UnmarshalBinary(data []byte) error {
+	var cast ReplyPlaintext
+	err := cast.UnmarshalBinary(data)
+	if err != nil {
+		return err
+	}
+
+	rq.UUID = cast.UUID
+	rq.Ciphertext = cast.Ciphertext
+	return nil
+}
+
+func (rr *RotationReply) MarshalBinary() ([]byte, error) {
+	data := make([]byte, uuid.Size*2)
+	oldD, err := rr.Old.MarshalBinary()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	newD, err := rr.New.MarshalBinary()
+	if err != nil {
+		return []byte{}, err
+	}
+
+	copy(data[0:uuid.Size], oldD)
+	copy(data[uuid.Size:], newD)
+	return data, nil
+}
+
+func (rr *RotationReply) UnmarshalBinary(data []byte) error {
+	if len(data) != uuid.Size*2 {
+		return errors.New("unexpected data len have : " + string(len(data)) + " should be 32")
+	}
+	rr.Old = *new(uuid.UUID)
+	err := rr.Old.UnmarshalBinary(data[:uuid.Size])
+	if err != nil {
+		return err
+	}
+
+	rr.New = *new(uuid.UUID)
+	err = rr.New.UnmarshalBinary(data[uuid.Size:])
+	return err
+}
+
+func (kr *KeyReply) MarshalBinary() ([]byte, error) {
+	pkData := make([]byte, 0)
+	var err error
+	if kr.PublicKey != nil {
+		pkData, err = kr.PublicKey.MarshalBinary()
+		if err != nil {
+			return []byte{}, err
+		}
+
+	}
+	ekData := make([]byte, 0)
+	if kr.EvaluationKey != nil {
+		ekData, err = kr.EvaluationKey.MarshalBinary()
+		if err != nil {
+			return []byte{}, err
+		}
+
+	}
+
+	rkData := make([]byte, 0)
+	if kr.RotationKeys != nil {
+		rkData, err = kr.RotationKeys.MarshalBinary()
+		if err != nil {
+			return []byte{}, err
+		}
+
+	}
+
+	pkLen := len(pkData)
+	ekLen := len(ekData)
+	rkLen := len(rkData)
+	data := make([]byte, pkLen+ekLen+rkLen+8*3)
+	pointer := 0
+	binary.BigEndian.PutUint64(data[pointer:pointer+8], uint64(pkLen))
+	pointer += 8
+	binary.BigEndian.PutUint64(data[pointer:pointer+8], uint64(ekLen))
+	pointer += 8
+	binary.BigEndian.PutUint64(data[pointer:pointer+8], uint64(rkLen))
+	pointer += 8
+	copy(data[pointer:pointer+pkLen], pkData)
+	pointer += pkLen
+	copy(data[pointer:pointer+ekLen], ekData)
+	pointer += ekLen
+	copy(data[pointer:pointer+rkLen], rkData)
+	pointer += rkLen
+
+	return data, nil
+
+}
+
+func (kr *KeyReply) UnmarshalBinary(data []byte) error {
+	if len(data) < 8*3 {
+		return nil
+	}
+	pointer := 0
+	pkLen := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
+	pointer += 8
+	ekLen := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
+	pointer += 8
+	rkLen := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
+	pointer += 8
+	if pkLen > 0 {
+		kr.PublicKey = new(bfv.PublicKey)
+		err := kr.PublicKey.UnmarshalBinary(data[pointer : pointer+pkLen])
+		if err != nil {
+			return err
+		}
+		pointer += pkLen
+	}
+
+	if ekLen > 0 {
+		kr.EvaluationKey = new(bfv.EvaluationKey)
+		err := kr.EvaluationKey.UnmarshalBinary(data[pointer : pointer+ekLen])
+		if err != nil {
+			return err
+		}
+		pointer += ekLen
+	}
+	if rkLen > 0 {
+		err := kr.RotationKeys.UnmarshalBinary(data[pointer : pointer+rkLen])
+		if err != nil {
+			return err
+		}
+
+		pointer += rkLen
+	}
+
+	return nil
+}

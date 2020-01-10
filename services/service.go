@@ -42,7 +42,9 @@ type Service struct {
 
 	SumReplies      map[SumQuery]chan uuid.UUID
 	MultiplyReplies map[MultiplyQuery]chan uuid.UUID
-	RefreshParams   chan *bfv.Ciphertext
+	RotationReplies map[uuid.UUID]chan uuid.UUID
+
+	RefreshParams chan *bfv.Ciphertext
 }
 
 type SwitchingParamters struct {
@@ -74,6 +76,7 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		SumReplies:      make(map[SumQuery]chan uuid.UUID),
 		MultiplyReplies: make(map[MultiplyQuery]chan uuid.UUID),
 		RefreshParams:   make(chan *bfv.Ciphertext),
+		RotationReplies: make(map[uuid.UUID]chan uuid.UUID),
 	}
 	//registering the handlers
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSendData); err != nil {
@@ -106,6 +109,10 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		return nil, errors.New("Wrong handler 10 : " + err.Error())
 	}
 
+	if err := newLattigo.RegisterHandler(newLattigo.HandleRotationQuery); err != nil {
+		return nil, errors.New("Wrong handler 11 : " + err.Error())
+	}
+
 	//c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
 	c.RegisterProcessor(newLattigo, msgTypes.msgSetupRequest)
 	c.RegisterProcessor(newLattigo, msgTypes.msgKeyRequest)
@@ -123,6 +130,8 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 	c.RegisterProcessor(newLattigo, msgTypes.msgMultiplyReply)
 	c.RegisterProcessor(newLattigo, msgTypes.msgRelinQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgRefreshQuery)
+	c.RegisterProcessor(newLattigo, msgTypes.msgRotationQuery)
+	c.RegisterProcessor(newLattigo, msgTypes.msgRotationReply)
 
 	return newLattigo, nil
 }
@@ -216,6 +225,40 @@ func (s *Service) Process(msg *network.Envelope) {
 		log.Lvl1("Got message for sum reply")
 		tmp := (msg.Msg).(*SumReply)
 		s.SumReplies[tmp.SumQuery] <- tmp.UUID
+	} else if msg.MsgType.Equal(msgTypes.msgRotationQuery) {
+		log.Lvl1("Got request for rotation !")
+		tmp := (msg.Msg).(*RotationQuery)
+		rotIdx := tmp.RotIdx
+		K := tmp.K
+		id := tmp.UUID
+		if !s.rotKeyGenerated[rotIdx] {
+			return
+		}
+		eval := bfv.NewEvaluator(s.Params)
+		cipher, ok := s.DataBase[id]
+		if !ok {
+			log.Error("Ciphertext does not exist : ", id)
+			return
+		}
+		newId := uuid.NewV1()
+		switch bfv.Rotation(rotIdx) {
+		case bfv.RotationRow:
+			s.DataBase[newId] = eval.RotateRowsNew(cipher, &s.RotationKey[rotIdx])
+		case bfv.RotationLeft:
+		case bfv.RotationRight:
+			s.DataBase[newId] = eval.RotateColumnsNew(cipher, K, &s.RotationKey[rotIdx])
+		}
+		reply := RotationReply{id, newId}
+		err := s.SendRaw(msg.ServerIdentity, &reply)
+		if err != nil {
+			log.Error("Could not rotate ciphertext : ", err)
+		}
+
+	} else if msg.MsgType.Equal(msgTypes.msgRotationReply) {
+		log.Lvl1("Got rotation replies")
+		tmp := (msg.Msg).(*RotationReply)
+		s.RotationReplies[tmp.Old] <- tmp.New
+
 	} else if msg.MsgType.Equal(msgTypes.msgRelinQuery) {
 		log.Lvl1("Got relin query")
 		tmp := (msg.Msg).(*RelinQuery)
@@ -252,8 +295,7 @@ func (s *Service) Process(msg *network.Envelope) {
 		reply := KeyReply{}
 		tmp := (msg.Msg).(*KeyRequest)
 		if tmp.PublicKey && s.pubKeyGenerated {
-			reply.PublicKey = *bfv.NewPublicKey(s.Params)
-			reply.PublicKey.Set(s.MasterPublicKey.Get())
+			reply.PublicKey = (s.MasterPublicKey)
 		}
 		//if tmp.EvaluationKey && s.evalKeyGenerated{
 		//	reply.EvaluationKey = *s.EvaluationKey
@@ -274,8 +316,8 @@ func (s *Service) Process(msg *network.Envelope) {
 	} else if msg.MsgType.Equal(msgTypes.msgKeyReply) {
 		log.Lvl1("Got a key reply")
 		tmp := (msg.Msg).(*KeyReply)
-		if tmp.PublicKey.Get()[0] != nil {
-			s.MasterPublicKey = &tmp.PublicKey
+		if tmp.PublicKey != nil {
+			s.MasterPublicKey = tmp.PublicKey
 		}
 		//if tmp.Flags & 2 > 0 {
 		//	s.EvaluationKey = &tmp.EvaluationKey
