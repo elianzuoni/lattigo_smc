@@ -42,6 +42,7 @@ type Service struct {
 
 	SumReplies      map[SumQuery]chan uuid.UUID
 	MultiplyReplies map[MultiplyQuery]chan uuid.UUID
+	RefreshParams   chan *bfv.Ciphertext
 }
 
 type SwitchingParamters struct {
@@ -72,6 +73,7 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 
 		SumReplies:      make(map[SumQuery]chan uuid.UUID),
 		MultiplyReplies: make(map[MultiplyQuery]chan uuid.UUID),
+		RefreshParams:   make(chan *bfv.Ciphertext),
 	}
 	//registering the handlers
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSendData); err != nil {
@@ -100,6 +102,10 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		return nil, errors.New("Wrong handler 9 : " + err.Error())
 	}
 
+	if err := newLattigo.RegisterHandler(newLattigo.HandleRefreshQuery); err != nil {
+		return nil, errors.New("Wrong handler 10 : " + err.Error())
+	}
+
 	//c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
 	c.RegisterProcessor(newLattigo, msgTypes.msgSetupRequest)
 	c.RegisterProcessor(newLattigo, msgTypes.msgKeyRequest)
@@ -116,6 +122,7 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 	c.RegisterProcessor(newLattigo, msgTypes.msgMultiplyQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgMultiplyReply)
 	c.RegisterProcessor(newLattigo, msgTypes.msgRelinQuery)
+	c.RegisterProcessor(newLattigo, msgTypes.msgRefreshQuery)
 
 	return newLattigo, nil
 }
@@ -169,14 +176,16 @@ func (s *Service) Process(msg *network.Envelope) {
 		id := uuid.NewV1()
 		s.DataBase[id] = eval.MulNew(ct1, ct2)
 		reply := MultiplyReply{id, *tmp}
+		log.Lvl1("Storing result in : ", id)
 		err := s.SendRaw(msg.ServerIdentity, &reply)
 		if err != nil {
 			log.Error("Could not reply to the server ", err)
 		}
 
 	} else if msg.MsgType.Equal(msgTypes.msgMultiplyReply) {
-		log.Lvl1("Got reply of multiply query ")
 		tmp := (msg.Msg).(*MultiplyReply)
+		log.Lvl1("Got reply of multiply query : ", tmp.UUID)
+
 		s.MultiplyReplies[tmp.MultiplyQuery] <- tmp.UUID
 
 	} else if msg.MsgType.Equal(msgTypes.msgSumQuery) {
@@ -221,10 +230,14 @@ func (s *Service) Process(msg *network.Envelope) {
 		}
 
 		eval := bfv.NewEvaluator(s.Params)
-		ct = eval.RelinearizeNew(ct, s.EvaluationKey)
-		s.DataBase[tmp.UUID] = ct
+		ct1 := eval.RelinearizeNew(ct, s.EvaluationKey)
+		s.DataBase[tmp.UUID] = ct1
 		log.Lvl1("Relinearization done")
 		return
+	} else if msg.MsgType.Equal(msgTypes.msgRefreshQuery) {
+		tmp := (msg.Msg).(*RefreshQuery)
+		log.Lvl1("Got refresh query for cipher :", tmp.UUID)
+
 	} else if msg.MsgType.Equal(msgTypes.msgStoreReply) {
 		log.Lvl1("Got a store reply")
 		tmp := (msg.Msg).(*StoreReply)
@@ -280,10 +293,11 @@ func (s *Service) Process(msg *network.Envelope) {
 		s.SwitchedCiphertext[tmp.UUID] = make(chan bfv.Ciphertext, 1)
 		s.SwitchedCiphertext[tmp.UUID] <- *tmp.Ciphertext
 	} else if msg.MsgType.Equal(msgTypes.msgQueryPlaintext) {
-		log.Lvl1("Got a query for ciphertext switching ")
 		//it comes from either the initiator or the root.
 		tree := s.Roster.GenerateBinaryTree()
 		query := (msg.Msg).(*QueryPlaintext)
+
+		log.Lvl1("Got a query for ciphertext switching : ", query.UUID)
 
 		if s.ServerIdentity().Equal(tree.Root.ServerIdentity) {
 			//The root has to propagate to all members the ciphertext and the public key...
@@ -365,7 +379,7 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		}
 	case protocols.CollectiveKeySwitchingProtocolName:
 		log.Lvl1(s.ServerIdentity(), ": New protocol cksp")
-
+		log.Error("NOT IMPLEMENTED")
 	case protocols.CollectivePublicKeySwitchingProtocolName:
 		log.Lvl1(s.ServerIdentity(), ": New protocol cpksp")
 		protocol, err = protocols.NewCollectivePublicKeySwitching(tn)
@@ -382,7 +396,6 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		if err != nil {
 			return nil, err
 		}
-
 	case protocols.RelinearizationKeyProtocolName:
 		log.Lvl1(s.ServerIdentity(), ": New protocol rlkp")
 		protocol, err = protocols.NewRelinearizationKey(tn)
@@ -437,6 +450,20 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 				s.rotKeyGenerated[rotIdx] = true
 			}()
 		}
+	case protocols.CollectiveRefreshName:
+		log.Lvl1(s.ServerIdentity(), "New Refresh protocol started ")
+		protocol, err = protocols.NewCollectiveRefresh(tn)
+		if err != nil {
+			return nil, err
+		}
+		//Setup the parameters
+		refresh := (protocol).(*protocols.RefreshProtocol)
+		var ciphertext *bfv.Ciphertext
+		var crs *ring.Poly
+		ciphertext = <-s.RefreshParams
+		crs = s.crpGen.ClockNew()
+		err = refresh.Init(*s.Params, s.SecretKey, *ciphertext, *crs)
+
 	}
 
 	return protocol, nil

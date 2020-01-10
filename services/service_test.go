@@ -43,7 +43,7 @@ func TestSetupEvalKey(t *testing.T) {
 }
 
 func TestSetupRotKey(t *testing.T) {
-	log.SetDebugVisible(4)
+	log.SetDebugVisible(1)
 	log.Lvl1("Testing if setup for rotation key is done properly for the service")
 	//turning off test.
 	size := 3
@@ -124,9 +124,7 @@ func TestSwitching(t *testing.T) {
 	data, err := client2.GetPlaintext(el, queryID)
 	log.Lvl1("Client retrieved data : ", data)
 
-	assert.Equal(t, "Result", string(data), string(content))
-
-	<-time.After(1000 * time.Second)
+	assert.Equal(t, "Result", string(data[0:9]), string(content))
 
 }
 
@@ -170,7 +168,7 @@ func TestSumQuery(t *testing.T) {
 	log.Lvl2("Query Id 2: ", queryID2)
 	<-time.After(1 * time.Second)
 
-	log.Lvl1("oWo Now wee sum up our senpai cipher owo ")
+	log.Lvl1("Suming up ciphers")
 
 	resultSum, err := client1.SendSumQuery(*queryID1, *queryID2)
 	log.Lvl1("Sum of ct1 and ct2 is stored in : ", resultSum)
@@ -212,6 +210,7 @@ func TestRelinearization(t *testing.T) {
 	client1 := NewLattigoSMCClient(el.List[1], "1")
 
 	q, err := client1.SendKeyRequest(true, false, false)
+	<-time.After(500 * time.Millisecond)
 	log.Lvl1("Response of query : ", q)
 	d1 := []byte{1, 2, 3, 4, 5, 6}
 	queryID1, err := client1.SendWriteQuery(el, d1)
@@ -233,7 +232,7 @@ func TestRelinearization(t *testing.T) {
 	log.Lvl2("Query Id 2: ", queryID2)
 	<-time.After(1 * time.Second)
 
-	log.Lvl1("oWo Now wee sum up our senpai cipher owo ")
+	log.Lvl1("multiply up our ciphertexts")
 
 	result, err := client1.SendMultiplyQuery(*queryID1, *queryID2)
 	log.Lvl1("Multiply of ct1 and ct2 is stored in : ", result)
@@ -245,7 +244,7 @@ func TestRelinearization(t *testing.T) {
 	<-time.After(1 * time.Second)
 	client2 := NewLattigoSMCClient(el.List[2], "2")
 	data, err := client2.GetPlaintext(el, &result)
-	log.Lvl1("Client retrieved data for sum : ", data)
+	log.Lvl1("Client retrieved data for multiply : ", data)
 
 	res := make([]byte, 6)
 	for i := range d1 {
@@ -253,5 +252,52 @@ func TestRelinearization(t *testing.T) {
 	}
 
 	assert.Equal(t, "Multiplication", data[:6], res)
+
+}
+
+func TestRefresh(t *testing.T) {
+	log.SetDebugVisible(4)
+	size := 3
+	local := onet.NewLocalTest(utils.SUITE)
+	_, el, _ := local.GenTree(size, true)
+
+	client := NewLattigoSMCClient(el.List[0], "0")
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+
+	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	<-time.After(2 * time.Second)
+	client1 := NewLattigoSMCClient(el.List[1], "1")
+	q, _ := client1.SendKeyRequest(true, false, false)
+	<-time.After(200 * time.Millisecond)
+	log.Lvl1("Reply of key request : ", q)
+	content := []byte("lattigood")
+	queryID, err := client1.SendWriteQuery(el, content)
+	if err != nil {
+		t.Fatal("Could not start client :", err)
+
+	}
+
+	log.Lvl2("Query Local Id : ", queryID, " with content : ", content)
+	<-time.After(500 * time.Millisecond)
+
+	//Now request for a refresh..
+	log.Lvl1("Request for refresh.")
+	result, err := client1.SendRefreshQuery(queryID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	<-time.After(3 * time.Second)
+
+	//Client 2 now requests to switch the key for him...
+	client2 := NewLattigoSMCClient(el.List[2], "2")
+	data, err := client2.GetPlaintext(el, &result)
+	log.Lvl1("Client retrieved data : ", data)
+
+	assert.Equal(t, "Result", string(data[0:9]), string(content))
 
 }

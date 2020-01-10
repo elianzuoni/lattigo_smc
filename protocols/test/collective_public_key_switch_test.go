@@ -69,7 +69,6 @@ func TestCollectivePublicKeySwitching(t *testing.T) {
 func testLocalPCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, plaintext *bfv.Plaintext) {
 	log.Lvl1("Started to test collective public key switching with nodes amounts : ", N)
 	defer local.CloseAll()
-	utils.QuietServers(local.Servers)
 
 	_, roster, tree := local.GenTree(N, true)
 

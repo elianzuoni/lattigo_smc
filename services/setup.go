@@ -25,15 +25,17 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 	s.PublicKey = keygen.GenPublicKey(s.SecretKey)
 	s.crpGen = *dbfv.NewCRPGenerator(s.Params, request.Seed)
 
+	requestSent := false
+
 	//Collective Key Generation
 	if !s.pubKeyGenerated && request.GeneratePublicKey {
 		//send the information to the childrens.
 		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
-
 			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
 			if err != nil {
 				return &SetupReply{-1}, err
 			}
+			requestSent = true
 
 			err = s.genPublicKey(tree)
 
@@ -49,13 +51,15 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 	if request.GenerateEvaluationKey && !s.evalKeyGenerated {
 		log.Lvl1("Generate evalutation key ! ")
 		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
-
-			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
-			if err != nil {
-				return &SetupReply{-1}, err
+			if !requestSent {
+				err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
+				if err != nil {
+					return &SetupReply{-1}, err
+				}
+				requestSent = true
 			}
 
-			err = s.genEvalKey(tree)
+			err := s.genEvalKey(tree)
 
 			if err != nil {
 				return &SetupReply{-1}, err
@@ -68,13 +72,16 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 
 		log.Lvl1("Generate evalutation key ! ")
 		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
+			if !requestSent {
 
-			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
-			if err != nil {
-				return &SetupReply{-1}, err
+				err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
+				if err != nil {
+					return &SetupReply{-1}, err
+				}
+				requestSent = true
 			}
 
-			err = s.genRotKey(tree, request.K, request.RotIdx)
+			err := s.genRotKey(tree, request.K, request.RotIdx)
 
 			if err != nil {
 				return &SetupReply{-1}, err

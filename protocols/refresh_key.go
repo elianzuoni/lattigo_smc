@@ -11,11 +11,11 @@ import (
 )
 
 //CollectiveKeyGenerationProtocolName name of protocol for onet
-const CollectiveRefreshKeyGeneration = "CollectiveRefreshKey"
+const CollectiveRefreshName = "CollectiveRefreshKey"
 
 func init() {
 
-	if _, err := onet.GlobalProtocolRegister(CollectiveRefreshKeyGeneration, NewCollectiveRefresh); err != nil {
+	if _, err := onet.GlobalProtocolRegister(CollectiveRefreshName, NewCollectiveRefresh); err != nil {
 		log.ErrFatal(err, "Could not register CollectiveKeyGeneration protocol : ")
 	}
 

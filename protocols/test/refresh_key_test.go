@@ -75,7 +75,6 @@ func TestRefreshProtocol(t *testing.T) {
 
 func testLocalRefresh(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, plaintext *bfv.Plaintext) {
 	defer local.CloseAll()
-	utils.QuietServers(local.Servers)
 
 	_, roster, tree := local.GenTree(N, true)
 

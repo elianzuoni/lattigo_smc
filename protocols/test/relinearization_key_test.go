@@ -66,7 +66,6 @@ func TestRelinearizationKeyLocal(t *testing.T) {
 
 func testLocalRKG(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string) {
 	defer local.CloseAll()
-	utils.QuietServers(local.Servers)
 
 	_, roster, tree := local.GenTree(N, true)
 
@@ -109,6 +108,7 @@ func testLocalRKG(t *testing.T, params *bfv.Parameters, N int, local *onet.Local
 	encoder := bfv.NewEncoder(params)
 
 	pt := bfv.NewPlaintext(params)
+
 	expected := params.NewPolyQP()
 	encoder.EncodeUint(expected.Coeffs[0], pt)
 	CipherText := encryptor_pk.EncryptNew(pt)

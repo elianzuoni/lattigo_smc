@@ -76,7 +76,7 @@ func (rlp *RelinearizationKeyProtocol) Dispatch() error {
 		return err
 	}
 	//get the parameters..
-	log.Lvl3(rlp.ServerIdentity(), " : starting relin key ")
+	log.Lvl1(rlp.ServerIdentity(), " : starting relin key ")
 
 	//aggregate the shares.
 	if !rlp.IsLeaf() {

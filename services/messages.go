@@ -29,6 +29,7 @@ type MsgTypes struct {
 	msgSumReply      network.MessageTypeID
 	msgMultiplyReply network.MessageTypeID
 	msgRelinQuery    network.MessageTypeID
+	msgRefreshQuery  network.MessageTypeID
 }
 
 var msgTypes = MsgTypes{}
@@ -60,4 +61,5 @@ func init() {
 	msgTypes.msgMultiplyReply = network.RegisterMessage(&MultiplyReply{})
 
 	msgTypes.msgRelinQuery = network.RegisterMessage(&RelinQuery{})
+	msgTypes.msgRefreshQuery = network.RegisterMessage(&RefreshQuery{})
 }

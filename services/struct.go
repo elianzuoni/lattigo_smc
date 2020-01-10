@@ -94,6 +94,27 @@ type MultiplyReply struct {
 //RefreshQuery query for UUID to be refreshed.
 type RefreshQuery struct {
 	uuid.UUID
+	*bfv.Ciphertext
+}
+
+func (rq *RefreshQuery) MarshalBinary() ([]byte, error) {
+	cast := new(ReplyPlaintext)
+	cast.UUID = rq.UUID
+	cast.Ciphertext = rq.Ciphertext
+	return cast.MarshalBinary()
+
+}
+
+func (rq *RefreshQuery) UnmarshalBinary(data []byte) error {
+	var cast ReplyPlaintext
+	err := cast.UnmarshalBinary(data)
+	if err != nil {
+		return err
+	}
+
+	rq.UUID = cast.UUID
+	rq.Ciphertext = cast.Ciphertext
+	return nil
 }
 
 //RelinQuery query for UUID to be relinearized
@@ -106,7 +127,6 @@ type SetupReply struct {
 	Done int
 }
 
-//TODO discuss issue - its impossible to send this structure on the network. it says its BinaryMarshaller compliant but it only serializes the UUID nothing else.
 //QueryPlaintext query for a ciphertext represented by UUID to be switched under publickey
 type QueryPlaintext struct {
 	PublicKey  *bfv.PublicKey

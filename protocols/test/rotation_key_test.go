@@ -117,7 +117,6 @@ func TestRotationKeyLocal(t *testing.T) {
 func testLocalRotKG(t *testing.T, params *bfv.Parameters, N int, local *onet.LocalTest, storageDirectory string, rotation bfv.Rotation, k uint64) {
 
 	defer local.CloseAll()
-	utils.QuietServers(local.Servers)
 
 	_, roster, tree := local.GenTree(N, true)
 
