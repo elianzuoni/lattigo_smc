@@ -18,7 +18,7 @@ func main() {
 	cliApp := cli.NewApp()
 	cliApp.Name = Name
 	cliApp.Version = Version
-	cliApp.Usage = "Homomorphic encryption based secure multi-party protocols"
+	cliApp.Usage = "Homomorphic encryption based secure multi-party protocol application"
 
 	debugFlags := []cli.Flag{
 		cli.IntFlag{Usage: "logging-level : 1 to 5", Name: "debug,d", Value: 1},
@@ -29,9 +29,9 @@ func main() {
 			Usage: "Store the data on the root",
 			Value: "",
 		},
-		cli.BoolFlag{Name: "sum ,s", Usage: "Get sum of all data on the server"},
-		cli.BoolFlag{Name: "multiply ,m", Usage: "Get product of all data on the server"},
-		cli.BoolFlag{Name: "predict, p", Usage: "Predict a value based on the data in the server"},
+
+		cli.StringFlag{Name: "sum ,s", Usage: "Get sum of two ciphers comma separated : <id1>,<id2>"},
+		cli.StringFlag{Name: "multiply ,m", Usage: "Get product of two ciphers comma separeted : <id1>,<id2>"},
 	}
 	serverFlags := []cli.Flag{
 		cli.StringFlag{

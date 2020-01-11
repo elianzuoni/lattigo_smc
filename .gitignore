@@ -12,3 +12,4 @@ SecretKey*
 # Dont add all the test data. 
 test_data/
 app/lattigosmc
+app/app

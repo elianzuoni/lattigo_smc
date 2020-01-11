@@ -9,16 +9,17 @@ import (
 
 //MsgTypes different messages that can be used for the service.
 type MsgTypes struct {
+	//Message for setup the keys.
 	msgSetupRequest network.MessageTypeID
-	msgQuery        network.MessageTypeID
 
-	//
+	//Messages to request keys
 	msgKeyRequest network.MessageTypeID
 	msgKeyReply   network.MessageTypeID
 
 	//Message to store ciphers
-	msgQueryData  network.MessageTypeID
-	msgStoreReply network.MessageTypeID
+	msgStoreQueryClient network.MessageTypeID //Store query when it comes from client.
+	msgStoreQuery       network.MessageTypeID
+	msgStoreReply       network.MessageTypeID
 	//Message for the key switch
 	msgQueryPlaintext network.MessageTypeID
 	msgReplyPlaintext network.MessageTypeID
@@ -45,13 +46,13 @@ func init() {
 
 	//Register the messages
 	log.Lvl1("Registering messages")
-	msgTypes.msgQueryData = network.RegisterMessage(&QueryData{})
+	msgTypes.msgStoreQueryClient = network.RegisterMessage(&QueryData{})
 
 	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
 	msgTypes.msgKeyRequest = network.RegisterMessage(&KeyRequest{})
 	msgTypes.msgKeyReply = network.RegisterMessage(&KeyReply{})
 
-	msgTypes.msgQuery = network.RegisterMessage(&StoreQuery{})
+	msgTypes.msgStoreQuery = network.RegisterMessage(&StoreQuery{})
 	msgTypes.msgStoreReply = network.RegisterMessage(&StoreReply{})
 
 	msgTypes.msgQueryPlaintext = network.RegisterMessage(&QueryPlaintext{})

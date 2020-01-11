@@ -1,3 +1,5 @@
+//evaluation contains the handler for different evaluation functionalinities. Evaluation are performed on existing ciphertexts and are the following :
+// Sum of c1,c2; multiply c1,c2; refresh c1; relinearize c1; rotate on c1.
 package services
 
 import (
@@ -123,6 +125,7 @@ func (s *Service) HandleRelinearizationQuery(query *RelinQuery) (network.Message
 
 }
 
+//HandleRotationQuery handles a query for a rotation. Return the id of the rotated ciphertext.
 func (s *Service) HandleRotationQuery(query *RotationQuery) (network.Message, error) {
 	log.Lvl1("Got rotation request : ", query.UUID)
 	tree := s.Roster.GenerateBinaryTree()

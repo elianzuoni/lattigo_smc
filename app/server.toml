@@ -1,0 +1,21 @@
+# Put the configurations of server here.
+[[servers]]
+  Address = "tcp://127.0.0.1:2002"
+  Description = "Lattigo-SMC Server 1 (root)"
+  Private="abc"
+  Public="abc"
+[[servers]]
+  Address = "tcp://127.0.0.1:2004"
+  Description = "Lattigo-SMC Server 2"
+  Private ="abc"
+  Public="abc"
+[[servers]]
+  Address = "tcp://127.0.0.1:2006"
+  Description = "Lattigo-SMC Server 3"
+  Private ="abc"
+  Public="abc"
+[[servers]]
+  Address = "tcp://127.0.0.1:2008"
+  Description = "Lattigo-SMC Server 4"
+  Private ="abc"
+  Public="abc"

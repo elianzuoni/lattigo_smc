@@ -10,7 +10,6 @@ import (
 	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
-	"time"
 )
 
 //Service is the service of lattigoSMC - allows to compute the different HE operations
@@ -67,9 +66,7 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		ServiceProcessor: onet.NewServiceProcessor(c),
 		DataBase:         make(map[uuid.UUID]*bfv.Ciphertext),
 		LocalUUID:        make(map[uuid.UUID]chan uuid.UUID),
-		//LocalData:          make(map[uuid.UUID]*Transaction),
-		//PendingTransaction: make(chan *Transaction, 10),
-		//KeyReceived:        make(chan bool),
+
 		SwitchedCiphertext:  make(map[uuid.UUID]chan bfv.Ciphertext),
 		SwitchingParameters: make(chan SwitchingParamters, 10),
 		RotationKey:         make([]bfv.RotationKeys, 3),
@@ -81,51 +78,54 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		RotationReplies: make(map[uuid.UUID]chan uuid.UUID),
 	}
 	//registering the handlers
+	e := registerHandlers(newLattigo)
+	if e != nil {
+		return nil, e
+	}
+	registerProcessors(c, newLattigo)
+
+	return newLattigo, nil
+}
+
+func registerHandlers(newLattigo *Service) error {
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSendData); err != nil {
-		return nil, errors.New("Wrong handler 1:" + err.Error())
+		return errors.New("Wrong handler 1:" + err.Error())
 	}
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSumQuery); err != nil {
-		return nil, errors.New("Wrong handler 2:" + err.Error())
+		return errors.New("Wrong handler 2:" + err.Error())
 	}
 	if err := newLattigo.RegisterHandler(newLattigo.HandleMultiplyQuery); err != nil {
-		return nil, errors.New("Wrong handler 3:" + err.Error())
+		return errors.New("Wrong handler 3:" + err.Error())
 	}
-
 	if err := newLattigo.RegisterHandler(newLattigo.HandleSetupQuery); err != nil {
-		return nil, errors.New("Wrong handler 5: " + err.Error())
+		return errors.New("Wrong handler 5: " + err.Error())
 	}
-
 	if err := newLattigo.RegisterHandler(newLattigo.HandlePlaintextQuery); err != nil {
-		return nil, errors.New("Wrong handler 7 : " + err.Error())
+		return errors.New("Wrong handler 7 : " + err.Error())
 	}
-
 	if err := newLattigo.RegisterHandler(newLattigo.HandleKeyRequest); err != nil {
-		return nil, errors.New("Wrong handler 8 : " + err.Error())
+		return errors.New("Wrong handler 8 : " + err.Error())
 	}
-
 	if err := newLattigo.RegisterHandler(newLattigo.HandleRelinearizationQuery); err != nil {
-		return nil, errors.New("Wrong handler 9 : " + err.Error())
+		return errors.New("Wrong handler 9 : " + err.Error())
 	}
-
 	if err := newLattigo.RegisterHandler(newLattigo.HandleRefreshQuery); err != nil {
-		return nil, errors.New("Wrong handler 10 : " + err.Error())
+		return errors.New("Wrong handler 10 : " + err.Error())
 	}
-
 	if err := newLattigo.RegisterHandler(newLattigo.HandleRotationQuery); err != nil {
-		return nil, errors.New("Wrong handler 11 : " + err.Error())
+		return errors.New("Wrong handler 11 : " + err.Error())
 	}
+	return nil
+}
 
-	//c.RegisterProcessor(newLattigo, msgTypes.msgQueryData)
+func registerProcessors(c *onet.Context, newLattigo *Service) {
 	c.RegisterProcessor(newLattigo, msgTypes.msgSetupRequest)
 	c.RegisterProcessor(newLattigo, msgTypes.msgKeyRequest)
 	c.RegisterProcessor(newLattigo, msgTypes.msgKeyReply)
-
-	c.RegisterProcessor(newLattigo, msgTypes.msgQuery)
+	c.RegisterProcessor(newLattigo, msgTypes.msgStoreQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgStoreReply)
-
 	c.RegisterProcessor(newLattigo, msgTypes.msgQueryPlaintext)
 	c.RegisterProcessor(newLattigo, msgTypes.msgReplyPlaintext)
-
 	c.RegisterProcessor(newLattigo, msgTypes.msgSumQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgSumReply)
 	c.RegisterProcessor(newLattigo, msgTypes.msgMultiplyQuery)
@@ -134,11 +134,11 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 	c.RegisterProcessor(newLattigo, msgTypes.msgRefreshQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgRotationQuery)
 	c.RegisterProcessor(newLattigo, msgTypes.msgRotationReply)
-
-	return newLattigo, nil
 }
 
+//Process a message from an other service. This is a big if-else-if loop over all type of messages that can be received.
 func (s *Service) Process(msg *network.Envelope) {
+	//TODO HUUGE REFACTORING NEEDED HERE !!!
 	//Processor interface used to recognize messages between server
 	if msg.MsgType.Equal(msgTypes.msgSetupRequest) {
 		log.Lvl1(s.ServerIdentity(), "got a setup message! (in process) ")
@@ -148,7 +148,7 @@ func (s *Service) Process(msg *network.Envelope) {
 		if err != nil {
 			log.Error(err)
 		}
-	} else if msg.MsgType.Equal(msgTypes.msgQuery) {
+	} else if msg.MsgType.Equal(msgTypes.msgStoreQuery) {
 		//query to store data..
 		log.Lvl1(s.ServerIdentity(), "got a request to store a cipher")
 		tmp := (msg.Msg).(*StoreQuery)
@@ -165,7 +165,7 @@ func (s *Service) Process(msg *network.Envelope) {
 		}
 		log.Lvl1("Sent an acknowledgement to  ", sender.String())
 
-		//} else if msg.MsgType.Equal(msgTypes.msgQueryData) {
+		//} else if msg.MsgType.Equal(msgTypes.msgStoreQueryClient) {
 
 	} else if msg.MsgType.Equal(msgTypes.msgMultiplyQuery) {
 
@@ -384,8 +384,7 @@ func (s *Service) Process(msg *network.Envelope) {
 
 }
 
-//Protocol handlers
-
+//NewProtocol starts a new protocol given by the name in the treenodeinstance and returns it correctly initialized.
 func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	err := tn.SetConfig(conf)
 	if err != nil {
@@ -394,162 +393,34 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 	var protocol onet.ProtocolInstance
 	switch tn.ProtocolName() {
 	case protocols.CollectiveKeyGenerationProtocolName:
-		log.Lvl1(s.ServerIdentity(), ": New protocol ckgp")
-
-		protocol, err = protocols.NewCollectiveKeyGeneration(tn)
+		protocol, err = s.newProtoCKG(tn)
 		if err != nil {
 			return nil, err
-		}
-		ckgp := protocol.(*protocols.CollectiveKeyGenerationProtocol)
-
-		//init
-		crp := s.crpGen.ClockNew()
-		err = ckgp.Init(s.Params, s.SecretKey, crp)
-
-		if !tn.IsRoot() {
-			go func() {
-
-				log.Lvl1(s.ServerIdentity(), "Waiting for the protocol to be finished...(NewProtocol)")
-				ckgp.Wait()
-				log.Lvl1(tn.ServerIdentity(), " : done with collective key gen ! ")
-
-				s.SecretKey = ckgp.Sk
-				s.DecryptorSk = bfv.NewDecryptor(s.Params, s.SecretKey)
-				s.Encoder = bfv.NewEncoder(s.Params)
-				s.PublicKey = bfv.NewKeyGenerator(s.Params).GenPublicKey(s.SecretKey)
-				s.pubKeyGenerated = true
-			}()
-
 		}
 	case protocols.CollectiveKeySwitchingProtocolName:
-		log.Lvl1(s.ServerIdentity(), ": New protocol cksp")
-		log.Error("NOT IMPLEMENTED")
-	case protocols.CollectivePublicKeySwitchingProtocolName:
-		log.Lvl1(s.ServerIdentity(), ": New protocol cpksp")
-		protocol, err = protocols.NewCollectivePublicKeySwitching(tn)
+		protocol, err = s.newProtoCKS(tn)
 		if err != nil {
 			return nil, err
 		}
-		pcks := protocol.(*protocols.CollectivePublicKeySwitchingProtocol)
-		var publickey bfv.PublicKey
-		var ciphertext *bfv.Ciphertext
-		sp := <-s.SwitchingParameters
-		publickey = sp.PublicKey
-		ciphertext = &sp.Ciphertext
-		err = pcks.Init(*s.Params, publickey, *s.SecretKey, ciphertext)
+	case protocols.CollectivePublicKeySwitchingProtocolName:
+		protocol, err = s.newProtoCPKS(tn)
 		if err != nil {
 			return nil, err
 		}
 	case protocols.RelinearizationKeyProtocolName:
-		log.Lvl1(s.ServerIdentity(), ": New protocol rlkp")
-		protocol, err = protocols.NewRelinearizationKey(tn)
+		protocol, err = s.newProtoRLK(tn)
 		if err != nil {
 			return nil, err
-		}
-		rkp := (protocol).(*protocols.RelinearizationKeyProtocol)
-		modulus := s.Params.Moduli.Qi
-		crp := make([]*ring.Poly, len(modulus))
-		for j := 0; j < len(modulus); j++ {
-			crp[j] = s.crpGen.ClockNew()
-		}
-		err = rkp.Init(*s.Params, *s.SecretKey, crp)
-		if err != nil {
-			log.Error("Error while generating Relin key : ", err)
-		}
-
-		if !tn.IsRoot() {
-			go func() {
-
-				log.Lvl1(s.ServerIdentity(), "Waiting for the protocol to be finished...(Relin Protocol)")
-				rkp.Wait()
-				log.Lvl1(tn.ServerIdentity(), " : done with collective relinkey gen ! ")
-
-				s.evalKeyGenerated = true
-			}()
-
 		}
 	case protocols.RotationProtocolName:
-		protocol, err = protocols.NewRotationKey(tn)
-		if err != nil {
-			log.Error("Could not start rotation :", err)
-
-		}
-		rotkey := (protocol).(*protocols.RotationKeyProtocol)
-		modulus := s.Params.Moduli.Qi
-		crp := make([]*ring.Poly, len(modulus))
-		for j := 0; j < len(modulus); j++ {
-			crp[j] = s.crpGen.ClockNew()
-		}
-		var rotIdx = s.RotIdx
-		var K = s.K
-		err = rotkey.Init(s.Params, *s.SecretKey, bfv.Rotation(rotIdx), K, crp)
-		if err != nil {
-			log.Error("Could not start rotation : ", err)
-
-		}
-
-		if !tn.IsRoot() {
-			go func() {
-				rotkey.Wait()
-				s.rotKeyGenerated[rotIdx] = true
-			}()
-		}
+		protocol, err = s.newProtoRotKG(tn)
 	case protocols.CollectiveRefreshName:
-		log.Lvl1(s.ServerIdentity(), "New Refresh protocol started ")
-		protocol, err = protocols.NewCollectiveRefresh(tn)
+		protocol, err = s.newProtoRefresh(tn)
 		if err != nil {
 			return nil, err
 		}
-		//Setup the parameters
-		refresh := (protocol).(*protocols.RefreshProtocol)
-		var ciphertext *bfv.Ciphertext
-		var crs *ring.Poly
-		ciphertext = <-s.RefreshParams
-		crs = s.crpGen.ClockNew()
-		err = refresh.Init(*s.Params, s.SecretKey, *ciphertext, *crs)
 
 	}
 
 	return protocol, nil
-}
-
-func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, error) {
-	//Initiate the CKS
-	log.Lvl1(s.ServerIdentity(), "got request for plaintext of id : ", query.UUID)
-	tree := s.GenerateBinaryTree()
-
-	//From the client Send it to all the other peers so they can initate the PCKS
-	query.PublicKey = bfv.NewPublicKey(s.Params)
-	query.PublicKey.Set(s.PublicKey.Get())
-
-	err := s.SendRaw(tree.Root.ServerIdentity, query)
-
-	if err != nil {
-		log.Error("Could not send the initation message to the root.")
-		return nil, err
-	}
-
-	//Wait for CKS to complete
-	log.Lvl1("Waiting for ciphertext UUID :", query.UUID)
-	for {
-		select {
-		case cipher := <-s.SwitchedCiphertext[query.UUID]:
-			log.Lvl1("Got my ciphertext : ", query.UUID)
-			plain := s.DecryptorSk.DecryptNew(&cipher)
-			//todo ask : when decoding the cipher text the values are not what is expected.
-			data64 := s.Encoder.DecodeUint(plain)
-			bytes, err := utils.Uint64ToBytes(data64, true)
-			if err != nil {
-				log.Error("Could not retrieve byte array : ", err)
-			}
-			response := &PlaintextReply{UUID: query.UUID, Data: bytes}
-
-			return response, nil
-		case <-time.After(time.Second):
-			log.Lvl1("Still waiting on ciphertext :", query.UUID)
-			break
-		}
-
-	}
-
 }

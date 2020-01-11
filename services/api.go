@@ -1,8 +1,7 @@
+//api contains the handler for the client to interact with the service. The client can perform various request to its server represented by its entryPoint
 package services
 
 import (
-	"go.dedis.ch/kyber/v3"
-	"go.dedis.ch/kyber/v3/util/key"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
@@ -15,21 +14,14 @@ type API struct {
 	*onet.Client
 	clientID   string
 	entryPoint *network.ServerIdentity
-
-	//keys between client and server
-	public  kyber.Point
-	private kyber.Scalar
 }
 
 //NewLattigoSMCClient creates a new client for lattigo-smc
 func NewLattigoSMCClient(entryPoint *network.ServerIdentity, clientID string) *API {
-	keys := key.NewKeyPair(utils.SUITE)
 	client := &API{
 		Client:     onet.NewClient(utils.SUITE, ServiceName),
 		clientID:   clientID,
 		entryPoint: entryPoint,
-		public:     keys.Public,
-		private:    keys.Private,
 	}
 
 	return client
@@ -52,11 +44,12 @@ func (c *API) SendSetupQuery(entities *onet.Roster, generatePublicKey, generateE
 }
 
 //SendKeyRequest sends a request for the server to retrieve the keys needed.
-func (c *API) SendKeyRequest(publickey, evaluationkey, rotationkey bool) (int, error) {
+func (c *API) SendKeyRequest(publickey, evaluationkey, rotationkey bool, RotIdx int) (int, error) {
 	kr := KeyRequest{
 		PublicKey:     publickey,
 		EvaluationKey: evaluationkey,
 		RotationKey:   rotationkey,
+		RotIdx:        RotIdx,
 	}
 
 	resp := SetupReply{}
@@ -88,7 +81,7 @@ func (c *API) SendWriteQuery(roster *onet.Roster, data []byte) (*uuid.UUID, erro
 }
 
 //GetPlaintext send a request to retrieve the plaintext of the ciphertetx encrypted under id
-func (c *API) GetPlaintext(roster *onet.Roster, id *uuid.UUID) ([]byte, error) {
+func (c *API) GetPlaintext(id *uuid.UUID) ([]byte, error) {
 	query := QueryPlaintext{UUID: *id}
 	response := PlaintextReply{}
 	err := c.SendProtobuf(c.entryPoint, &query, &response)
@@ -99,11 +92,6 @@ func (c *API) GetPlaintext(roster *onet.Roster, id *uuid.UUID) ([]byte, error) {
 
 	data := response.Data
 	return data, nil
-}
-
-//String returns the string representation of the client
-func (c *API) String() string {
-	return "[Client " + c.clientID + "]"
 }
 
 //SendSumQuery sends a query to sum up to ciphertext.
@@ -138,9 +126,10 @@ func (c *API) SendMultiplyQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
 
 }
 
-func (c *API) SendRelinQuery(uuids uuid.UUID) (uuid.UUID, error) {
+//SendRelinQuery request for ciphertext id to be relinearized
+func (c *API) SendRelinQuery(id uuid.UUID) (uuid.UUID, error) {
 	query := RelinQuery{
-		UUID: uuids,
+		UUID: id,
 	}
 	result := ServiceState{}
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
@@ -151,6 +140,7 @@ func (c *API) SendRelinQuery(uuids uuid.UUID) (uuid.UUID, error) {
 	return result.Id, nil
 }
 
+//SendRefreshQuery send a query for ciphertext id to be refreshed.
 func (c *API) SendRefreshQuery(id *uuid.UUID) (uuid.UUID, error) {
 	query := RefreshQuery{*id, nil}
 
@@ -164,9 +154,10 @@ func (c *API) SendRefreshQuery(id *uuid.UUID) (uuid.UUID, error) {
 
 }
 
-func (c *API) SendRotationQuery(uuids uuid.UUID, K uint64, rotType int) (uuid.UUID, error) {
+//SendRotationQuery send a query to perform a rotation of type rotType-K on id
+func (c *API) SendRotationQuery(id uuid.UUID, K uint64, rotType int) (uuid.UUID, error) {
 	query := RotationQuery{
-		UUID:   uuids,
+		UUID:   id,
 		RotIdx: rotType,
 		K:      K,
 	}
@@ -179,4 +170,9 @@ func (c *API) SendRotationQuery(uuids uuid.UUID, K uint64, rotType int) (uuid.UU
 
 	log.Lvl1("Got reply of rotaiton : ", result.Id)
 	return result.Id, err
+}
+
+//String returns the string representation of the client
+func (c *API) String() string {
+	return "[Client " + c.clientID + "]"
 }

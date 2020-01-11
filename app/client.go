@@ -6,42 +6,240 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/app"
 	"go.dedis.ch/onet/v3/log"
+	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/services"
 	"os"
+	"strconv"
+	"strings"
 )
 
-func runLattigo(c *cli.Context) {
-	//parameters
-	data := c.String("write")
-	groupToml := c.String("grouptoml")
-	sum := c.Bool("sum")
-	multiply := c.Bool("multiply")
-	predict := c.Bool("predict")
-	write := c.Bool("write")
-	//setup the group toml for servers...
+type SetupValues struct {
+	paramsIdx    int
+	genPublicKey bool
+	genEvalKey   bool
+	genRotKey    bool
+	rotIdx       int
+	K            uint64
+}
 
-	_, err := parseGroupToml(groupToml)
+func runLattigo(c *cli.Context) {
+	//Setups
+	groupToml := c.String("grouptoml")
+	id := c.Int("id")
+	setup := c.String("setup")
+	retrieveKey := c.String("retrievekey")
+
+	//Write-Read
+	write := c.String("write")
+	get := c.String("get")
+
+	//Evaluations
+	sum := c.String("sum")
+	multiply := c.String("multiply")
+	refresh := c.String("refresh")
+	relin := c.String("relin")
+	rotate := c.String("rotate")
+
+	//Setups
+	//setup the group toml for servers...
+	roster, err := parseGroupToml(groupToml)
 	if err != nil {
 		log.ErrFatal(err, "Could not parse group toml file :", groupToml)
 	}
 
-	if sum {
+	client := services.NewLattigoSMCClient(roster.List[id], string(id))
 
-		log.Lvl1("Query to sum all values on the root")
+	if setup != "" {
+		log.Lvl1("Setup request")
 
-	} else if multiply {
-		log.Lvl1("Query to multiply all values on the root")
-	} else if data != "" && write {
-		log.Lvl1("Storing data : ", data, " on server ")
-		//todo add check for data
+		values := parseSetup(setup)
+		seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+		err := client.SendSetupQuery(roster, values.genPublicKey, values.genEvalKey, values.genRotKey, uint64(values.rotIdx), int(values.K), uint64(values.paramsIdx), seed)
+		if err != nil {
+			log.Error("Could not setup the client :", err)
+		}
+	}
+	if retrieveKey != "" {
+		log.Lvl1("Request to get keys")
+		values := strings.Split(retrieveKey, ",")
+		genPublicKey, _ := strconv.ParseBool(values[0])
+		genEvalKey, _ := strconv.ParseBool(values[1])
+		genRotKey, _ := strconv.ParseBool(values[2])
+		rotIdx, _ := strconv.ParseInt(values[3], 10, 32)
+		d, err := client.SendKeyRequest(genPublicKey, genEvalKey, genRotKey, int(rotIdx))
+		if err != nil {
+			log.Error("Could not retrieve keys : ", err)
+		}
+		log.Lvl1("Retrieved the requested keys. ", d)
 
-	} else if data != "" && predict {
-		log.Lvl1("Predicting for value : ", data)
-		//todo add check for data.
-	} else {
-		log.Error("Error : bad argument combination")
 	}
 
+	if write != "" {
+		log.Lvl1("Request to write to server")
+		id, err := client.SendWriteQuery(roster, []byte(write))
+		if err != nil {
+			log.Error("Could not write data : ", err)
+			return
+		}
+		log.Lvl1("Wrote data at id : ", id)
+		return
+
+	}
+	if get != "" {
+		log.Lvl1("Request to get data from server")
+		id, err := uuid.FromString(get)
+		if err != nil {
+			log.Error("Incorrect UUID :", err)
+			return
+		}
+		data, err := client.GetPlaintext(&id)
+		log.Lvl1("Retrieved data at id ", id, " : ", data)
+		return
+	}
+
+	if sum != "" {
+		log.Lvl1("Query to sum values on the root")
+		values := strings.Split(sum, ",")
+		if len(values) != 2 {
+			log.Error("Invalid input expected two id comma separated got ", values)
+			return
+		}
+		id1, err := uuid.FromString(values[0])
+		if err != nil {
+			log.Error("incorrect id ", err)
+		}
+		id2, err := uuid.FromString(values[1])
+		if err != nil {
+			log.Error("incorrect id ", err)
+		}
+
+		res, err := client.SendSumQuery(id1, id2)
+		if err != nil {
+			log.Error("Could not send sum query : ", err)
+			return
+		}
+		log.Lvl1("Sum is stored at id ", res)
+
+		return
+
+	}
+	if multiply != "" {
+		log.Lvl1("Query to multiply  on the root")
+		values := strings.Split(sum, ",")
+		if len(values) != 2 {
+			log.Error("Invalid input expected two id comma separated got ", values)
+			return
+		}
+		id1, err := uuid.FromString(values[0])
+		if err != nil {
+			log.Error("incorrect id ", err)
+		}
+		id2, err := uuid.FromString(values[1])
+		if err != nil {
+			log.Error("incorrect id ", err)
+		}
+
+		res, err := client.SendMultiplyQuery(id1, id2)
+		if err != nil {
+			log.Error("Could not send multiply query : ", err)
+			return
+		}
+		log.Lvl1("Multiply is stored at id ", res)
+
+		return
+
+	}
+
+	if refresh != "" {
+		log.Lvl1("Query to refresh values on the root")
+
+		id, err := uuid.FromString(refresh)
+		if err != nil {
+			log.Error("incorrect id ", err)
+		}
+
+		res, err := client.SendRefreshQuery(&id)
+		if err != nil {
+			log.Error("Could not send refresh query : ", err)
+			return
+		}
+		log.Lvl1("Refresh is stored at id ", res)
+
+		return
+	}
+
+	if relin != "" {
+		log.Lvl1("Query to relinearize a cipher")
+		id, err := uuid.FromString(relin)
+		if err != nil {
+			log.Error("incorrect id ", err)
+		}
+
+		res, err := client.SendRelinQuery(id)
+		if err != nil {
+			log.Error("Could not send relin query : ", err)
+			return
+		}
+		log.Lvl1("Relinearized cipher is stored at id ", res)
+
+		return
+	}
+
+	if rotate != "" {
+		log.Lvl1("Query to rotate a cipher")
+		values := strings.Split(rotate, ",")
+
+		id, err := uuid.FromString(values[0])
+		if err != nil {
+			log.Error("incorrect id ", err)
+			return
+		}
+
+		K, err := strconv.ParseInt(values[1], 10, 32)
+		if err != nil {
+			log.Error("Could parse K ", err)
+			return
+		}
+
+		rotType, err := strconv.ParseInt(values[2], 10, 32)
+		if err != nil {
+			log.Error("Could not parse rotation type ", err)
+			return
+		}
+
+		res, err := client.SendRotationQuery(id, uint64(K), int(rotType))
+		if err != nil {
+			log.Error("Could not send rotate query : ", err)
+			return
+		}
+		log.Lvl1("Rotated cipher is stored at id ", res)
+
+		return
+	}
+
+}
+
+func parseSetup(s string) SetupValues {
+	values := strings.Split(s, ",")
+	if len(values) != 6 {
+		return SetupValues{}
+	}
+	paramsIdx, _ := strconv.ParseInt(values[0], 10, 32)
+	genPublicKey, _ := strconv.ParseBool(values[1])
+	genEvalKey, _ := strconv.ParseBool(values[2])
+	genRotKey, _ := strconv.ParseBool(values[3])
+	rotIdx, _ := strconv.ParseInt(values[4], 10, 32)
+	K, _ := strconv.ParseUint(values[5], 10, 64)
+	sv := SetupValues{
+		paramsIdx:    int(paramsIdx),
+		genPublicKey: genPublicKey,
+		genEvalKey:   genEvalKey,
+		genRotKey:    genRotKey,
+		rotIdx:       int(rotIdx),
+		K:            K,
+	}
+
+	return sv
 }
 
 func parseGroupToml(s string) (*onet.Roster, error) {
@@ -57,30 +255,4 @@ func parseGroupToml(s string) (*onet.Roster, error) {
 		return nil, errors.New("Roster length should be > 0")
 	}
 	return group.Roster, nil
-}
-
-func writeQuery(el *onet.Roster, data string) error {
-	entryPoint := el.List[0]
-	client := services.NewLattigoSMCClient(entryPoint, "0")
-
-	queryID, err := client.SendWriteQuery(el, []byte{' '})
-	if err != nil {
-		return err
-	}
-
-	log.Lvl1("Result of data was written in ciphertext with UUID ", queryID)
-
-	return nil
-}
-
-func sumQuery() error {
-	return nil
-}
-
-func multiplyQuery() error {
-	return nil
-}
-
-func predictQuery() error {
-	return nil
 }

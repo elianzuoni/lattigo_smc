@@ -6,7 +6,6 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
-	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"time"
@@ -14,7 +13,6 @@ import (
 
 //------------HANDLES-QUERIES ---------------
 func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, error) {
-	log.Lvl1(s.ServerIdentity(), "new setup request")
 	tree := request.Roster.GenerateBinaryTree()
 
 	log.Lvl1("Begin new setup with ", tree.Size(), " parties")
@@ -92,7 +90,6 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 
 	}
 
-	log.Lvl1(s.ServerIdentity(), "out ")
 	return &SetupReply{1}, nil
 
 }
@@ -188,35 +185,4 @@ func (s *Service) genRotKey(tree *onet.Tree, k uint64, rotIdx int) error {
 	s.RotationKey[rotIdx] = rotkeygen.RotKey
 	s.rotKeyGenerated[rotIdx] = true
 	return nil
-}
-
-func (s *Service) switchKeys(tree *onet.Tree, id uuid.UUID) (*ReplyPlaintext, error) {
-	log.Lvl1(s.ServerIdentity(), " Switching keys")
-	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectivePublicKeySwitchingProtocolName)
-	protocol, err := s.NewProtocol(tni, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	err = s.RegisterProtocolInstance(protocol)
-	if err != nil {
-		return nil, err
-	}
-
-	pks := protocol.(*protocols.CollectivePublicKeySwitchingProtocol)
-	<-time.After(1 * time.Second)
-	err = pks.Start()
-	if err != nil {
-		log.ErrFatal(err, "Could not start collective public key switching")
-	}
-	go pks.Dispatch()
-	log.Lvl1(pks.ServerIdentity(), "waiting for protocol to be finished ")
-	pks.Wait()
-
-	//Send the ciphertext to the original asker.
-	reply := ReplyPlaintext{
-		UUID:       id,
-		Ciphertext: &pks.CiphertextOut,
-	}
-	return &reply, err
 }
