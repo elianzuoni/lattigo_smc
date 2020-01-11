@@ -163,3 +163,20 @@ func (c *API) SendRefreshQuery(id *uuid.UUID) (uuid.UUID, error) {
 	return result.Id, nil
 
 }
+
+func (c *API) SendRotationQuery(uuids uuid.UUID, K uint64, rotType int) (uuid.UUID, error) {
+	query := RotationQuery{
+		UUID:   uuids,
+		RotIdx: rotType,
+		K:      K,
+	}
+
+	result := ServiceState{}
+	err := c.SendProtobuf(c.entryPoint, &query, &result)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	log.Lvl1("Got reply of rotaiton : ", result.Id)
+	return result.Id, err
+}

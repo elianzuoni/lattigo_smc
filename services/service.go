@@ -45,6 +45,8 @@ type Service struct {
 	RotationReplies map[uuid.UUID]chan uuid.UUID
 
 	RefreshParams chan *bfv.Ciphertext
+	RotIdx        int
+	K             uint64
 }
 
 type SwitchingParamters struct {
@@ -245,11 +247,13 @@ func (s *Service) Process(msg *network.Envelope) {
 		case bfv.RotationRow:
 			s.DataBase[newId] = eval.RotateRowsNew(cipher, &s.RotationKey[rotIdx])
 		case bfv.RotationLeft:
+			s.DataBase[newId] = eval.RotateColumnsNew(cipher, K, &s.RotationKey[rotIdx])
 		case bfv.RotationRight:
 			s.DataBase[newId] = eval.RotateColumnsNew(cipher, K, &s.RotationKey[rotIdx])
 		}
 		reply := RotationReply{id, newId}
 		err := s.SendRaw(msg.ServerIdentity, &reply)
+		log.Lvl1("Sent result of rotaiton :) ")
 		if err != nil {
 			log.Error("Could not rotate ciphertext : ", err)
 		}
@@ -297,15 +301,13 @@ func (s *Service) Process(msg *network.Envelope) {
 		if tmp.PublicKey && s.pubKeyGenerated {
 			reply.PublicKey = (s.MasterPublicKey)
 		}
-		//if tmp.EvaluationKey && s.evalKeyGenerated{
-		//	reply.EvaluationKey = *s.EvaluationKey
-		//	reply.Flags |= 2
-		//
-		//}
-		//if tmp.RotationKey{
-		//
-		//	reply.Flags |= 4
-		//}
+		if tmp.EvaluationKey && s.evalKeyGenerated {
+			reply.EvaluationKey = s.EvaluationKey
+
+		}
+		if tmp.RotationKey && s.rotKeyGenerated[tmp.RotIdx] {
+			reply.RotationKeys = &s.RotationKey[tmp.RotIdx]
+		}
 
 		//Send the result.
 		err := s.SendRaw(msg.ServerIdentity, &reply)
@@ -319,12 +321,12 @@ func (s *Service) Process(msg *network.Envelope) {
 		if tmp.PublicKey != nil {
 			s.MasterPublicKey = tmp.PublicKey
 		}
-		//if tmp.Flags & 2 > 0 {
-		//	s.EvaluationKey = &tmp.EvaluationKey
-		//}
-		//if tmp.Flags & 4 > 0 {
-		//	//todo
-		//}
+		if tmp.EvaluationKey != nil {
+			s.EvaluationKey = tmp.EvaluationKey
+		}
+		if tmp.RotationKeys != nil {
+			s.RotationKey[tmp.RotIdx] = *tmp.RotationKeys
+		}
 
 		log.Lvl1("Got the public keys !")
 
@@ -478,8 +480,8 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 		for j := 0; j < len(modulus); j++ {
 			crp[j] = s.crpGen.ClockNew()
 		}
-		var rotIdx int
-		var K uint64
+		var rotIdx = s.RotIdx
+		var K = s.K
 		err = rotkey.Init(s.Params, *s.SecretKey, bfv.Rotation(rotIdx), K, crp)
 		if err != nil {
 			log.Error("Could not start rotation : ", err)

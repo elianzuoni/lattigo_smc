@@ -334,8 +334,9 @@ func (kr *KeyReply) MarshalBinary() ([]byte, error) {
 	pkLen := len(pkData)
 	ekLen := len(ekData)
 	rkLen := len(rkData)
-	data := make([]byte, pkLen+ekLen+rkLen+8*3)
-	pointer := 0
+	data := make([]byte, pkLen+ekLen+rkLen+8*3+1)
+	data[0] = byte(kr.RotIdx)
+	pointer := 1
 	binary.BigEndian.PutUint64(data[pointer:pointer+8], uint64(pkLen))
 	pointer += 8
 	binary.BigEndian.PutUint64(data[pointer:pointer+8], uint64(ekLen))
@@ -354,10 +355,12 @@ func (kr *KeyReply) MarshalBinary() ([]byte, error) {
 }
 
 func (kr *KeyReply) UnmarshalBinary(data []byte) error {
-	if len(data) < 8*3 {
+	if len(data) < 8*3+1 {
 		return nil
 	}
-	pointer := 0
+	kr.RotIdx = int(data[0])
+
+	pointer := 1
 	pkLen := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
 	pointer += 8
 	ekLen := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))

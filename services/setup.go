@@ -69,7 +69,8 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 	}
 
 	if request.GenerateRotationKey && !s.rotKeyGenerated[request.RotIdx] {
-
+		s.RotIdx = request.RotIdx
+		s.K = request.K
 		log.Lvl1("Generate evalutation key ! ")
 		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
 			if !requestSent {
@@ -88,6 +89,7 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 			}
 
 		}
+
 	}
 
 	log.Lvl1(s.ServerIdentity(), "out ")

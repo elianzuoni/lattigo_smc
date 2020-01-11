@@ -49,6 +49,7 @@ type KeyRequest struct {
 	PublicKey     bool
 	EvaluationKey bool
 	RotationKey   bool
+	RotIdx        int
 }
 
 //KeyReply containing different requested keys.
@@ -56,6 +57,7 @@ type KeyReply struct {
 	*bfv.PublicKey
 	*bfv.EvaluationKey
 	*bfv.RotationKeys
+	RotIdx int
 }
 
 type StoreQuery struct {
@@ -122,8 +124,33 @@ type ReplyPlaintext struct {
 
 type RotationQuery struct {
 	uuid.UUID
-	RotIdx int
 	K      uint64
+	RotIdx int
+}
+
+func (rq *RotationQuery) MarshalBinary() ([]byte, error) {
+	data := make([]byte, uuid.Size+1+8)
+	id, err := rq.UUID.MarshalBinary()
+	if err != nil {
+		return []byte{}, err
+	}
+	ptr := 0
+	copy(data[ptr:ptr+uuid.Size], id)
+	ptr += uuid.Size
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], rq.K)
+	ptr += 8
+	data[ptr] = byte(rq.RotIdx)
+	return data, nil
+
+}
+
+func (rq *RotationQuery) UnmarshalBinary(data []byte) error {
+	err := rq.UUID.UnmarshalBinary(data[:uuid.Size])
+	ptr := uuid.Size
+	rq.K = binary.BigEndian.Uint64(data[ptr : ptr+8])
+	ptr += 8
+	rq.RotIdx = int(data[ptr])
+	return err
 }
 
 type RotationReply struct {

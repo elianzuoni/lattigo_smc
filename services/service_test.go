@@ -1,13 +1,17 @@
 package services
 
 import (
+	"crypto/rand"
 	"github.com/golangplus/testing/assert"
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/utils"
 	"testing"
 	"time"
 )
+
+const COEFFSIZE = 4096
 
 func TestSetupCollectiveKeyGen(t *testing.T) {
 	log.SetDebugVisible(1)
@@ -148,7 +152,11 @@ func TestSumQuery(t *testing.T) {
 
 	q, err := client1.SendKeyRequest(true, false, false)
 	log.Lvl1("Response of query : ", q)
-	d1 := []byte{1, 2, 3, 4, 5, 6}
+	d1 := make([]byte, COEFFSIZE)
+	n, err := rand.Read(d1)
+	if err != nil || n != COEFFSIZE {
+		t.Fatal(err, "could not initialize d1 ")
+	}
 	queryID1, err := client1.SendWriteQuery(el, d1)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
@@ -158,7 +166,12 @@ func TestSumQuery(t *testing.T) {
 	log.Lvl2("Query Id 1: ", queryID1)
 	<-time.After(1 * time.Second)
 
-	d2 := []byte{8, 9, 10, 11, 12, 13}
+	d2 := make([]byte, COEFFSIZE)
+	n, err = rand.Read(d2)
+	if err != nil || n != COEFFSIZE {
+		t.Fatal(err, "could not initialize d1 ")
+	}
+
 	queryID2, err := client1.SendWriteQuery(el, d2)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
@@ -179,12 +192,12 @@ func TestSumQuery(t *testing.T) {
 	dataSum, err := client2.GetPlaintext(el, &resultSum)
 	log.Lvl1("Client retrieved data for sum : ", dataSum)
 
-	resSum := make([]byte, 6)
+	resSum := make([]byte, COEFFSIZE)
 	for i := range d1 {
 		resSum[i] = d1[i] + d2[i]
 	}
 
-	assert.Equal(t, "Sum", dataSum[:6], resSum)
+	assert.Equal(t, "Sum", dataSum, resSum)
 
 	return
 
@@ -212,7 +225,11 @@ func TestRelinearization(t *testing.T) {
 	q, err := client1.SendKeyRequest(true, false, false)
 	<-time.After(500 * time.Millisecond)
 	log.Lvl1("Response of query : ", q)
-	d1 := []byte{1, 2, 3, 4, 5, 6}
+	d1 := make([]byte, COEFFSIZE)
+	n, err := rand.Read(d1)
+	if err != nil || n != COEFFSIZE {
+		t.Fatal(err, "could not initialize d1 ")
+	}
 	queryID1, err := client1.SendWriteQuery(el, d1)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
@@ -222,7 +239,12 @@ func TestRelinearization(t *testing.T) {
 	log.Lvl2("Query Id 1: ", queryID1)
 	<-time.After(1 * time.Second)
 
-	d2 := []byte{8, 9, 10, 11, 12, 13}
+	d2 := make([]byte, COEFFSIZE)
+	n, err = rand.Read(d2)
+	if err != nil || n != COEFFSIZE {
+		t.Fatal(err, "could not initialize d2 ")
+	}
+
 	queryID2, err := client1.SendWriteQuery(el, d2)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
@@ -241,17 +263,17 @@ func TestRelinearization(t *testing.T) {
 	result, err = client1.SendRelinQuery(result)
 
 	//Try to do a key switch on it!!!
-	<-time.After(1 * time.Second)
+	<-time.After(2 * time.Second)
 	client2 := NewLattigoSMCClient(el.List[2], "2")
 	data, err := client2.GetPlaintext(el, &result)
 	log.Lvl1("Client retrieved data for multiply : ", data)
 
-	res := make([]byte, 6)
+	res := make([]byte, COEFFSIZE)
 	for i := range d1 {
 		res[i] = d1[i] * d2[i]
 	}
 
-	assert.Equal(t, "Multiplication", data[:6], res)
+	assert.Equal(t, "Multiplication", data, res)
 
 }
 
@@ -300,4 +322,76 @@ func TestRefresh(t *testing.T) {
 
 	assert.Equal(t, "Result", string(data[0:9]), string(content))
 
+}
+
+func TestRotation(t *testing.T) {
+	log.SetDebugVisible(4)
+	size := 5
+	K := 2
+	rotIdx := bfv.RotationLeft
+	local := onet.NewLocalTest(utils.SUITE)
+	_, el, _ := local.GenTree(size, true)
+
+	client := NewLattigoSMCClient(el.List[0], "0")
+	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
+
+	err := client.SendSetupQuery(el, true, false, true, uint64(K), rotIdx, 0, seed)
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	<-time.After(2 * time.Second)
+
+	client1 := NewLattigoSMCClient(el.List[1], "1")
+
+	q, err := client1.SendKeyRequest(true, false, false)
+	log.Lvl1("Response of query : ", q)
+	<-time.After(time.Second)
+	data := make([]byte, COEFFSIZE)
+	n, err := rand.Read(data)
+	if err != nil || n != COEFFSIZE {
+		t.Fatal(err, "could not initialize data ")
+	}
+	queryID1, err := client1.SendWriteQuery(el, data)
+	if err != nil {
+		t.Fatal("Could not start client :", err)
+
+	}
+
+	log.Lvl2("Query Id 1: ", queryID1)
+	<-time.After(1 * time.Second)
+
+	log.Lvl1("Rotation of cipher to the right of ", K, "K step")
+
+	resultRot, err := client1.SendRotationQuery(*queryID1, uint64(K), rotIdx)
+	log.Lvl1("Rotation is stored in : ", resultRot)
+
+	//Try to do a key switch on it!!!
+	<-time.After(1 * time.Second)
+	client2 := NewLattigoSMCClient(el.List[2], "2")
+	got, err := client2.GetPlaintext(el, &resultRot)
+
+	//We need to split it in two
+	got1, got2 := got[:COEFFSIZE/2], got[COEFFSIZE/2:]
+	data1, data2 := data[:COEFFSIZE/2], data[COEFFSIZE/2:]
+
+	expected1 := make([]byte, COEFFSIZE/2)
+	expected2 := make([]byte, COEFFSIZE/2)
+
+	copy(expected1[:len(expected1)-K], data1[K:])
+	copy(expected1[len(expected1)-K:], data1[:K])
+
+	copy(expected2[:len(expected2)-K], data2[K:])
+	copy(expected2[len(expected2)-K:], data2[:K])
+
+	log.Lvl1("Expected data 1 is : ", expected1)
+	log.Lvl1("Retrieve data 1 is : ", got1)
+
+	log.Lvl1("Expected data 2 is : ", expected2)
+	log.Lvl1("Retrieve data 2 is : ", got2)
+
+	assert.Equal(t, "rotation part 1 ", got1, expected1)
+	assert.Equal(t, "rotation part 2 ", got2, expected2)
+
+	return
 }
