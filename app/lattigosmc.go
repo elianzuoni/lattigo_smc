@@ -85,7 +85,7 @@ func main() {
 
 	cliApp.Flags = debugFlags
 	cliApp.Before = func(ctx *cli.Context) error {
-		log.SetDebugVisible(4)
+		log.SetDebugVisible(ctx.GlobalInt("debug"))
 		return nil
 	}
 

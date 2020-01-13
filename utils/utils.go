@@ -1,3 +1,4 @@
+//Some utility methods that simplify the testing process.
 package utils
 
 import (
@@ -16,6 +17,7 @@ import (
 	"strings"
 )
 
+//LocalTest a structure containing the shares and ideal secret keys. Should be used for testing.
 type LocalTest struct {
 	Roster          *onet.Roster
 	IdealSecretKey0 *bfv.SecretKey
@@ -28,6 +30,7 @@ type LocalTest struct {
 	Crs              *ring.Poly
 }
 
+//GetLocalTestForRoster gets the local test for the given roster. The keys will be stored in directory.
 func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, directory string) (lt *LocalTest, err error) {
 	lt = new(LocalTest)
 	lt.IdealSecretKey0 = bfv.NewSecretKey(params) // ideal secret key 0
@@ -62,6 +65,7 @@ func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, director
 	return
 }
 
+//TearDown removes the local key stored in the filesystem.
 func (lt *LocalTest) TearDown(simul bool) error {
 	var err error
 
@@ -92,7 +96,7 @@ func (lt *LocalTest) TearDown(simul bool) error {
 	return nil
 }
 
-//Save the given secret key with a seed that will be hashed
+//SaveSecretKey the given secret key with a seed that will be hashed
 func SaveSecretKey(sk *bfv.SecretKey, seed network.ServerIdentityID, directory string) error {
 	data, err := sk.MarshalBinary()
 	if err != nil {
@@ -147,7 +151,7 @@ func GetSecretKey(ctx *bfv.Parameters, seed network.ServerIdentityID, directory 
 	return sk, SaveSecretKey(sk, seed, directory)
 }
 
-//Save the public key so it can be loaded afterwards.
+//SavePublicKey so it can be loaded afterwards.
 func SavePublicKey(pk *bfv.PublicKey, seed network.ServerIdentityID) error {
 	data, err := pk.MarshalBinary()
 
@@ -162,7 +166,7 @@ func SavePublicKey(pk *bfv.PublicKey, seed network.ServerIdentityID) error {
 	return nil
 }
 
-//Load public key
+//LoadPublicKey loads a public key from the seed.
 func LoadPublicKey(ctx *bfv.Parameters, seed network.ServerIdentityID) (pk *bfv.PublicKey, err error) {
 	var data []byte
 	pk = bfv.NewPublicKey(ctx)
@@ -174,7 +178,7 @@ func LoadPublicKey(ctx *bfv.Parameters, seed network.ServerIdentityID) (pk *bfv.
 	return
 }
 
-// equalslice compares two slices of uint64 values, and return true if they are equal, else false.
+//Equalslice compares two slices of uint64 values, and return true if they are equal, else false.
 func Equalslice(a, b []uint64) bool {
 
 	if len(a) != len(b) {
@@ -189,6 +193,7 @@ func Equalslice(a, b []uint64) bool {
 	return true
 }
 
+//Uint64ToBytes converst a uint64 array to byte array. naive true will do a 1-to-1 mapping of array else 1-to-8 mapping
 func Uint64ToBytes(data []uint64, naive bool) ([]byte, error) {
 	if naive {
 		res := make([]byte, len(data))
@@ -214,6 +219,7 @@ func Uint64ToBytes(data []uint64, naive bool) ([]byte, error) {
 	return result, nil
 }
 
+//BytesToUint64 byte array to uint64 array. naive true means a 1-to-1 mapping. false 8-to-1 mapping
 func BytesToUint64(data []byte, naive bool) ([]uint64, error) {
 	if naive {
 		res := make([]uint64, len(data))
@@ -241,8 +247,7 @@ func BytesToUint64(data []byte, naive bool) ([]uint64, error) {
 	return result, nil
 }
 
-//From Unlynx ( https://github.com/ldsec/unlynx )
-// SendISMOthers sends a message to all other services
+//SendISMOthers sends a message to all other services. !! THIS IS TAKEN FROM Unlynx ( https://github.com/ldsec/unlynx ) !!
 func SendISMOthers(s *onet.ServiceProcessor, el *onet.Roster, msg interface{}) error {
 	var errStrs []string
 	for _, e := range el.List {

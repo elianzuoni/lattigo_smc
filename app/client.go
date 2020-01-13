@@ -93,7 +93,7 @@ func runLattigo(c *cli.Context) {
 			return
 		}
 		data, err := client.GetPlaintext(&id)
-		log.Lvl1("Retrieved data at id ", id, " : ", data)
+		log.Lvl1("Retrieved data at id ", id, " : ", string(data))
 		return
 	}
 
