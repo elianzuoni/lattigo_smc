@@ -34,7 +34,7 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 				return &SetupReply{-1}, err
 			}
 			requestSent = true
-
+			<-time.After(2 * time.Second)
 			err = s.genPublicKey(tree)
 
 			if err != nil {

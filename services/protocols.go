@@ -18,34 +18,25 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 	switch tn.ProtocolName() {
 	case protocols.CollectiveKeyGenerationProtocolName:
 		protocol, err = s.newProtoCKG(tn)
-		if err != nil {
-			return nil, err
-		}
+
 	case protocols.CollectiveKeySwitchingProtocolName:
 		protocol, err = s.newProtoCKS(tn)
-		if err != nil {
-			return nil, err
-		}
+
 	case protocols.CollectivePublicKeySwitchingProtocolName:
 		protocol, err = s.newProtoCPKS(tn)
-		if err != nil {
-			return nil, err
-		}
+
 	case protocols.RelinearizationKeyProtocolName:
 		protocol, err = s.newProtoRLK(tn)
-		if err != nil {
-			return nil, err
-		}
+
 	case protocols.RotationProtocolName:
 		protocol, err = s.newProtoRotKG(tn)
 	case protocols.CollectiveRefreshName:
 		protocol, err = s.newProtoRefresh(tn)
-		if err != nil {
-			return nil, err
-		}
 
 	}
-
+	if err != nil {
+		return nil, err
+	}
 	return protocol, nil
 }
 

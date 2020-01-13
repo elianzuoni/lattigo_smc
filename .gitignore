@@ -14,3 +14,5 @@ test_data/
 app/lattigosmc
 app/app
 app/keys
+# Toml file
+app/config

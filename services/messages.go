@@ -5,6 +5,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/protocols"
 )
 
 //MsgTypes different messages that can be used for the service.
@@ -68,4 +69,6 @@ func init() {
 
 	msgTypes.msgRotationQuery = network.RegisterMessage(&RotationQuery{})
 	msgTypes.msgRotationReply = network.RegisterMessage(&RotationReply{})
+
+	network.RegisterMessage(&protocols.Start{})
 }

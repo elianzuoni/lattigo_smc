@@ -115,7 +115,7 @@ func (ckgp *CollectiveKeyGenerationProtocol) Wait() {
 
 //NewCollectiveKeyGeneration is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
 func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl3("NewCollectiveKeyGen called")
+	log.Lvl1("NewCollectiveKeyGen called")
 
 	p := &CollectiveKeyGenerationProtocol{
 		TreeNodeInstance: n,

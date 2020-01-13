@@ -1,18 +1,18 @@
 [[servers]]
   Address = "tls://localhost:2000"
   Suite = "Ed25519"
-  Public = "e03b8f5bdd4e7043607181a032503c3833dc2721b6db15831adcc5d6b0c1283a"
+  Public = "a0835535e74e0991c06545e73d9e3173cd2a5b1b02e06fd5afde89217bb2c2cf"
   Description = "lattigo:0"
   [servers.Services]
 [[servers]]
   Address = "tls://localhost:2010"
   Suite = "Ed25519"
-  Public = "b3f0d41be7891720e1822423cca4607ede3d4974d886274852c22041e3e544a2"
+  Public = "4590864ee5d1618f645bdeeb5bf8dc96bcf0d70edeb0e9ba98cf6f4736647629"
   Description = "lattigo:1"
   [servers.Services]
 [[servers]]
   Address = "tls://localhost:2020"
   Suite = "Ed25519"
-  Public = "84e6394fca11f7a2d9f3fcd1ff7146e1ae8f34b3cc1ff6ca62a93f11fc905772"
+  Public = "3e2251f75480dd2a34c5abe3fbaf8487c1e24934824193b9414247b94b7e2399"
   Description = "lattigo:2"
   [servers.Services]
