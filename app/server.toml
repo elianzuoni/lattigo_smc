@@ -1,21 +1,18 @@
-# Put the configurations of server here.
 [[servers]]
-  Address = "tcp://127.0.0.1:2002"
-  Description = "Lattigo-SMC Server 0 (root)"
-  Private = "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZWQyNTUxOQAAACD5Rcd82XGc7HtOcDdu010+ssHgLt/k73cBVRqVo0Qm5AAAAJBRX2vIUV9ryAAAAAtzc2gtZWQyNTUxOQAAACD5Rcd82XGc7HtOcDdu010+ssHgLt/k73cBVRqVo0Qm5AAAAED5gUEH/QsAenC+uPl2GGkTmivLLwj2LSYmTnGHg2OqA/lFx3zZcZzse05wN27TXT6yweAu3+TvdwFVGpWjRCbkAAAADWpvaGFuQG9zYm94ZXM="
-  Public = "AAAAC3NzaC1lZDI1NTE5AAAAIPlFx3zZcZzse05wN27TXT6yweAu3+TvdwFVGpWjRCbk"
+  Address = "tls://localhost:2000"
+  Suite = "Ed25519"
+  Public = "e03b8f5bdd4e7043607181a032503c3833dc2721b6db15831adcc5d6b0c1283a"
+  Description = "lattigo:0"
+  [servers.Services]
 [[servers]]
-  Address = "tcp://127.0.0.1:2004"
-  Description = "Lattigo-SMC Server 1"
-  Private = "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZWQyNTUxOQAAACB0QVTUvicerO1ZR9qSUSrCpcnlhGpZ26oo6qPZR+gzHwAAAJCqmPUSqpj1EgAAAAtzc2gtZWQyNTUxOQAAACB0QVTUvicerO1ZR9qSUSrCpcnlhGpZ26oo6qPZR+gzHwAAAEDUWYZbye/0OlFsK9uMNbHIz2h9JKpECESRVpuzdLm+R3RBVNS+Jx6s7VlH2pJRKsKlyeWEalnbqijqo9lH6DMfAAAADWpvaGFuQG9zYm94ZXM="
-  Public = "AAAAC3NzaC1lZDI1NTE5AAAAIHRBVNS+Jx6s7VlH2pJRKsKlyeWEalnbqijqo9lH6DMf"
+  Address = "tls://localhost:2010"
+  Suite = "Ed25519"
+  Public = "b3f0d41be7891720e1822423cca4607ede3d4974d886274852c22041e3e544a2"
+  Description = "lattigo:1"
+  [servers.Services]
 [[servers]]
-  Address = "tcp://127.0.0.1:2006"
-  Description = "Lattigo-SMC Server 2"
-  Private = "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZWQyNTUxOQAAACCMTl9zh64CAE5RFSt+sLZzJdYA5FEFfprhqBhhWkA1AgAAAJBPm/FAT5vxQAAAAAtzc2gtZWQyNTUxOQAAACCMTl9zh64CAE5RFSt+sLZzJdYA5FEFfprhqBhhWkA1AgAAAEBfVq6kWdncZcJwPbGOYgV4bFu0yrBLbcDQQWuRw0ytA4xOX3OHrgIATlEVK36wtnMl1gDkUQV+muGoGGFaQDUCAAAADWpvaGFuQG9zYm94ZXM="
-  Public = "AAAAC3NzaC1lZDI1NTE5AAAAIIxOX3OHrgIATlEVK36wtnMl1gDkUQV+muGoGGFaQDUC"
-[[servers]]
-  Address = "tcp://127.0.0.1:2008"
-  Description = "Lattigo-SMC Server 3"
-  Private = "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZWQyNTUxOQAAACCd2Ff57yugBhlWYm56EkkO3WvTHyedVbdl21lxl0V8GQAAAJAJA/g5CQP4OQAAAAtzc2gtZWQyNTUxOQAAACCd2Ff57yugBhlWYm56EkkO3WvTHyedVbdl21lxl0V8GQAAAEA5M3VbPvCRIv/ylC1/wVDsYlC54ecaX11WRcCu+n7TQJ3YV/nvK6AGGVZibnoSSQ7da9MfJ51Vt2XbWXGXRXwZAAAADWpvaGFuQG9zYm94ZXM="
-  Public = "AAAAC3NzaC1lZDI1NTE5AAAAIJ3YV/nvK6AGGVZibnoSSQ7da9MfJ51Vt2XbWXGXRXwZ"
+  Address = "tls://localhost:2020"
+  Suite = "Ed25519"
+  Public = "84e6394fca11f7a2d9f3fcd1ff7146e1ae8f34b3cc1ff6ca62a93f11fc905772"
+  Description = "lattigo:2"
+  [servers.Services]

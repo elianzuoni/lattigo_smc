@@ -5,6 +5,7 @@ import (
 	"github.com/urfave/cli"
 	"go.dedis.ch/onet/v3/app"
 	"go.dedis.ch/onet/v3/log"
+	_ "lattigo-smc/protocols"
 	"lattigo-smc/utils"
 	"os"
 )
@@ -29,6 +30,7 @@ func main() {
 		cli.StringFlag{Name: "retrievekey", Usage: "Retrieve key with boolean <collkey>,<evalkey>,<rottype>,<rotType>,<K>"},
 		cli.StringFlag{Name: "grouptoml, gt", Usage: "Give the gorup toml"},
 		cli.IntFlag{Name: "id", Usage: "id of the client"},
+		cli.StringFlag{Name: "setup", Usage: "Setup the server <paramsIdx>,<genColKey>,<genEvalKey>,<genRotKey>,<rottype>,<K>"},
 
 		cli.StringFlag{Name: "sum ,s", Usage: "Get sum of two ciphers comma separated : <id1>,<id2>"},
 
@@ -83,7 +85,7 @@ func main() {
 
 	cliApp.Flags = debugFlags
 	cliApp.Before = func(ctx *cli.Context) error {
-		log.SetDebugVisible(ctx.GlobalInt("debug"))
+		log.SetDebugVisible(4)
 		return nil
 	}
 
