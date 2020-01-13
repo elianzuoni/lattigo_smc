@@ -314,7 +314,6 @@ func TestRefresh(t *testing.T) {
 	}
 
 	<-time.After(3 * time.Second)
-
 	//Client 2 now requests to switch the key for him...
 	client2 := NewLattigoSMCClient(el.List[2], "2")
 	data, err := client2.GetPlaintext(&result)

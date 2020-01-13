@@ -142,7 +142,7 @@ func (c *API) SendRelinQuery(id uuid.UUID) (uuid.UUID, error) {
 
 //SendRefreshQuery send a query for ciphertext id to be refreshed.
 func (c *API) SendRefreshQuery(id *uuid.UUID) (uuid.UUID, error) {
-	query := RefreshQuery{*id, nil}
+	query := RefreshQuery{*id, true, nil}
 
 	result := ServiceState{}
 	err := c.SendProtobuf(c.entryPoint, &query, &result)

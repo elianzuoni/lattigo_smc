@@ -95,6 +95,7 @@ type MultiplyReply struct {
 //RefreshQuery query for UUID to be refreshed.
 type RefreshQuery struct {
 	uuid.UUID
+	InnerQuery bool
 	*bfv.Ciphertext
 }
 

@@ -49,12 +49,19 @@ func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, er
 func (s *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, error) {
 	log.Lvl1("Got request to refresh cipher : ", query.UUID)
 	tree := s.Roster.GenerateBinaryTree()
-	if query.Ciphertext == nil {
+	if query.Ciphertext == nil && query.InnerQuery {
+		query.InnerQuery = false
 		err := s.SendRaw(tree.Root.ServerIdentity, query)
 		if err != nil {
 			return nil, err
 		}
 
+	} else {
+		err := s.refreshProto(query)
+		if err != nil {
+			log.Error("Could not start refresh ", err)
+			return nil, err
+		}
 	}
 	//this returns the id that was requested as the server will store it with the same id.
 	return &ServiceState{query.UUID, true}, nil
@@ -79,6 +86,7 @@ func (s *Service) refreshProto(query *RefreshQuery) error {
 		//Start the protocol
 		log.Lvl1(s.ServerIdentity(), "Starting collective key refresh ")
 		s.RefreshParams <- query.Ciphertext
+		log.Lvl1("Got params :)")
 		tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveRefreshName)
 		protocol, err := s.NewProtocol(tni, nil)
 		if err != nil {

@@ -24,15 +24,20 @@ func main() {
 		cli.IntFlag{Usage: "logging-level : 1 to 5", Name: "debug,d", Value: 1},
 	}
 	clientFlags := []cli.Flag{
-		cli.StringFlag{
-			Name:  "write, w",
-			Usage: "Store the data on the root",
-			Value: "",
-		},
+		cli.StringFlag{Name: "write, w", Usage: "Store data <data>"},
+		cli.StringFlag{Name: "get, g", Usage: "Get data stored at <UUID>"},
+		cli.StringFlag{Name: "retrievekey", Usage: "Retrieve key with boolean <collkey>,<evalkey>,<rottype>,<rotType>,<K>"},
+		cli.StringFlag{Name: "grouptoml, gt", Usage: "Give the gorup toml"},
+		cli.IntFlag{Name: "id", Usage: "id of the client"},
 
 		cli.StringFlag{Name: "sum ,s", Usage: "Get sum of two ciphers comma separated : <id1>,<id2>"},
+
 		cli.StringFlag{Name: "multiply ,m", Usage: "Get product of two ciphers comma separeted : <id1>,<id2>"},
+		cli.StringFlag{Name: "refresh, ref", Usage: "Refresh a ciphertext with <UUID>"},
+		cli.StringFlag{Name: "relin, rel", Usage: "Relinearize a cipher with <UUID>"},
+		cli.StringFlag{Name: "rotate , rot", Usage: "Rotate a ciphertext format <UUID>,<rotType>,<K>"},
 	}
+
 	serverFlags := []cli.Flag{
 		cli.StringFlag{
 			Name:  "config, c",

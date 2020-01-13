@@ -254,21 +254,36 @@ func (mr *MultiplyReply) UnmarshalBinary(data []byte) error {
 
 func (rq *RefreshQuery) MarshalBinary() ([]byte, error) {
 	cast := new(ReplyPlaintext)
+
 	cast.UUID = rq.UUID
 	cast.Ciphertext = rq.Ciphertext
-	return cast.MarshalBinary()
-
+	data, err := cast.MarshalBinary()
+	if err != nil {
+		return []byte{}, err
+	}
+	var flag byte
+	if rq.InnerQuery {
+		flag = 1
+	}
+	data = append(data, flag)
+	return data, nil
 }
 
 func (rq *RefreshQuery) UnmarshalBinary(data []byte) error {
 	var cast ReplyPlaintext
-	err := cast.UnmarshalBinary(data)
+	err := cast.UnmarshalBinary(data[:len(data)-1])
 	if err != nil {
 		return err
 	}
 
 	rq.UUID = cast.UUID
 	rq.Ciphertext = cast.Ciphertext
+	flag := data[len(data)-1]
+	if flag > 0 {
+		rq.InnerQuery = true
+	} else {
+		rq.InnerQuery = false
+	}
 	return nil
 }
 

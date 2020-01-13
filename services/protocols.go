@@ -8,6 +8,47 @@ import (
 	"lattigo-smc/protocols"
 )
 
+//NewProtocol starts a new protocol given by the name in the treenodeinstance and returns it correctly initialized.
+func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	err := tn.SetConfig(conf)
+	if err != nil {
+		return nil, err
+	}
+	var protocol onet.ProtocolInstance
+	switch tn.ProtocolName() {
+	case protocols.CollectiveKeyGenerationProtocolName:
+		protocol, err = s.newProtoCKG(tn)
+		if err != nil {
+			return nil, err
+		}
+	case protocols.CollectiveKeySwitchingProtocolName:
+		protocol, err = s.newProtoCKS(tn)
+		if err != nil {
+			return nil, err
+		}
+	case protocols.CollectivePublicKeySwitchingProtocolName:
+		protocol, err = s.newProtoCPKS(tn)
+		if err != nil {
+			return nil, err
+		}
+	case protocols.RelinearizationKeyProtocolName:
+		protocol, err = s.newProtoRLK(tn)
+		if err != nil {
+			return nil, err
+		}
+	case protocols.RotationProtocolName:
+		protocol, err = s.newProtoRotKG(tn)
+	case protocols.CollectiveRefreshName:
+		protocol, err = s.newProtoRefresh(tn)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	return protocol, nil
+}
+
 func (s *Service) newProtoCKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 	log.Lvl1(s.ServerIdentity(), ": New protocol ckgp")
 	protocol, err := protocols.NewCollectiveKeyGeneration(tn)
