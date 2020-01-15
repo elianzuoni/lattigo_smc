@@ -26,6 +26,7 @@ func main() {
 	}
 	clientFlags := []cli.Flag{
 		cli.StringFlag{Name: "write, w", Usage: "Store data <data>"},
+		cli.StringFlag{Name: "type, t", Usage: "What is the type of data stored (string or byte)"},
 		cli.StringFlag{Name: "get, g", Usage: "Get data stored at <UUID>"},
 		cli.StringFlag{Name: "retrievekey", Usage: "Retrieve key with boolean <collkey>,<evalkey>,<rottype>,<rotType>,<K>"},
 		cli.StringFlag{Name: "grouptoml, gt", Usage: "Give the gorup toml"},

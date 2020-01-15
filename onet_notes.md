@@ -1,5 +1,5 @@
 # Notes on onet
-Some notes I took of Onet while trying to understand it. 
+Some notes I took of Onet while trying to understand it. They may be out of date..
 
 ## Simulation 
 - Server members = nodes

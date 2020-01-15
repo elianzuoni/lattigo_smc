@@ -14,6 +14,7 @@ import (
 	"go.dedis.ch/onet/v3/network"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -245,6 +246,19 @@ func BytesToUint64(data []byte, naive bool) ([]uint64, error) {
 		return []uint64{}, err
 	}
 	return result, nil
+}
+
+func StringToBytes(str []string) []byte {
+	data := make([]byte, len(str))
+	for i, e := range str {
+		v, err := strconv.ParseInt(e, 10, 8)
+		if err != nil {
+			panic(err)
+		}
+		data[i] = byte(v)
+
+	}
+	return data
 }
 
 //SendISMOthers sends a message to all other services. !! THIS IS TAKEN FROM Unlynx ( https://github.com/ldsec/unlynx ) !!

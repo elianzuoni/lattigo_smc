@@ -17,7 +17,8 @@ func init() {
 }
 
 //Init initializes the variable for the protocol. Should be called before dispatch
-func (rkp *RotationKeyProtocol) Init(params *bfv.Parameters, sk bfv.SecretKey, rottype bfv.Rotation, k uint64, crp []*ring.Poly) error {
+func (rkp *RotationKeyProtocol) Init(params *bfv.Parameters, sk bfv.SecretKey, rottype bfv.Rotation, k uint64, crp []*ring.Poly, new bool, rotkey *bfv.RotationKeys) error {
+
 	rkp.Params = *params
 	rkp.Crp = crp
 
@@ -25,7 +26,12 @@ func (rkp *RotationKeyProtocol) Init(params *bfv.Parameters, sk bfv.SecretKey, r
 	rkp.RTShare = rkp.RotationProtocol.AllocateShare()
 	//need rottype, k , sk and crp
 	rkp.RotationProtocol.GenShare(rottype, k, sk.Get(), crp, &rkp.RTShare)
-	rkp.RotKey = *bfv.NewRotationKeys()
+	if new {
+		rkp.RotKey = *bfv.NewRotationKeys()
+
+	} else {
+		rkp.RotKey = *rotkey
+	}
 
 	return nil
 }

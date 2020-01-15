@@ -66,7 +66,7 @@ func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, erro
 		}
 	}
 
-	if request.GenerateRotationKey && !s.rotKeyGenerated[request.RotIdx] {
+	if request.GenerateRotationKey && !s.rotKeyGenerated {
 		s.RotIdx = request.RotIdx
 		s.K = request.K
 		log.Lvl1("Generate evalutation key ! ")
@@ -182,7 +182,7 @@ func (s *Service) genRotKey(tree *onet.Tree, k uint64, rotIdx int) error {
 	rotkeygen.Wait()
 	log.Lvl1("Finished relin protocol")
 
-	s.RotationKey[rotIdx] = rotkeygen.RotKey
-	s.rotKeyGenerated[rotIdx] = true
+	s.RotationKey = &rotkeygen.RotKey
+	s.rotKeyGenerated = true
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/services"
+	"lattigo-smc/utils"
 	"os"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ func runLattigo(c *cli.Context) {
 
 	//Write-Read
 	write := c.String("write")
+	typeData := c.String("type")
 	get := c.String("get")
 
 	//Evaluations
@@ -42,6 +44,10 @@ func runLattigo(c *cli.Context) {
 
 	//Setups
 	//setup the group toml for servers...
+	if groupToml == "" {
+		groupToml = "server.toml"
+		log.Lvl1("Using default grouptoml :", groupToml)
+	}
 	roster, err := parseGroupToml(groupToml)
 	if err != nil {
 		log.ErrFatal(err, "Could not parse group toml file :", groupToml)
@@ -75,8 +81,23 @@ func runLattigo(c *cli.Context) {
 	}
 
 	if write != "" {
-		log.Lvl1("Request to write to server")
-		id, err := client.SendWriteQuery(roster, []byte(write))
+		if typeData == "" {
+			typeData = "string"
+		}
+
+		log.Lvl1("Request to write to server type of data : ", typeData)
+		var err error
+		var id *uuid.UUID
+		if typeData == "string" {
+			id, err = client.SendWriteQuery(roster, []byte(write))
+		} else if typeData == "byte" {
+			data := strings.Split(write, ",")
+			dBytes := utils.StringToBytes(data)
+			id, err = client.SendWriteQuery(roster, dBytes)
+		} else {
+			log.Error("unknown type of data : ", typeData)
+			return
+		}
 		if err != nil {
 			log.Error("Could not write data : ", err)
 			return
@@ -93,7 +114,13 @@ func runLattigo(c *cli.Context) {
 			return
 		}
 		data, err := client.GetPlaintext(&id)
-		log.Lvl1("Retrieved data at id ", id, " : ", string(data))
+		if typeData == "string" {
+			log.Lvl1("Retrieved data at id ", id, " : ", string(data))
+
+		} else {
+			log.Lvl1("Retrieved data at id ", id, " : ", (data))
+
+		}
 		return
 	}
 

@@ -101,7 +101,7 @@ func (s *Service) processKeyReply(msg *network.Envelope) {
 		s.EvaluationKey = tmp.EvaluationKey
 	}
 	if tmp.RotationKeys != nil {
-		s.RotationKey[tmp.RotIdx] = *tmp.RotationKeys
+		s.RotationKey = tmp.RotationKeys
 	}
 	log.Lvl1("Got the public keys !")
 }
@@ -160,8 +160,8 @@ func (s *Service) processKeyRequest(msg *network.Envelope) {
 		reply.EvaluationKey = s.EvaluationKey
 
 	}
-	if tmp.RotationKey && s.rotKeyGenerated[tmp.RotIdx] {
-		reply.RotationKeys = &s.RotationKey[tmp.RotIdx]
+	if tmp.RotationKey && s.rotKeyGenerated {
+		reply.RotationKeys = s.RotationKey
 	}
 	//Send the result.
 	err := s.SendRaw(msg.ServerIdentity, &reply)
@@ -176,7 +176,7 @@ func (s *Service) processRotationQuery(msg *network.Envelope) {
 	rotIdx := tmp.RotIdx
 	K := tmp.K
 	id := tmp.UUID
-	if !s.rotKeyGenerated[rotIdx] {
+	if !s.rotKeyGenerated {
 		return
 	}
 	eval := bfv.NewEvaluator(s.Params)
@@ -188,11 +188,11 @@ func (s *Service) processRotationQuery(msg *network.Envelope) {
 	newId := uuid.NewV1()
 	switch bfv.Rotation(rotIdx) {
 	case bfv.RotationRow:
-		s.DataBase[newId] = eval.RotateRowsNew(cipher, &s.RotationKey[rotIdx])
+		s.DataBase[newId] = eval.RotateRowsNew(cipher, s.RotationKey)
 	case bfv.RotationLeft:
-		s.DataBase[newId] = eval.RotateColumnsNew(cipher, K, &s.RotationKey[rotIdx])
+		s.DataBase[newId] = eval.RotateColumnsNew(cipher, K, s.RotationKey)
 	case bfv.RotationRight:
-		s.DataBase[newId] = eval.RotateColumnsNew(cipher, K, &s.RotationKey[rotIdx])
+		s.DataBase[newId] = eval.RotateColumnsNew(cipher, K, s.RotationKey)
 	}
 	reply := RotationReply{id, newId}
 	err := s.SendRaw(msg.ServerIdentity, &reply)

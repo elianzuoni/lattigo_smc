@@ -28,14 +28,14 @@ type Service struct {
 
 	pubKeyGenerated     bool
 	evalKeyGenerated    bool
-	rotKeyGenerated     []bool
+	rotKeyGenerated     bool
 	DataBase            map[uuid.UUID]*bfv.Ciphertext
 	LocalUUID           map[uuid.UUID]chan uuid.UUID
 	Ckgp                *protocols.CollectiveKeyGenerationProtocol
 	crpGen              ring.CRPGenerator
 	SwitchedCiphertext  map[uuid.UUID]chan bfv.Ciphertext
 	SwitchingParameters chan SwitchingParamters
-	RotationKey         []bfv.RotationKeys
+	RotationKey         *bfv.RotationKeys
 
 	SumReplies      map[SumQuery]chan uuid.UUID
 	MultiplyReplies map[MultiplyQuery]chan uuid.UUID
@@ -61,8 +61,6 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 
 		SwitchedCiphertext:  make(map[uuid.UUID]chan bfv.Ciphertext),
 		SwitchingParameters: make(chan SwitchingParamters, 10),
-		RotationKey:         make([]bfv.RotationKeys, 3),
-		rotKeyGenerated:     make([]bool, 3),
 
 		SumReplies:      make(map[SumQuery]chan uuid.UUID),
 		MultiplyReplies: make(map[MultiplyQuery]chan uuid.UUID),

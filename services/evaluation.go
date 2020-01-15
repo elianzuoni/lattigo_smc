@@ -137,7 +137,7 @@ func (s *Service) HandleRelinearizationQuery(query *RelinQuery) (network.Message
 func (s *Service) HandleRotationQuery(query *RotationQuery) (network.Message, error) {
 	log.Lvl1("Got rotation request : ", query.UUID)
 	tree := s.Roster.GenerateBinaryTree()
-	if !s.rotKeyGenerated[query.RotIdx] {
+	if !s.rotKeyGenerated {
 		log.Lvl1("Key has not been generated ! ")
 		return &ServiceState{uuid.UUID{}, false}, nil
 	}

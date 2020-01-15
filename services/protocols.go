@@ -136,7 +136,11 @@ func (s *Service) newProtoRotKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstanc
 	}
 	var rotIdx = s.RotIdx
 	var K = s.K
-	err = rotkey.Init(s.Params, *s.SecretKey, bfv.Rotation(rotIdx), K, crp)
+	if s.RotationKey != nil {
+		err = rotkey.Init(s.Params, *s.SecretKey, bfv.Rotation(rotIdx), K, crp, false, s.RotationKey)
+	} else {
+		err = rotkey.Init(s.Params, *s.SecretKey, bfv.Rotation(rotIdx), K, crp, true, nil)
+	}
 	if err != nil {
 		log.Error("Could not start rotation : ", err)
 		return nil, err
@@ -145,7 +149,7 @@ func (s *Service) newProtoRotKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstanc
 	if !tn.IsRoot() {
 		go func() {
 			rotkey.Wait()
-			s.rotKeyGenerated[rotIdx] = true
+			s.rotKeyGenerated = true
 		}()
 	}
 	return protocol, err
