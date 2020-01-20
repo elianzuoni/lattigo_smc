@@ -1,2 +1,18 @@
 .DS_Store
 .idea/
+
+# Stuff from the simulation builds
+simulation/build/
+simulation/test_data/
+simulation/simulation
+# Dont add the keys that are generated for testing.
+PublicKey*
+SecretKey*
+*.sk
+# Dont add all the test data. 
+test_data/
+app/lattigosmc
+app/app
+app/keys
+# Toml file
+app/config
