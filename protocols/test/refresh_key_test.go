@@ -18,7 +18,7 @@ import (
 func TestRefreshProtocol(t *testing.T) {
 	/**Variables for test ***/
 	var nbnodes = []int{3, 8, 16}
-	var paramsSets = bfv.DefaultParams[:3]
+	var paramsSets = bfv.DefaultParams
 
 	var storageDirectory = "/tmp/"
 	if testing.Short() {
