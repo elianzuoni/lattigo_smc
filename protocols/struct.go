@@ -154,6 +154,24 @@ type RotationKeyProtocol struct {
 	ChannelStart   chan StructStart
 }
 
+//EncryptionToSharesProtocol implements the onet.Protocol interface.
+//Contains all the variables needed at some phase of the protocol.
+type EncryptionToSharesProtocol struct {
+	*onet.TreeNodeInstance
+	*dbfv.E2SProtocol
+
+	//Variables not contained in E2SProtocol.
+	sk bfv.SecretKey
+	ct *bfv.Ciphertext
+
+	//Channels to receive from other nodes.
+	channelStart     chan StructStart
+	channelDecShares chan []StructE2SDecryptionShare //A channel of slices allows to receive all shares at once
+
+	//Channel to return the additive share to caller
+	ChannelAddShare chan dbfv.AdditiveShare
+}
+
 //StructRTGShare handler for onet
 type StructRTGShare struct {
 	*onet.TreeNode
@@ -259,4 +277,20 @@ type StructRelinKeyRoundTwo struct {
 type StructRelinKeyRoundThree struct {
 	*onet.TreeNode
 	dbfv.RKGShareRoundThree
+}
+
+//StructE2SDecryptionShare is a handler for onet
+//Wraps the decryption share (used in Encryption-to-Shares protocol) so that it can
+//be passed via onet with the paradigm described in cothority_template
+type StructE2SDecryptionShare struct {
+	*onet.TreeNode
+	dbfv.E2SDecryptionShare
+}
+
+//StructE2SReencryptionShare is a handler for onet
+//Wraps the re-encryption share (used in Shares-to-Encryption protocol) so that it can
+//be passed via onet with the paradigm described in cothority_template
+type StructS2EReencryptionShare struct {
+	*onet.TreeNode
+	dbfv.S2EReencryptionShare
 }
