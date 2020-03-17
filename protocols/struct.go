@@ -154,14 +154,15 @@ type RotationKeyProtocol struct {
 	ChannelStart   chan StructStart
 }
 
-//EncryptionToSharesProtocol implements the onet.Protocol interface.
-//Contains all the variables needed at some phase of the protocol.
+// EncryptionToSharesProtocol implements the onet.Protocol interface.
+// Contains all the variables that the caller needs to supply at some phase of the protocol,
+// plus the private channels to communicate between nodes, and the public channel to output the result.
 type EncryptionToSharesProtocol struct {
 	*onet.TreeNodeInstance
 	*dbfv.E2SProtocol
 
 	//Variables not contained in E2SProtocol.
-	sk bfv.SecretKey
+	sk *bfv.SecretKey
 	ct *bfv.Ciphertext
 
 	//Channels to receive from other nodes.
@@ -170,6 +171,26 @@ type EncryptionToSharesProtocol struct {
 
 	//Channel to return the additive share to caller
 	ChannelAddShare chan dbfv.AdditiveShare
+}
+
+// SharesToEncryptionProtocol implements the onet.Protocol interface.
+// Contains all the variables that the caller needs to supply at some phase of the protocol,
+// plus the private channels to communicate between nodes, and the public channel to output the result.
+type SharesToEncryptionProtocol struct {
+	*onet.TreeNodeInstance
+	*dbfv.S2EProtocol
+
+	//Variables not contained in E2SProtocol.
+	addShare dbfv.AdditiveShare
+	sk       *bfv.SecretKey
+	crs      *ring.Poly
+
+	//Channels to receive from other nodes.
+	channelStart       chan StructStart
+	channelReencShares chan []StructS2EReencryptionShare //A channel of slices allows to receive all shares at once
+
+	//Channel to return the ciphertext to the caller (only if root)
+	ChannelCiphertext chan *bfv.Ciphertext
 }
 
 //StructRTGShare handler for onet
@@ -279,17 +300,17 @@ type StructRelinKeyRoundThree struct {
 	dbfv.RKGShareRoundThree
 }
 
-//StructE2SDecryptionShare is a handler for onet
-//Wraps the decryption share (used in Encryption-to-Shares protocol) so that it can
-//be passed via onet with the paradigm described in cothority_template
+// StructE2SDecryptionShare is a handler for onet.
+// Wraps the decryption share (used in Encryption-to-Shares protocol) so that it can
+// be passed via onet with the paradigm described in cothority_template
 type StructE2SDecryptionShare struct {
 	*onet.TreeNode
 	dbfv.E2SDecryptionShare
 }
 
-//StructE2SReencryptionShare is a handler for onet
-//Wraps the re-encryption share (used in Shares-to-Encryption protocol) so that it can
-//be passed via onet with the paradigm described in cothority_template
+// StructE2SReencryptionShare is a handler for onet.
+// Wraps the re-encryption share (used in Shares-to-Encryption protocol) so that it can
+// be passed via onet with the paradigm described in cothority_template
 type StructS2EReencryptionShare struct {
 	*onet.TreeNode
 	dbfv.S2EReencryptionShare
