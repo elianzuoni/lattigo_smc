@@ -3,11 +3,14 @@
 // that, at the end, actually has the plaintext).
 // The steps are:
 //
-// Method Init:
-// 0) Every node initialises the protocol variables.
+// Method NewSharesToEncryptionProtocol:
+// 0) The nodes initialise the variables needed for the protocol. This method is not usable as-is: it
+//    needs to be encapsulated in a proper protocol factory (respecting the onet.NewProtocol signature).
+//    For this reason, though SharesToEncryptionProtocol does implement the onet.ProtocolInstance interface,
+//    it is not registered to the onet library, as no protocol factory is yet defined.
 // Method Start:
 // 1) The root sends the wake-up message to itself.
-// Method Dispatch
+// Method Dispatch:
 // 2) Every node waits to receive the wake-up message, then re-sends it to children.
 // 3a) Every node computes its re-encryption share.
 //		3b) If node is not leaf, it waits to collect re-encryption shares from every child
@@ -18,7 +21,6 @@
 package protocols
 
 import (
-	"errors"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
@@ -26,60 +28,31 @@ import (
 	"go.dedis.ch/onet/v3/log"
 )
 
-//CollectiveKeyGenerationProtocolName name of protocol for onet.
-const SharesToEncryptionProtocolName = "SharesToEncryption"
-
-// init registers the protocol to the underlying onet library, so that it has a factory
-// when it has to instantiate a ProtocolInstance
-func init() {
-
-	if _, err := onet.GlobalProtocolRegister(SharesToEncryptionProtocolName, NewSharesToEncryptionProtocol); err != nil {
-		log.ErrFatal(err, "Could not register EncryptionToShares protocol : ")
+// This is a full-blown constructor. In every context (test, simulation, or deployment) it will have to
+// be encapsulated in a proper protocol factory, that only takes the TreeNodeInstance as an argument
+// and somehow supplies the rest of the parameters on its own.
+func NewSharesToEncryptionProtocol(t *onet.TreeNodeInstance, params *bfv.Parameters, sigmaSmudging float64,
+	addShare *dbfv.AdditiveShare, sk *bfv.SecretKey, crs *ring.Poly) (*SharesToEncryptionProtocol, error) {
+	proto := &SharesToEncryptionProtocol{
+		TreeNodeInstance:  t,
+		S2EProtocol:       dbfv.NewS2EProtocol(params, sigmaSmudging),
+		addShare:          addShare,
+		sk:                sk,
+		crs:               crs,
+		ChannelCiphertext: make(chan *bfv.Ciphertext),
 	}
 
-}
+	// No need to initialise the channels: RegisterChannels will do it for us.
+	err := proto.RegisterChannels(&proto.channelStart, &proto.channelReencShares)
 
-// NewSharesToEncryptionProtocol is called when a new protocol is started (at the root) or
-// when a message is received for a new instance of the protocol (at non-roots).
-// It only initialises with the onet-related variables: the channels and the TreeNodeInstance;
-// the rest has to be "manually" initialised through Init.
-func NewSharesToEncryptionProtocol(n *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl1("NewEncryptionToSharesProtocol called")
-
-	p := &SharesToEncryptionProtocol{
-		TreeNodeInstance: n,
-	}
-
-	//No need to initialise the channels: onet.RegisterChannels will do it for us.
-	if e := p.RegisterChannels(&p.channelStart, &p.channelReencShares); e != nil {
-		return nil, errors.New("Could not register channel: " + e.Error())
-	}
-
-	return p, nil
-}
-
-// NewEncryptionToSharesProtocol is called when a new protocol is started (at the root) or
-// when a message is received for a new instance of the protocol (at non-roots).
-// It only initialises with the onet-related variables: the channels and the TreeNodeInstance;
-// the rest has to be "manually" initialised through Init.
-func (p *SharesToEncryptionProtocol) Init(params *bfv.Parameters, sigmaSmudging float64,
-	addShare dbfv.AdditiveShare, sk *bfv.SecretKey, crs *ring.Poly) error {
-	p.S2EProtocol = dbfv.NewS2EProtocol(params, sigmaSmudging)
-
-	p.addShare = addShare
-	p.sk = sk
-	p.crs = crs
-
-	p.ChannelCiphertext = make(chan *bfv.Ciphertext)
-
-	return nil
+	return proto, err
 }
 
 /****************ONET HANDLERS ******************/
 
 //Start starts the protocol (only called at root).
 func (p *SharesToEncryptionProtocol) Start() error {
-	log.Lvl2(p.ServerIdentity(), "Started Encryption-to-Shares protocol")
+	log.Lvl2(p.ServerIdentity(), "Started Shares-To-Encryption protocol")
 	//Step 1: send wake-up message to self
 	return p.SendTo(p.TreeNode(), &Start{})
 }
@@ -87,7 +60,7 @@ func (p *SharesToEncryptionProtocol) Start() error {
 // Dispatch is called at each node to run the protocol.
 // It implements the main protocol logic.
 func (p *SharesToEncryptionProtocol) Dispatch() error {
-	var reencShare dbfv.S2EReencryptionShare          // Will be sent to parent
+	var reencShare *dbfv.S2EReencryptionShare         // Will be sent to parent
 	var childReencShares []StructS2EReencryptionShare //Will contain children's re-encryption shares
 	var cipher *bfv.Ciphertext                        //Will be returned to caller via ChannelAddShare
 
@@ -100,7 +73,7 @@ func (p *SharesToEncryptionProtocol) Dispatch() error {
 	wakeup := <-p.channelStart
 	//Send wake-up message to all children
 	log.Lvl3("Sending wake-up message")
-	err := p.SendToChildren(&wakeup)
+	err := p.SendToChildren(&wakeup.Start)
 	if err != nil {
 		log.ErrFatal(err, "Could not send wake up message ")
 		return err
@@ -108,28 +81,29 @@ func (p *SharesToEncryptionProtocol) Dispatch() error {
 
 	// Step 3: case leaf / non-leaf.
 	// Step 3a: compute re-encryption share.
+	log.Lvl3("Generating re-encryption share")
 	p.GenShare(p.sk, p.crs, p.addShare, reencShare)
 	// Step 3b: if non-leaf, wait and aggregate children's shares
 	if !p.IsLeaf() {
+		log.Lvl3("Non-leaf: waiting to collect children's shares")
 		childReencShares = <-p.channelReencShares
+		log.Lvl3("Non-leaf: aggregating children's shares")
 		for _, share := range childReencShares {
-			p.AggregateShares(reencShare, share.S2EReencryptionShare, reencShare)
+			p.AggregateShares(reencShare, &share.S2EReencryptionShare, reencShare)
 		}
 	}
 	// Step 3c: send to parent (has no effect if node is root).
-	if err = p.SendToParent(&reencShare); err != nil {
-		log.ErrFatal(err, "Could not re-encryption share to parent ")
+	log.Lvl3("Sending share to parent")
+	if err = p.SendToParent(reencShare); err != nil {
+		log.ErrFatal(err, "Could not send re-encryption share to parent ")
 		return err
 	}
 
-	// Step 4: if root, compute ciphertext
+	// Step 4: if root, compute ciphertext and return it
 	if p.IsRoot() {
 		cipher = p.Reencrypt(reencShare, p.crs)
-	} else {
-		cipher = nil
+		p.ChannelCiphertext <- cipher
 	}
-	// Return in any case
-	p.ChannelCiphertext <- cipher
 
 	p.Done() //Onet requirement to finalise the protocol
 

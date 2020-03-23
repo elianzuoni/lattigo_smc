@@ -161,16 +161,16 @@ type EncryptionToSharesProtocol struct {
 	*onet.TreeNodeInstance
 	*dbfv.E2SProtocol
 
-	//Variables not contained in E2SProtocol.
+	// Variables not contained in E2SProtocol.
 	sk *bfv.SecretKey
 	ct *bfv.Ciphertext
 
-	//Channels to receive from other nodes.
+	// Channels to receive from other nodes.
 	channelStart     chan StructStart
-	channelDecShares chan []StructE2SDecryptionShare //A channel of slices allows to receive all shares at once
+	channelDecShares chan []StructE2SDecryptionShare // A channel of slices allows to receive all shares at once.
 
-	//Channel to return the additive share to caller
-	ChannelAddShare chan dbfv.AdditiveShare
+	// Function to output the result: needed because non-roots also have a result.
+	finalise func(*dbfv.AdditiveShare)
 }
 
 // SharesToEncryptionProtocol implements the onet.Protocol interface.
@@ -181,7 +181,7 @@ type SharesToEncryptionProtocol struct {
 	*dbfv.S2EProtocol
 
 	//Variables not contained in E2SProtocol.
-	addShare dbfv.AdditiveShare
+	addShare *dbfv.AdditiveShare
 	sk       *bfv.SecretKey
 	crs      *ring.Poly
 
