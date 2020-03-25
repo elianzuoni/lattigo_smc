@@ -21,6 +21,7 @@ import (
 //LocalTest a structure containing the shares and ideal secret keys. Should be used for testing.
 type LocalTest struct {
 	Roster          *onet.Roster
+	Params          *bfv.Parameters
 	IdealSecretKey0 *bfv.SecretKey
 	IdealSecretKey1 *bfv.SecretKey
 
@@ -34,6 +35,7 @@ type LocalTest struct {
 //GetLocalTestForRoster gets the local test for the given roster. The keys will be stored in directory.
 func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, directory string) (lt *LocalTest, err error) {
 	lt = new(LocalTest)
+	lt.Params = params
 	lt.IdealSecretKey0 = bfv.NewSecretKey(params) // ideal secret key 0
 	lt.IdealSecretKey1 = bfv.NewSecretKey(params)
 	lt.Roster = roster
@@ -278,4 +280,21 @@ func SendISMOthers(s *onet.ServiceProcessor, el *onet.Roster, msg interface{}) e
 		err = errors.New(strings.Join(errStrs, "\n"))
 	}
 	return err
+}
+
+// GenMsgCtAccum is used for testing encryption-to-shares: it creates a random message and its encryption,
+// and allocates an AdditiveShare accumulator.
+func (lt *LocalTest) GenMsgCtAccum() (msg []uint64, ct *bfv.Ciphertext, accum *dbfv.ConcurrentAdditiveShareAccum) {
+	contextT, _ := ring.NewContextWithParams(uint64(1<<lt.Params.LogN), []uint64{lt.Params.T})
+	poly := contextT.NewUniformPoly()
+	msg = poly.Coeffs[0]
+	encoder := bfv.NewEncoder(lt.Params)
+	plain := bfv.NewPlaintext(lt.Params)
+	encoder.EncodeUint(msg, plain)
+	encryptor := bfv.NewEncryptorFromSk(lt.Params, lt.IdealSecretKey0)
+	ct = bfv.NewCiphertext(lt.Params, 1)
+	encryptor.Encrypt(plain, ct)
+
+	accum = dbfv.NewConcurrentAdditiveShareAccum(lt.Params, lt.Params.Sigma, len(lt.Roster.List))
+	return
 }

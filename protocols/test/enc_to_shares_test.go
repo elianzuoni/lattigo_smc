@@ -8,134 +8,75 @@ import (
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
-	"sync"
 	"testing"
 	"time"
 )
 
-// Various goroutines, each running the protocol as a node, will need to provide their AdditiveShare to
-// a common accumulator. The last one unlocks "done", awaking the master thread.
-type concurrentAdditiveShareAccum struct {
-	*sync.Mutex
-	*dbfv.AdditiveShare
-	proto   *dbfv.E2SProtocol
-	missing int
-	done    *sync.Mutex
-}
-
-func newConcurrentAdditiveShareAccum(params *bfv.Parameters, sigmaSmudging float64, nbParties int) *concurrentAdditiveShareAccum {
-	proto := dbfv.NewE2SProtocol(params, sigmaSmudging)
-	c := &concurrentAdditiveShareAccum{
-		Mutex:         &sync.Mutex{},
-		AdditiveShare: proto.AllocateAddShare(),
-		proto:         proto,
-		missing:       nbParties,
-		done:          &sync.Mutex{},
-	}
-
-	c.done.Lock()
-	return c
-}
-
-func (accum *concurrentAdditiveShareAccum) accumulate(share *dbfv.AdditiveShare) {
-	accum.Lock()
-	defer accum.Unlock()
-
-	accum.proto.SumAdditiveShares(accum.AdditiveShare, share, accum.AdditiveShare)
-	accum.missing -= 1
-	if accum.missing == 0 {
-		accum.done.Unlock()
-	}
-}
-
-func (accum *concurrentAdditiveShareAccum) waitDone() {
-	accum.done.Lock()
-}
-
-// finaliser accumulates to the global accumulator.
-func finaliser(share *dbfv.AdditiveShare) {
-	e2sTestGlobal.accum.accumulate(share)
-
-}
-
+// Struct containing the global variables representing the context available to all functions and goroutines.
 type e2sTestContext struct {
 	storageDirectory string
 	nbParties        []int
 	paramsSets       []*bfv.Parameters
+	protoName        string
 
+	params    *bfv.Parameters
 	localTest *onet.LocalTest
 	lt        *utils.LocalTest
 	roster    *onet.Roster
 	tree      *onet.Tree
-	protoName string
 
 	msg   []uint64
 	ct    *bfv.Ciphertext
-	accum *concurrentAdditiveShareAccum
+	accum *dbfv.ConcurrentAdditiveShareAccum
 }
 
 var e2sTestGlobal = e2sTestContext{
 	storageDirectory: "/tmp/",
 	nbParties:        []int{3, 8, 16},
 	paramsSets:       bfv.DefaultParams,
+	protoName:        "EncryptionToSharesTest",
 }
 
-// lt, and ct are not yet defined when newProtocolFactory is called, so it cannot hardcode them
-// into the protocol factory. Since the protocol factory will only use them when they are defined,
-// getter methods solve the problem.
-func e2sTestGetLt() *utils.LocalTest {
-	return e2sTestGlobal.lt
-}
-func e2sTestGetCt() *bfv.Ciphertext {
-	return e2sTestGlobal.ct
-}
-
+// Generates global variables: called once per test.
 func e2sTestGenGlobal(params *bfv.Parameters, N int, testType string) {
 	var err error
 
+	log.Lvl3("Generating global parameters")
+
+	log.Lvl4("Generating localTest")
 	if testType == "local" {
 		e2sTestGlobal.localTest = onet.NewLocalTest(suites.MustFind("Ed25519"))
 	} else {
 		e2sTestGlobal.localTest = onet.NewTCPTest(suites.MustFind("Ed25519"))
 	}
 
+	log.Lvl4("Generating roster and tree")
 	_, e2sTestGlobal.roster, e2sTestGlobal.tree = e2sTestGlobal.localTest.GenTree(N, true)
+	log.Lvl4("Generating lt")
 	e2sTestGlobal.lt, err = utils.GetLocalTestForRoster(e2sTestGlobal.roster, params, e2sTestGlobal.storageDirectory)
 	if err != nil {
-		log.Fatal("Could not generate tree:", err)
+		log.Fatal("Could not generate lt:", err)
 	}
 
-	n := uint64(1 << params.LogN)
-	contextT, _ := ring.NewContextWithParams(n, []uint64{params.T})
-
-	poly := contextT.NewUniformPoly()
-	e2sTestGlobal.msg = poly.Coeffs[0]
-	encoder := bfv.NewEncoder(params)
-	plain := bfv.NewPlaintext(params)
-	encoder.EncodeUint(e2sTestGlobal.msg, plain)
-	e2sTestGlobal.ct = bfv.NewCiphertext(params, 1)
-	encryptor := bfv.NewEncryptorFromSk(params, e2sTestGlobal.lt.IdealSecretKey0)
-	encryptor.Encrypt(plain, e2sTestGlobal.ct)
-
-	e2sTestGlobal.accum = newConcurrentAdditiveShareAccum(params, params.Sigma, N)
+	log.Lvl4("Generating random message and its encryption; allocating accumulator")
+	e2sTestGlobal.msg, e2sTestGlobal.ct, e2sTestGlobal.accum = e2sTestGlobal.lt.GenMsgCtAccum()
 }
 
-// newProtocolFactory returns a protocol factory respecting the onet.NewProtocol signature.
-func newE2STestProtocolFactory(params *bfv.Parameters, finalise func(*dbfv.AdditiveShare)) func(*onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	return func(t *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		log.Lvl3("new enc_to_shares protocol instance for", t.ServerIdentity())
+// e2sTestProtocolFactory is a protocol factory respecting the onet.NewProtocol signature: it supplies
+// additional arguments to the NewEncryptionToSharesProtocol constructor by taking them from the global context.
+func e2sTestProtocolFactory(t *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+	log.Lvl3("new enc_to_shares protocol instance for", t.ServerIdentity())
 
-		sigmaSmudge := params.Sigma // TODO: how to set this?
-		sk := e2sTestGetLt().SecretKeyShares0[t.ServerIdentity().ID]
+	sigmaSmudge := e2sTestGlobal.params.Sigma // TODO: how to set this?
+	sk := e2sTestGlobal.lt.SecretKeyShares0[t.ServerIdentity().ID]
 
-		return protocols.NewEncryptionToSharesProtocol(t, params, sigmaSmudge, sk, e2sTestGetCt(), finalise)
-	}
+	return protocols.NewEncryptionToSharesProtocol(t, e2sTestGlobal.params, sigmaSmudge,
+		sk, e2sTestGlobal.ct, protocols.NewE2SAccumFinaliser(e2sTestGlobal.accum))
 }
 
 func TestEncryptionToShares(t *testing.T) {
@@ -146,60 +87,59 @@ func TestEncryptionToShares(t *testing.T) {
 
 	log.SetDebugVisible(1)
 
-	// Every triple (parameter set, roster size, test type) defines a different protocol, with its name and factory
+	log.Lvl3("Registering protocol")
+	if _, err := onet.GlobalProtocolRegister(e2sTestGlobal.protoName, e2sTestProtocolFactory); err != nil {
+		log.Fatal("Could not register protocol:", err)
+		t.Fail()
+	}
+
 	for _, params := range e2sTestGlobal.paramsSets {
+		e2sTestGlobal.params = params
+
 		for _, N := range e2sTestGlobal.nbParties {
 			// Local test
-			e2sTestGlobal.protoName = fmt.Sprintf("EncryptionToSharesLocal-%d-%d_nodes", params.LogN, N)
-			protoFactory := newE2STestProtocolFactory(params, finaliser)
 
-			if _, err := onet.GlobalProtocolRegister(e2sTestGlobal.protoName, protoFactory); err != nil {
-				log.Error("Could not register EncryptionToSharesLocal : ", err)
-				t.Fail()
-			}
-
-			// genGlobal starts the servers, so it needs to be called after registering protocols
+			log.Lvl4("Generating global context for local test")
+			// Generate global context before running protocol
 			e2sTestGenGlobal(params, N, "local")
 
+			log.Lvl1("Launching local test")
 			localSubTestName := fmt.Sprintf("/local/params=%d/nbParties=%d", 1<<params.LogN, N)
 			t.Run(localSubTestName, func(t *testing.T) {
-				testE2S(t, params, N)
+				testE2S(t, N)
 			})
 
 			// TCP test
 
-			e2sTestGlobal.protoName = fmt.Sprintf("EncryptionToSharesTCP-%d-%d_nodes", params.LogN, N)
-			protoFactory = newE2STestProtocolFactory(params, finaliser)
-
-			if _, err := onet.GlobalProtocolRegister(e2sTestGlobal.protoName, protoFactory); err != nil {
-				log.Error("Could not register EncryptionToSharesTCP : ", err)
-				t.Fail()
-			}
-
-			// genGlobal starts the servers, so it needs to be called after registering protocols
+			// Generate global context before running protocol
+			log.Lvl4("Generating global context for tcp test")
 			e2sTestGenGlobal(params, N, "tcp")
 
+			log.Lvl1("Launching tcp test")
 			tcpSubTestName := fmt.Sprintf("/TCP/params=%d/nbnodes=%d", 1<<params.LogN, N)
 			t.Run(tcpSubTestName, func(t *testing.T) {
-				testE2S(t, params, N)
+				testE2S(t, N)
 			})
 
 		}
 	}
 }
 
-func testE2S(t *testing.T, params *bfv.Parameters, N int) {
+// Acts as root of the protocol: instantiates it, starts it, waits for termination, then checks for correctness.
+func testE2S(t *testing.T, N int) {
 	log.Lvl1("Started to test enc_to_shares with: ", N, " parties")
 	defer e2sTestGlobal.localTest.CloseAll()
 
-	// The protocol has already been registered under protoName: current thread acts as root.
+	// Instantiate protocol.
+	log.Lvl4("Instantiating protocol")
 	pi, err := e2sTestGlobal.localTest.CreateProtocol(e2sTestGlobal.protoName, e2sTestGlobal.tree)
 	if err != nil {
-		t.Fatal("Couldn't create new node:", err)
+		t.Fatal("Couldn't instantiate protocol:", err)
 	}
 	e2s := pi.(*protocols.EncryptionToSharesProtocol)
 
-	log.Lvl1("Starting e2s")
+	// Start protocol.
+	log.Lvl1("Starting protocol")
 	now := time.Now()
 	err = e2s.Start()
 	if err != nil {
@@ -207,20 +147,24 @@ func testE2S(t *testing.T, params *bfv.Parameters, N int) {
 		t.Fail()
 	}
 
-	e2sTestGlobal.accum.waitDone()
+	// Wait for termination.
+	log.Lvl3("Waiting for protocol termination...")
+	e2sTestGlobal.accum.WaitDone()
 	elapsed := time.Since(now)
-	log.Lvl1("**********Done! Time elapsed : ", elapsed, "*************")
+	log.Lvl1("Time elapsed : ", elapsed)
 
+	// Check for correctness.
 	if !e2sTestGlobal.accum.Equal(e2sTestGlobal.msg) {
 		log.Fatal("Sharing failed")
 		t.Fail()
 	}
+	log.Lvl1("Sharing succeeded!")
 
+	// Tear down lt
+	log.Lvl3("Tearing down lt")
 	err = e2sTestGlobal.lt.TearDown(false)
 	if err != nil {
 		log.Fatal(err)
 		t.Fail()
 	}
-
-	log.Lvl1("Success")
 }

@@ -75,16 +75,16 @@ func (p *EncryptionToSharesProtocol) Dispatch() error {
 
 	decShare, addShare = p.AllocateShares()
 
-	log.Lvl3(p.ServerIdentity(), " Dispatching ; is root = ", p.IsRoot())
+	log.Lvl3(p.ServerIdentity(), "Started dispatching")
 
 	// Step 2: wait for wake-up, then send it to children
-	log.Lvl3("Waiting for wake-up message")
+	log.Lvl3(p.ServerIdentity(), "Waiting for wake-up message")
 	wakeup := <-p.channelStart
 	//Send wake-up message to all children
-	log.Lvl3("Sending wake-up message")
+	log.Lvl3(p.ServerIdentity(), "Sending wake-up message")
 	err := p.SendToChildren(&wakeup.Start)
 	if err != nil {
-		log.ErrFatal(err, "Could not send wake up message: ")
+		log.ErrFatal(err, p.ServerIdentity(), "Could not send wake up message: ")
 		return err
 	}
 
@@ -92,35 +92,43 @@ func (p *EncryptionToSharesProtocol) Dispatch() error {
 	if p.IsLeaf() {
 		// Step 3a: generate decryption share, then send it to parent.
 		p.GenSharesSlave(p.sk, p.ct, decShare, addShare)
+		log.Lvl3(p.ServerIdentity(), "Leaf. Generated decryption share: sending to parent")
 		if err = p.SendToParent(decShare); err != nil {
-			log.ErrFatal(err, "Could not send decryption share to parent: ")
+			log.ErrFatal(err, p.ServerIdentity(), "Could not send decryption share to parent: ")
 			return err
 		}
 	} else if !p.IsRoot() {
 		// Step 3b: generate decryption share, then wait for children's share,
 		// then aggregate, then send to parent.
 		p.GenSharesSlave(p.sk, p.ct, decShare, addShare)
+		log.Lvl3(p.ServerIdentity(), "Non-leaf, non-root. Generated decryption share: waiting to collect children's shares")
 		childDecShares = <-p.channelDecShares // Blocking wait.
 
+		log.Lvl3(p.ServerIdentity(), "Non-leaf, non-root. Received children's shares: aggregating")
 		for _, share := range childDecShares {
 			p.AggregateDecryptionShares(decShare, &share.E2SDecryptionShare, decShare)
 		}
 
+		log.Lvl3(p.ServerIdentity(), "Non-leaf, non-root. Aggregated children's shares: sending to parent")
 		if err = p.SendToParent(decShare); err != nil {
-			log.ErrFatal(err, "Could not send decryption share to parent ")
+			log.ErrFatal(err, p.ServerIdentity(), "Could not send decryption share to parent ")
 			return err
 		}
 	} else {
 		// Step 3c: wait for children's share, then aggregate, then generate additive share
+		log.Lvl3(p.ServerIdentity(), "Root. Waiting to receive children's shares")
 		childDecShares = <-p.channelDecShares // Blocking wait.
 
+		log.Lvl3(p.ServerIdentity(), "Root. Received children's shares: aggregating")
 		for _, share := range childDecShares {
 			p.AggregateDecryptionShares(decShare, &share.E2SDecryptionShare, decShare)
 		}
 
+		log.Lvl3(p.ServerIdentity(), "Root. Aggregated children's shares: generating mine")
 		p.GenShareMaster(p.sk, p.ct, decShare, addShare)
 	}
 
+	log.Lvl3(p.ServerIdentity(), "Finalising AdditiveShare")
 	// Step 4: return the generated additive by feeding it to the finalise
 	p.finalise(addShare)
 
@@ -131,3 +139,10 @@ func (p *EncryptionToSharesProtocol) Dispatch() error {
 
 // Check that *EncryptionToSharesProtocol implements onet.ProtocolInstance
 var _ onet.ProtocolInstance = (*EncryptionToSharesProtocol)(nil)
+
+// NewE2SAccumFinaliser returns a finaliser which is recurrent in tests: it accumulates to the provided accumulator.
+func NewE2SAccumFinaliser(accum *dbfv.ConcurrentAdditiveShareAccum) func(share *dbfv.AdditiveShare) {
+	return func(share *dbfv.AdditiveShare) {
+		accum.Accumulate(share)
+	}
+}

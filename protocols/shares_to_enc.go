@@ -66,41 +66,42 @@ func (p *SharesToEncryptionProtocol) Dispatch() error {
 
 	reencShare = p.AllocateShare()
 
-	log.Lvl3(p.ServerIdentity(), " Dispatching ; is root = ", p.IsRoot())
+	log.Lvl3(p.ServerIdentity(), "Started dispatching")
 
 	// Step 2: wait for wake-up, then send it to children
-	log.Lvl3("Waiting for wake-up message")
+	log.Lvl3(p.ServerIdentity(), "Waiting for wake-up message")
 	wakeup := <-p.channelStart
 	//Send wake-up message to all children
-	log.Lvl3("Sending wake-up message")
+	log.Lvl3(p.ServerIdentity(), "Sending wake-up message")
 	err := p.SendToChildren(&wakeup.Start)
 	if err != nil {
-		log.ErrFatal(err, "Could not send wake up message ")
+		log.ErrFatal(err, p.ServerIdentity(), "Could not send wake up message ")
 		return err
 	}
 
 	// Step 3: case leaf / non-leaf.
 	// Step 3a: compute re-encryption share.
-	log.Lvl3("Generating re-encryption share")
+	log.Lvl1(p.ServerIdentity(), "Generating re-encryption share")
 	p.GenShare(p.sk, p.crs, p.addShare, reencShare)
 	// Step 3b: if non-leaf, wait and aggregate children's shares
 	if !p.IsLeaf() {
-		log.Lvl3("Non-leaf: waiting to collect children's shares")
+		log.Lvl3(p.ServerIdentity(), "Non-leaf: waiting to collect children's shares")
 		childReencShares = <-p.channelReencShares
-		log.Lvl3("Non-leaf: aggregating children's shares")
+		log.Lvl3(p.ServerIdentity(), "Non-leaf: aggregating children's shares")
 		for _, share := range childReencShares {
 			p.AggregateShares(reencShare, &share.S2EReencryptionShare, reencShare)
 		}
 	}
 	// Step 3c: send to parent (has no effect if node is root).
-	log.Lvl3("Sending share to parent")
+	log.Lvl3(p.ServerIdentity(), "Sending share to parent")
 	if err = p.SendToParent(reencShare); err != nil {
-		log.ErrFatal(err, "Could not send re-encryption share to parent ")
+		log.ErrFatal(err, p.ServerIdentity(), "Could not send re-encryption share to parent ")
 		return err
 	}
 
 	// Step 4: if root, compute ciphertext and return it
 	if p.IsRoot() {
+		log.Lvl1(p.ServerIdentity(), "Re-encrypting, then sending to output channel")
 		cipher = p.Reencrypt(reencShare, p.crs)
 		p.ChannelCiphertext <- cipher
 	}
