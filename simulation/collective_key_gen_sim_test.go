@@ -3,7 +3,6 @@ package main
 import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul"
-	"lattigo-smc/protocols"
 	"testing"
 )
 
@@ -11,7 +10,7 @@ import (
 func TestSimulationCollectiveKeyGen(t *testing.T) {
 	//turn off test variable
 	log.Lvl1("Test !! ")
-	protocols.TurnOffTest()
+	//protocols.TurnOffTest() // TODO: what?
 
 	simul.Start("runconfigs/key_gen_config.toml")
 
