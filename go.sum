@@ -20,6 +20,10 @@ github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORN
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
+github.com/ldsec/lattigo v1.3.0 h1:E+pwWoHFmCD0GIQCb3QI6M0MIqyziyx0lnB0eNFyzbY=
+github.com/ldsec/lattigo v1.3.0/go.mod h1:5Gexy0KDFEvbEZVLvEBCbMihs/nM1SQfgjq4Row4/Ak=
+github.com/ldsec/lattigo v1.3.1-0.20200323124021-a8c4a233cc1c h1:S8IMJSxh13HmTURFrtY0lbt32L7cZCdm8FjC9wV3Kos=
+github.com/ldsec/lattigo v1.3.1-0.20200323124021-a8c4a233cc1c/go.mod h1:JTNJimZeKD0QeWwmQUFjxUs2nfz/3aG+LAUTKshw+Yg=
 github.com/montanaflynn/stats v0.5.0 h1:2EkzeTSqBB4V4bJwWrt5gIIrZmpJBcoIRGS2kWLgzmk=
 github.com/montanaflynn/stats v0.5.0/go.mod h1:wL8QJuTMNUDYhXwkmfOly8iTdp5TEcJFWZD2D7SIkUc=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
