@@ -1,8 +1,8 @@
-// Simulation for EncToShares protocol. As in the protocol test, global variables (enclosed in
+// Simulation for SharesToEnc protocol. As in the protocol test, global variables (enclosed in
 // a dedicated struct) are used to represent the context, that has to be available to different
 // goroutines.
-// As in test, a random message and its encryption are generated (once per round): the protocol is run on
-// the encryption and the result is tested against the message.
+// As in test, every node generates its AdditiveShare in the protocol factory and accumulates it
+// to a global accumulator, which is eventually used for correctness check.
 
 package main // TODO: why is this package main?
 
@@ -11,6 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
+	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/protocols"
@@ -20,50 +21,51 @@ import (
 
 // Implements the onet.Simulation interface. Contains some of the protocol parameters
 // that are needed at some point: global variables are still needed.
-type EncToSharesSim struct {
+type SharesToEncSim struct {
 	// These parameters will be read from the toml file.
 	onet.SimulationBFTree
 	ParamsIdx int // TODO: needs to be exported? (probably)
 
-	// These parameters will be initialised in the method NewEncToSharesSim after reading the file.
-	Params *bfv.Parameters // TODO: needs to be exported? (probably not)
+	// These parameters will be initialised in the method NewS after reading the file.
+	s2e *dbfv.S2EProtocol
 }
 
 func init() {
-	onet.SimulationRegister("EncryptionToShares", NewEncToSharesSim)
+	onet.SimulationRegister("SharesToEncryption", NewSharesToEncSim)
 }
 
 // Struct holding the global variables representing the context.
 // lt is set in Setup, once per test (simulation consists of various tests).
 // The other parameters are set in Run, once for each round of every test.
-type e2sSimContext struct {
+type s2eSimContext struct {
 	storageDir    string
 	sigmaSmudging float64
+	Params        *bfv.Parameters // TODO: needs to be exported? (probably not)
 	lt            *utils.LocalTest
-	msg           []uint64
-	ct            *bfv.Ciphertext
+	crs           *ring.Poly
 	accum         *dbfv.ConcurrentAdditiveShareAccum
 }
 
-var e2sGlobal = e2sSimContext{storageDir: "tmp/"} // TODO: global variables are horrible
+var s2eGlobal = s2eSimContext{storageDir: "tmp/"} // TODO: global variables are horrible
 
-// NewEncToSharesSim is a onet.Simulation factory, registered as a handler with onet.SimulationRegister.
+// NewSharesToEncSim is a onet.Simulation factory, registered as a handler with onet.SimulationRegister.
 // It reads some parameters from the toml file, and sets others accordingly.
-func NewEncToSharesSim(config string) (onet.Simulation, error) {
-	log.Lvl1("Called with config =\n", config)
+func NewSharesToEncSim(config string) (onet.Simulation, error) {
+	log.Lvl2("Called with config =\n", config)
 
-	sim := &EncToSharesSim{}
+	sim := &SharesToEncSim{}
 
 	// The toml file contains ParamsIdx and part of the fields in the SimulationBFTree
 	_, err := toml.Decode(config, sim)
 	if err != nil {
-		log.Fatal("Error decoding toml: ", err)
+		log.Fatal("Error decoding toml:", err)
 		return nil, err
 	}
 
 	// These parameters can be already set
-	sim.Params = bfv.DefaultParams[sim.ParamsIdx]
-	e2sGlobal.sigmaSmudging = sim.Params.Sigma // TODO: set sigmaSmudge
+	s2eGlobal.Params = bfv.DefaultParams[sim.ParamsIdx]
+	s2eGlobal.sigmaSmudging = s2eGlobal.Params.Sigma // TODO: set sigmaSmudge
+	sim.s2e = dbfv.NewS2EProtocol(s2eGlobal.Params, s2eGlobal.sigmaSmudging)
 
 	return sim, nil
 }
@@ -72,8 +74,8 @@ func NewEncToSharesSim(config string) (onet.Simulation, error) {
 // Unfortunately, the Simulation on which it is called is thrown away by onet; the ones on which
 // it will call Node are different, and Setup is not called on them. Thus, it is pointless to store
 // some context into sim, we have to use global variables.
-func (sim *EncToSharesSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
-	log.Lvl1("Called with hosts = ", hosts)
+func (sim *SharesToEncSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
+	log.Lvl2("Called with hosts = ", hosts)
 
 	// Create tree configuration
 	sc := &onet.SimulationConfig{}
@@ -86,7 +88,7 @@ func (sim *EncToSharesSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 
 	// Create global LocalTest, that will store key-shards and other relevant parameters.
 	log.Lvl3("Creating global LocalTest")
-	e2sGlobal.lt, err = utils.GetLocalTestForRoster(sc.Roster, sim.Params, e2sGlobal.storageDir)
+	s2eGlobal.lt, err = utils.GetLocalTestForRoster(sc.Roster, s2eGlobal.Params, s2eGlobal.storageDir)
 	if err != nil {
 		return nil, err
 	}
@@ -95,13 +97,13 @@ func (sim *EncToSharesSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 }
 
 // Node is run at each node to set it up, before running the actual protocol.
-func (sim *EncToSharesSim) Node(config *onet.SimulationConfig) error {
-	log.Lvl1("Node called: starting to set up")
+func (sim *SharesToEncSim) Node(config *onet.SimulationConfig) error {
+	log.Lvl2("Node called: starting to set up")
 
 	log.Lvl3("Registering protocol")
-	_, err := config.Server.ProtocolRegister("EncryptionToSharesSimul", newE2SSimProtocolFactory(sim))
+	_, err := config.Server.ProtocolRegister("SharesToEncryptionSimul", news2eSimProtocolFactory(sim))
 	if err != nil {
-		return errors.New("Error when registering protocol " + err.Error())
+		return errors.New("Error when registering protocol: " + err.Error())
 	}
 
 	log.Lvl3("Node setup OK")
@@ -109,22 +111,28 @@ func (sim *EncToSharesSim) Node(config *onet.SimulationConfig) error {
 }
 
 // Returns a protocol factory (onet.NewProtocol) that extracts variables (besides tni) from the simulation
-// and, alas, the global variables.
-func newE2SSimProtocolFactory(sim *EncToSharesSim) onet.NewProtocol {
+// and, alas, the global variables. It also creates the node's AdditiveShare.
+func news2eSimProtocolFactory(sim *SharesToEncSim) onet.NewProtocol {
 	return func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		sk := e2sGlobal.lt.SecretKeyShares0[tni.ServerIdentity().ID]
-		return protocols.NewEncryptionToSharesProtocol(tni, sim.Params, e2sGlobal.sigmaSmudging, sk, e2sGlobal.ct,
-			protocols.NewE2SAccumFinaliser(e2sGlobal.accum))
+		sk := s2eGlobal.lt.SecretKeyShares0[tni.ServerIdentity().ID]
+
+		// Create own AdditiveShare and accumulate it to the global accumulator
+		// (we can't do this in Node, because, when it is called, accum isn't yet defined).
+		addShare := sim.s2e.GenRandomAddShare()
+		s2eGlobal.accum.Accumulate(addShare)
+
+		return protocols.NewSharesToEncryptionProtocol(tni, s2eGlobal.Params, s2eGlobal.sigmaSmudging, addShare, sk,
+			s2eGlobal.crs)
 	}
 }
 
 // Run is executed only at the root. It creates and starts the protocol, then checks for correctness.
 // It also computes some timing statistics.
-func (sim *EncToSharesSim) Run(config *onet.SimulationConfig) error {
+func (sim *SharesToEncSim) Run(config *onet.SimulationConfig) error {
 	// Teardown of LocalTest.
 	defer func() {
 		log.Lvl3("Tearing down LocalTest")
-		err := e2sGlobal.lt.TearDown(true)
+		err := s2eGlobal.lt.TearDown(true)
 		if err != nil {
 			log.Error("Could not tear down the LocalTest:", err)
 		}
@@ -136,31 +144,32 @@ func (sim *EncToSharesSim) Run(config *onet.SimulationConfig) error {
 	timings := make([]time.Duration, sim.Rounds)
 	// TODO: why do we need rounds? We always do the same thing.
 	for i := 0; i < sim.Rounds; i++ {
-		// Create random msg and its encryption, and allocate AdditiveShare accumulator.
-		log.Lvl4("Creating random message and its encryption, allocating accumulator")
-		e2sGlobal.msg, e2sGlobal.ct, e2sGlobal.accum = e2sGlobal.lt.GenMsgCtAccum()
+		// Setting global context.
+		log.Lvl4("Generating crs; allocating accumulator")
+		s2eGlobal.crs = s2eGlobal.lt.NewCipherCRS()
+		s2eGlobal.accum = dbfv.NewConcurrentAdditiveShareAccum(s2eGlobal.lt.Params, s2eGlobal.sigmaSmudging, size)
 
 		// Create the protocol.
 		log.Lvl3("Instantiating protocol")
-		pi, err := config.Overlay.CreateProtocol("EncryptionToSharesSimul", config.Tree, onet.NilServiceID) // TODO: why NilServiceID?
+		pi, err := config.Overlay.CreateProtocol("SharesToEncryptionSimul", config.Tree, onet.NilServiceID) // TODO: why NilServiceID?
 		if err != nil {
 			log.Fatal("Couldn't create protocol:", err)
 		}
 		// round := monitor.NewTimeMeasure("alpha") // TODO: is this needed?
-		e2sp := pi.(*protocols.EncryptionToSharesProtocol)
+		s2ep := pi.(*protocols.SharesToEncryptionProtocol)
 
 		// Launch it in another goroutine.
-		log.Lvl1("Starting Encryption-To-Shares protocol in separate goroutine")
+		log.Lvl2("Starting Shares-To-Encryption protocol in separate goroutine")
 		now := time.Now()
 		go func() {
-			if err = e2sp.Start(); err != nil {
+			if err = s2ep.Start(); err != nil {
 				log.Fatal("Error in protocol Start: ", err)
 			}
 		}()
 
 		// Wait for completion.
 		log.Lvl3("Waiting for protocol to end...")
-		e2sGlobal.accum.WaitDone()
+		cipher := <-s2ep.ChannelCiphertext
 		elapsed := time.Since(now)
 		timings[i] = elapsed
 		log.Lvl1("Elapsed time : ", elapsed)
@@ -168,10 +177,16 @@ func (sim *EncToSharesSim) Run(config *onet.SimulationConfig) error {
 		//round.Record()
 
 		// Check for correctness.
-		if !e2sGlobal.accum.Equal(e2sGlobal.msg) {
-			log.Fatal("Sharing error")
+		decryptor := bfv.NewDecryptor(s2eGlobal.Params, s2eGlobal.lt.IdealSecretKey0)
+		plain := bfv.NewPlaintext(s2eGlobal.Params)
+		decryptor.Decrypt(cipher, plain)
+		encoder := bfv.NewEncoder(s2eGlobal.Params)
+		msg := encoder.DecodeUint(plain)
+
+		if !s2eGlobal.accum.Equal(msg) {
+			log.Fatal("Re-encryption error")
 		} else {
-			log.Lvl1("Sharing successful!")
+			log.Lvl1("Re-encryption successful!")
 		}
 
 		// Wait a bit before next round

@@ -1,4 +1,4 @@
-Simulation = "EncryptionToShares"
+Simulation = "SharesToEncryption"
 BF = 7
 Rounds = 25
 Suite = "Ed25519"

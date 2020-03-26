@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-//Simulate the collective key generation. With a test.
 func TestEncToSharesSimulation(t *testing.T) {
 	log.SetDebugVisible(1)
 

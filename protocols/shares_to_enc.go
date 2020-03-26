@@ -81,7 +81,7 @@ func (p *SharesToEncryptionProtocol) Dispatch() error {
 
 	// Step 3: case leaf / non-leaf.
 	// Step 3a: compute re-encryption share.
-	log.Lvl1(p.ServerIdentity(), "Generating re-encryption share")
+	log.Lvl2(p.ServerIdentity(), "Generating re-encryption share")
 	p.GenShare(p.sk, p.crs, p.addShare, reencShare)
 	// Step 3b: if non-leaf, wait and aggregate children's shares
 	if !p.IsLeaf() {
@@ -101,7 +101,7 @@ func (p *SharesToEncryptionProtocol) Dispatch() error {
 
 	// Step 4: if root, compute ciphertext and return it
 	if p.IsRoot() {
-		log.Lvl1(p.ServerIdentity(), "Re-encrypting, then sending to output channel")
+		log.Lvl2(p.ServerIdentity(), "Re-encrypting, then sending to output channel")
 		cipher = p.Reencrypt(reencShare, p.crs)
 		p.ChannelCiphertext <- cipher
 	}

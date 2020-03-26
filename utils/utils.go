@@ -30,6 +30,7 @@ type LocalTest struct {
 	StorageDirectory string
 	CrsGen           *ring.CRPGenerator
 	Crs              *ring.Poly
+	crsCipherGen     *ring.CRPGenerator
 }
 
 //GetLocalTestForRoster gets the local test for the given roster. The keys will be stored in directory.
@@ -45,6 +46,7 @@ func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, director
 
 	lt.CrsGen = dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
 	lt.Crs = lt.CrsGen.ClockNew()
+	lt.crsCipherGen = dbfv.NewCipherCRPGenerator(params, []byte{'s', 'o', 'r', 'e', 't', 'a'})
 
 	rq, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	for _, si := range roster.List {
@@ -297,4 +299,9 @@ func (lt *LocalTest) GenMsgCtAccum() (msg []uint64, ct *bfv.Ciphertext, accum *d
 
 	accum = dbfv.NewConcurrentAdditiveShareAccum(lt.Params, lt.Params.Sigma, len(lt.Roster.List))
 	return
+}
+
+// NewCipherCRS returns a new crp for ciphertext (Sampled from R_q)
+func (lt *LocalTest) NewCipherCRS() *ring.Poly {
+	return lt.crsCipherGen.ClockNew()
 }
