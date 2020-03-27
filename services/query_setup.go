@@ -186,3 +186,12 @@ func (s *Service) genRotKey(tree *onet.Tree, k uint64, rotIdx int) error {
 	s.rotKeyGenerated = true
 	return nil
 }
+
+func (s *Service) processSetupQuery(msg *network.Envelope) {
+	log.Lvl1(s.ServerIdentity(), "got a setup message! (in process) ")
+	tmp := (msg.Msg).(*SetupRequest)
+	_, err := s.HandleSetupQuery(tmp)
+	if err != nil {
+		log.Error(err)
+	}
+}

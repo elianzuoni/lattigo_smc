@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/golangplus/testing v0.0.0-20180327235837-af21d9c3145e
-	github.com/ldsec/lattigo v1.3.1-0.20200323124021-a8c4a233cc1c
+	github.com/ldsec/lattigo v1.3.1-0.20200326110927-d19137245ed9
 	github.com/urfave/cli v1.22.2
 	go.dedis.ch/kyber/v3 v3.0.4
 	go.dedis.ch/onet/v3 v3.0.21

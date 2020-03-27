@@ -14,16 +14,16 @@ type MsgTypes struct {
 	msgSetupRequest network.MessageTypeID
 
 	//Messages to request keys
-	msgKeyRequest network.MessageTypeID
-	msgKeyReply   network.MessageTypeID
+	msgKeyQuery network.MessageTypeID
+	msgKeyReply network.MessageTypeID
 
 	//Message to store ciphers
 	msgStoreQueryClient network.MessageTypeID //Store query when it comes from client.
 	msgStoreQuery       network.MessageTypeID
 	msgStoreReply       network.MessageTypeID
 	//Message for the key switch
-	msgQueryPlaintext network.MessageTypeID
-	msgReplyPlaintext network.MessageTypeID
+	msgPlaintextQuery network.MessageTypeID
+	msgPlaintextReply network.MessageTypeID
 
 	//Messages for evaluations
 	msgSumQuery      network.MessageTypeID
@@ -50,14 +50,14 @@ func init() {
 	msgTypes.msgStoreQueryClient = network.RegisterMessage(&QueryData{})
 
 	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
-	msgTypes.msgKeyRequest = network.RegisterMessage(&KeyRequest{})
+	msgTypes.msgKeyQuery = network.RegisterMessage(&KeyRequest{})
 	msgTypes.msgKeyReply = network.RegisterMessage(&KeyReply{})
 
 	msgTypes.msgStoreQuery = network.RegisterMessage(&StoreQuery{})
 	msgTypes.msgStoreReply = network.RegisterMessage(&StoreReply{})
 
-	msgTypes.msgQueryPlaintext = network.RegisterMessage(&QueryPlaintext{})
-	msgTypes.msgReplyPlaintext = network.RegisterMessage(&ReplyPlaintext{})
+	msgTypes.msgPlaintextQuery = network.RegisterMessage(&QueryPlaintext{})
+	msgTypes.msgPlaintextReply = network.RegisterMessage(&ReplyPlaintext{})
 
 	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{})
 	msgTypes.msgSumReply = network.RegisterMessage(&SumReply{})
