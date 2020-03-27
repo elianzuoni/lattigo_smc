@@ -265,7 +265,7 @@ func StringToBytes(str []string) []byte {
 	return data
 }
 
-//SendISMOthers sends a message to all other services. !! THIS IS TAKEN FROM Unlynx ( https://github.com/ldsec/unlynx ) !!
+//SendISMOthers sends a message to all other service. !! THIS IS TAKEN FROM Unlynx ( https://github.com/ldsec/unlynx ) !!
 func SendISMOthers(s *onet.ServiceProcessor, el *onet.Roster, msg interface{}) error {
 	var errStrs []string
 	for _, e := range el.List {

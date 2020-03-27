@@ -1,4 +1,4 @@
-package services
+package service
 
 import (
 	"github.com/ldsec/lattigo/bfv"

@@ -1,5 +1,5 @@
 //Contains the various messages used by the service and client architecture.
-package services
+package service
 
 import (
 	"go.dedis.ch/onet/v3"

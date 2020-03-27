@@ -7,7 +7,7 @@ import (
 	"go.dedis.ch/onet/v3/app"
 	"go.dedis.ch/onet/v3/log"
 	uuid "gopkg.in/satori/go.uuid.v1"
-	"lattigo-smc/services"
+	"lattigo-smc/service"
 	"lattigo-smc/utils"
 	"os"
 	"strconv"
@@ -53,7 +53,7 @@ func runLattigo(c *cli.Context) {
 		log.ErrFatal(err, "Could not parse group toml file :", groupToml)
 	}
 
-	client := services.NewLattigoSMCClient(roster.List[id], string(id))
+	client := service.NewLattigoSMCClient(roster.List[id], string(id))
 
 	if setup != "" {
 		log.Lvl1("Setup request")

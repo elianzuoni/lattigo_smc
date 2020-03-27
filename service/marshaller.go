@@ -1,5 +1,5 @@
 //BinaryMarshaller implementation of structures.
-package services
+package service
 
 import (
 	"encoding/binary"

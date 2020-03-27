@@ -1,5 +1,5 @@
 //api contains the handler for the client to interact with the service. The client can perform various request to its server represented by its entryPoint
-package services
+package service
 
 import (
 	"go.dedis.ch/onet/v3"
