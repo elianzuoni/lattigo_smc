@@ -9,14 +9,14 @@ import (
 )
 
 func (rp *ReplyPlaintext) MarshalBinary() ([]byte, error) {
-	sq := StoreQuery{
+	sq := StoreRequest{
 		Ciphertext: rp.Ciphertext,
 		UUID:       rp.UUID,
 	}
 	return sq.MarshalBinary()
 }
 func (rp *ReplyPlaintext) UnmarshalBinary(data []byte) error {
-	var sq StoreQuery
+	var sq StoreRequest
 	err := sq.UnmarshalBinary(data)
 	if err != nil {
 		return err
@@ -26,7 +26,7 @@ func (rp *ReplyPlaintext) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-func (sq *StoreQuery) MarshalBinary() ([]byte, error) {
+func (sq *StoreRequest) MarshalBinary() ([]byte, error) {
 
 	ctD := make([]byte, 0)
 	if sq.Ciphertext != nil {
@@ -54,7 +54,7 @@ func (sq *StoreQuery) MarshalBinary() ([]byte, error) {
 
 	return data, nil
 }
-func (sq *StoreQuery) UnmarshalBinary(data []byte) error {
+func (sq *StoreRequest) UnmarshalBinary(data []byte) error {
 	pointer := 0
 	lenCt := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
 	pointer += 8
@@ -178,8 +178,8 @@ func (rp *PlaintextReply) UnmarshalBinary(data []byte) error {
 
 func (sq *SumQuery) MarshalBinary() ([]byte, error) {
 	data := make([]byte, 32)
-	copy(data[:uuid.Size], sq.UUID.Bytes())
-	copy(data[uuid.Size:], sq.Other.Bytes())
+	copy(data[:uuid.Size], sq.ID1.Bytes())
+	copy(data[uuid.Size:], sq.ID2.Bytes())
 	return data, nil
 }
 
@@ -187,11 +187,11 @@ func (sq *SumQuery) UnmarshalBinary(data []byte) error {
 	if len(data) != 32 {
 		return errors.New("unexpected data size")
 	}
-	err := sq.UUID.UnmarshalBinary(data[:uuid.Size])
+	err := sq.ID1.UnmarshalBinary(data[:uuid.Size])
 	if err != nil {
 		return err
 	}
-	err = sq.Other.UnmarshalBinary(data[uuid.Size:])
+	err = sq.ID2.UnmarshalBinary(data[uuid.Size:])
 	return err
 }
 
@@ -308,13 +308,13 @@ func (rr *RotationReply) UnmarshalBinary(data []byte) error {
 	if len(data) != uuid.Size*2 {
 		return errors.New("unexpected data len have : " + string(len(data)) + " should be 32")
 	}
-	rr.Old = *new(uuid.UUID)
+	rr.Old = *new(CipherID)
 	err := rr.Old.UnmarshalBinary(data[:uuid.Size])
 	if err != nil {
 		return err
 	}
 
-	rr.New = *new(uuid.UUID)
+	rr.New = *new(CipherID)
 	err = rr.New.UnmarshalBinary(data[uuid.Size:])
 	return err
 }

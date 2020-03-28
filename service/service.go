@@ -7,7 +7,6 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
-	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/protocols"
 )
 
@@ -30,38 +29,47 @@ type Service struct {
 	pubKeyGenerated     bool
 	evalKeyGenerated    bool
 	rotKeyGenerated     bool
-	DataBase            map[uuid.UUID]*bfv.Ciphertext
-	LocalUUID           map[uuid.UUID]chan uuid.UUID
+	DataBase            map[CipherID]*bfv.Ciphertext
 	Ckgp                *protocols.CollectiveKeyGenerationProtocol
 	crpGen              ring.CRPGenerator
-	SwitchedCiphertext  map[uuid.UUID]chan bfv.Ciphertext
+	SwitchedCiphertext  map[CipherID]chan bfv.Ciphertext
 	SwitchingParameters chan SwitchingParameters
 	RotationKey         *bfv.RotationKeys
 
-	SumReplies      map[SumQuery]chan uuid.UUID
-	MultiplyReplies map[MultiplyQuery]chan uuid.UUID
-	RotationReplies map[uuid.UUID]chan uuid.UUID
+	SumReplies      map[SumRequestID]chan CipherID
+	MultiplyReplies map[MultiplyRequestID]chan CipherID
+	RotationReplies map[CipherID]chan CipherID
 
 	RefreshParams chan *bfv.Ciphertext
 	RotIdx        int
 	K             uint64
 }
 
+const ServiceName = "LattigoSMC"
+
+// Registers the LattigoSMC service to the onet library
+func init() {
+	_, err := onet.RegisterNewService(ServiceName, NewLattigoSMCService)
+	if err != nil {
+		log.Error("Could not start the service")
+		panic(err)
+	}
+}
+
 func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
-	log.Lvl1(c.ServerIdentity(), "Starting lattigo smc service")
+	log.Lvl1(c.ServerIdentity(), "Starting LattigoSMC service")
 
 	smcService := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
-		DataBase:         make(map[uuid.UUID]*bfv.Ciphertext),
-		LocalUUID:        make(map[uuid.UUID]chan uuid.UUID),
+		DataBase:         make(map[CipherID]*bfv.Ciphertext),
 
-		SwitchedCiphertext:  make(map[uuid.UUID]chan bfv.Ciphertext),
+		SwitchedCiphertext:  make(map[CipherID]chan bfv.Ciphertext),
 		SwitchingParameters: make(chan SwitchingParameters, 10),
 
-		SumReplies:      make(map[SumQuery]chan uuid.UUID),
-		MultiplyReplies: make(map[MultiplyQuery]chan uuid.UUID),
+		SumReplies:      make(map[SumRequestID]chan CipherID),
+		MultiplyReplies: make(map[MultiplyRequestID]chan CipherID),
 		RefreshParams:   make(chan *bfv.Ciphertext, 3),
-		RotationReplies: make(map[uuid.UUID]chan uuid.UUID),
+		RotationReplies: make(map[CipherID]chan CipherID),
 	}
 
 	// Registers the handlers for client requests.
@@ -113,21 +121,18 @@ func registerClientQueryHandlers(smcService *Service) error {
 // server-to-server interaction). Upon reception of one of these messages, the method Process will be invoked.
 // TODO: how does onet distinguish the two SumQuery registered both above and here?
 func registerServerMsgHandler(c *onet.Context, smcService *Service) {
-	c.RegisterProcessor(smcService, msgTypes.msgSetupRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgKeyQuery)
+	// TODO: complete
+
+	c.RegisterProcessor(smcService, msgTypes.msgKeyRequest)
 	c.RegisterProcessor(smcService, msgTypes.msgKeyReply)
-	c.RegisterProcessor(smcService, msgTypes.msgStoreQuery)
-	c.RegisterProcessor(smcService, msgTypes.msgStoreReply)
-	c.RegisterProcessor(smcService, msgTypes.msgPlaintextQuery)
-	c.RegisterProcessor(smcService, msgTypes.msgPlaintextReply)
-	c.RegisterProcessor(smcService, msgTypes.msgSumQuery)
+
+	c.RegisterProcessor(smcService, msgTypes.msgStoreRequest)
+
+	c.RegisterProcessor(smcService, msgTypes.msgSumRequest)
 	c.RegisterProcessor(smcService, msgTypes.msgSumReply)
-	c.RegisterProcessor(smcService, msgTypes.msgMultiplyQuery)
+
+	c.RegisterProcessor(smcService, msgTypes.msgMultiplyRequest)
 	c.RegisterProcessor(smcService, msgTypes.msgMultiplyReply)
-	c.RegisterProcessor(smcService, msgTypes.msgRelinQuery)
-	c.RegisterProcessor(smcService, msgTypes.msgRefreshQuery)
-	c.RegisterProcessor(smcService, msgTypes.msgRotationQuery)
-	c.RegisterProcessor(smcService, msgTypes.msgRotationReply)
 }
 
 // Process processes messages from servers. It is called by the onet library upon reception of any of
@@ -136,24 +141,22 @@ func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 func (s *Service) Process(msg *network.Envelope) {
 	if msg.MsgType.Equal(msgTypes.msgSetupRequest) {
 		s.processSetupQuery(msg)
-	} else if msg.MsgType.Equal(msgTypes.msgStoreQuery) {
-		s.processStoreQuery(msg)
-	} else if msg.MsgType.Equal(msgTypes.msgStoreReply) {
-		s.processStoreReply(msg)
-	} else if msg.MsgType.Equal(msgTypes.msgMultiplyQuery) {
-		s.processMultiplyQuery(msg)
+	} else if msg.MsgType.Equal(msgTypes.msgStoreRequest) {
+		s.processStoreRequest(msg)
+	} else if msg.MsgType.Equal(msgTypes.msgMultiplyRequest) {
+		s.processMultiplyRequest(msg)
 	} else if msg.MsgType.Equal(msgTypes.msgMultiplyReply) {
 		s.processMultiplyReply(msg)
-	} else if msg.MsgType.Equal(msgTypes.msgSumQuery) {
-		s.processSumQuery(msg)
+	} else if msg.MsgType.Equal(msgTypes.msgSumRequest) {
+		s.processSumRequest(msg)
 	} else if msg.MsgType.Equal(msgTypes.msgSumReply) {
 		s.processSumReply(msg)
 	} else if msg.MsgType.Equal(msgTypes.msgRotationQuery) {
 		s.processRotationQuery(msg)
 	} else if msg.MsgType.Equal(msgTypes.msgRotationReply) {
 		s.processRotationReply(msg)
-	} else if msg.MsgType.Equal(msgTypes.msgKeyQuery) {
-		s.processKeyQuery(msg)
+	} else if msg.MsgType.Equal(msgTypes.msgKeyRequest) {
+		s.processKeyRequest(msg)
 	} else if msg.MsgType.Equal(msgTypes.msgKeyReply) {
 		s.processKeyReply(msg)
 	} else if msg.MsgType.Equal(msgTypes.msgPlaintextQuery) {

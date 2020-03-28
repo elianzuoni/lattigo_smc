@@ -45,7 +45,7 @@ func (c *API) SendSetupQuery(entities *onet.Roster, generatePublicKey, generateE
 
 //SendKeyRequest sends a request for the server to retrieve the keys needed.
 func (c *API) SendKeyRequest(publickey, evaluationkey, rotationkey bool, RotIdx int) (int, error) {
-	kr := KeyRequest{
+	kr := KeyQuery{
 		PublicKey:     publickey,
 		EvaluationKey: evaluationkey,
 		RotationKey:   rotationkey,
@@ -58,12 +58,12 @@ func (c *API) SendKeyRequest(publickey, evaluationkey, rotationkey bool, RotIdx 
 	return resp.Done, err
 }
 
-//SendWriteQuery send a query to write the data in the array. returns the UUID of the corresponding ciphertext.
-func (c *API) SendWriteQuery(roster *onet.Roster, data []byte) (*uuid.UUID, error) {
+//SendWriteQuery send a query to write the data in the array. returns the ID1 of the corresponding ciphertext.
+func (c *API) SendWriteQuery(roster *onet.Roster, data []byte) (*CipherID, error) {
 
 	result := ServiceState{}
-	query := QueryData{}
-	//query.UUID = uuid.UUID{}
+	query := StoreQuery{}
+	//query.ID1 = uuid.ID1{}
 	query.Data = data
 	query.Roster = *roster
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
@@ -81,7 +81,7 @@ func (c *API) SendWriteQuery(roster *onet.Roster, data []byte) (*uuid.UUID, erro
 }
 
 //GetPlaintext send a request to retrieve the plaintext of the ciphertetx encrypted under id
-func (c *API) GetPlaintext(id *uuid.UUID) ([]byte, error) {
+func (c *API) GetPlaintext(id *CipherID) ([]byte, error) {
 	query := QueryPlaintext{UUID: *id}
 	response := PlaintextReply{}
 	err := c.SendProtobuf(c.entryPoint, &query, &response)
@@ -95,15 +95,15 @@ func (c *API) GetPlaintext(id *uuid.UUID) ([]byte, error) {
 }
 
 //SendSumQuery sends a query to sum up to ciphertext.
-func (c *API) SendSumQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
+func (c *API) SendSumQuery(id1, id2 CipherID) (CipherID, error) {
 	query := SumQuery{
-		UUID:  id1,
-		Other: id2,
+		ID1: id1,
+		ID2: id2,
 	}
 	result := ServiceState{}
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
 	if err != nil {
-		return uuid.UUID{}, err
+		return CipherID{}, err
 	}
 	log.Lvl1("Got reply of sum query :", result.Id)
 	return result.Id, nil
@@ -111,7 +111,7 @@ func (c *API) SendSumQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
 }
 
 //SendMultiplyQuery sends a query to multiply 2 ciphertext.
-func (c *API) SendMultiplyQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
+func (c *API) SendMultiplyQuery(id1, id2 CipherID) (CipherID, error) {
 	query := MultiplyQuery{
 		UUID:  id1,
 		Other: id2,
@@ -119,7 +119,7 @@ func (c *API) SendMultiplyQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
 	result := ServiceState{}
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
 	if err != nil {
-		return uuid.UUID{}, err
+		return CipherID{}, err
 	}
 	log.Lvl1("Got reply of multiply query :", result.Id)
 	return result.Id, nil
@@ -127,27 +127,27 @@ func (c *API) SendMultiplyQuery(id1, id2 uuid.UUID) (uuid.UUID, error) {
 }
 
 //SendRelinQuery request for ciphertext id to be relinearized
-func (c *API) SendRelinQuery(id uuid.UUID) (uuid.UUID, error) {
+func (c *API) SendRelinQuery(id CipherID) (CipherID, error) {
 	query := RelinQuery{
 		UUID: id,
 	}
 	result := ServiceState{}
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
 	if err != nil {
-		return uuid.UUID{}, err
+		return CipherID{}, err
 	}
 	log.Lvl1("Got reply of relinearization query :", result.Id)
 	return result.Id, nil
 }
 
 //SendRefreshQuery send a query for ciphertext id to be refreshed.
-func (c *API) SendRefreshQuery(id *uuid.UUID) (uuid.UUID, error) {
+func (c *API) SendRefreshQuery(id *CipherID) (CipherID, error) {
 	query := RefreshQuery{*id, true, nil}
 
 	result := ServiceState{}
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
 	if err != nil {
-		return uuid.UUID{}, err
+		return CipherID{}, err
 	}
 	log.Lvl1("Got reply of refresh query :", result.Id)
 	return result.Id, nil
@@ -155,7 +155,7 @@ func (c *API) SendRefreshQuery(id *uuid.UUID) (uuid.UUID, error) {
 }
 
 //SendRotationQuery send a query to perform a rotation of type rotType-K on id
-func (c *API) SendRotationQuery(id uuid.UUID, K uint64, rotType int) (uuid.UUID, error) {
+func (c *API) SendRotationQuery(id CipherID, K uint64, rotType int) (CipherID, error) {
 	query := RotationQuery{
 		UUID:   id,
 		RotIdx: rotType,
@@ -165,7 +165,7 @@ func (c *API) SendRotationQuery(id uuid.UUID, K uint64, rotType int) (uuid.UUID,
 	result := ServiceState{}
 	err := c.SendProtobuf(c.entryPoint, &query, &result)
 	if err != nil {
-		return uuid.UUID{}, err
+		return CipherID{}, err
 	}
 
 	log.Lvl1("Got reply of rotaiton : ", result.Id)

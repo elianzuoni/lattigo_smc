@@ -13,14 +13,14 @@ func (s *Service) HandleRotationQuery(query *RotationQuery) (network.Message, er
 	tree := s.Roster.GenerateBinaryTree()
 	if !s.rotKeyGenerated {
 		log.Lvl1("Key has not been generated ! ")
-		return &ServiceState{uuid.UUID{}, false}, nil
+		return &ServiceState{CipherID{}, false}, nil
 	}
 	err := s.SendRaw(tree.Root.ServerIdentity, query)
 	if err != nil {
 		return nil, err
 	}
 
-	s.RotationReplies[query.UUID] = make(chan uuid.UUID)
+	s.RotationReplies[query.UUID] = make(chan CipherID)
 	res := <-s.RotationReplies[query.UUID]
 
 	return &ServiceState{res, false}, nil

@@ -1,3 +1,10 @@
+// This file defines the behaviour of the service when a StoreRequest is received.
+// HandleStoreQuery is charged with handling the client query: the query contains a clear-text vector, which
+// is encrypted and sent to the root, alongside an ID.
+// processStoreRequest is the method - executed at the root - charged with dealing with the StoreRequest received
+// from the server: it stores the ciphertext in the local database under the received ID.
+// No protocol is fired while handling this query.
+
 package service
 
 import (
@@ -7,17 +14,13 @@ import (
 	"go.dedis.ch/onet/v3/network"
 	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/utils"
-	"time"
 )
 
-// HandleStoreQuery is the handler registered for message type QueryData: a client asks to store new data into the system.
-// After some checks, the data is encrypted (TODO: WTF???) and associated to a fresh UUID: both are sent in a StoreQuery
-// to the root. The root will store the ciphertext in its database under a new fresh UUID (TODO: why?),
-// which it will send back to this server. This server handles this response in the processStoreReply method, which
-// puts the remote UUID in a channel. This method waits on that channel for confirmation, then returns the remote UUID
-// to the client (the original one is only used to index the channel on which to listen).
-func (s *Service) HandleStoreQuery(query *QueryData) (network.Message, error) {
-	log.Lvl1(s.ServerIdentity(), "Received SendData query")
+// HandleStoreQuery is the handler registered for message type StoreQuery: a client asks to store new data into the system.
+// After some checks, the data is encrypted (TODO: WTF???) and associated to an ID: both are sent in a StoreRequest
+// to the root. The root will store the ciphertext in its database under the provided ID.
+func (s *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error) {
+	log.Lvl1(s.ServerIdentity(), "Received StoreRequest query")
 
 	data := query.Data
 	tree := query.Roster.GenerateBinaryTree()
@@ -32,7 +35,7 @@ func (s *Service) HandleStoreQuery(query *QueryData) (network.Message, error) {
 		log.Error(s.ServerIdentity(), "Master public key not available")
 		// TODO: what do we return here?
 		return &ServiceState{
-			Id:      uuid.UUID{},
+			Id:      CipherID{},
 			Pending: true,
 		}, nil
 	}
@@ -48,65 +51,30 @@ func (s *Service) HandleStoreQuery(query *QueryData) (network.Message, error) {
 	encoder.EncodeUint(coeffs, pt)
 	encryptorPk := bfv.NewEncryptorFromPk(s.Params, s.MasterPublicKey)
 	cipher := encryptorPk.EncryptNew(pt)
-	// Generate a fresh UUID for this ciphertext.
-	id := uuid.NewV1()
+	// Generate a fresh ID1 for this ciphertext.
+	id := CipherID(uuid.NewV1())
 
-	// Send the StoreQuery to the root.
-	log.Lvl2(s.ServerIdentity(), "Sending StoreQuery to the root")
-	err = s.SendRaw(tree.Root.ServerIdentity, &StoreQuery{cipher, id})
+	// Send the StoreRequest to the root.
+	log.Lvl2(s.ServerIdentity(), "Sending StoreRequest to the root")
+	err = s.SendRaw(tree.Root.ServerIdentity, &StoreRequest{cipher, id})
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Couldn't send StoreQuery to the root:", err) // TODO: why not return nil, err?
+		err = errors.New("Couldn't send StoreRequest to the root: " + err.Error())
+		log.Error(s.ServerIdentity(), err)
+		return nil, err
 	}
 
-	// Wait to receive confirmation from root (it will be processed by processStoreReply and put in the channel)
-	log.Lvl2(s.ServerIdentity(), "Waiting to receive remoteID as confirmation from root")
-	for {
-		select {
-		case remoteID := <-s.LocalUUID[id]: // TODO: how do we know it is already defined?
-			log.Lvl2(s.ServerIdentity(), "Received confirmation from root")
-			return &ServiceState{remoteID, true}, nil // TODO: why Pending = true?
-
-		case <-time.After(1 * time.Second):
-			log.Lvl4(s.ServerIdentity(), "Elapsed 1 second waiting for confirmation. ")
-			break
-		}
-	}
-
+	return &ServiceState{
+		Id:      id,
+		Pending: true,
+	}, nil
 }
 
-// StoreQuery is received at root from server.
-// The ciphertext is stored under a fresh UUID, which is returned, as confirmation, along with the original UUID.
-func (s *Service) processStoreQuery(msg *network.Envelope) {
-	query := (msg.Msg).(*StoreQuery)
-	id := uuid.NewV1()
-	log.Lvl1(s.ServerIdentity(), "Root. Received forwarded request to store new ciphertext wth ID:", query.UUID)
+// StoreRequest is received at root from server.
+// The ciphertext is stored under the provided ID.
+func (s *Service) processStoreRequest(msg *network.Envelope) {
+	query := (msg.Msg).(*StoreRequest)
+	log.Lvl1(s.ServerIdentity(), "Root. Received forwarded request to store new ciphertext with ID:", query.ID)
 
-	// Store ciphertext under fresh UUID
-	s.DataBase[id] = query.Ciphertext
-	log.Lvl4(s.ServerIdentity(), "Original UUID:", query.UUID, "; Fresh UUID:", id)
-
-	// Send new and original UUIDs in acknowledgement
-	sender := msg.ServerIdentity
-	ack := StoreReply{query.UUID, id, true}
-	log.Lvl2(s.ServerIdentity(), "Sending ack to server", sender)
-	err := s.SendRaw(sender, &ack)
-	if err != nil {
-		log.Error(s.ServerIdentity(), "Couldn't send ack to server", sender)
-	}
-	log.Lvl2(s.ServerIdentity(), "Sent ack to server", sender)
-}
-
-// StoreReply is received at server from root.
-// When this method is executed, the method HandleStoreQuery is waiting on the channel for the remote UUID,
-// so we just send it and awake the goroutine executing that method.
-func (s *Service) processStoreReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*StoreReply)
-	log.Lvl1(s.ServerIdentity(), "Server. Received StoreReply. LocalID:", reply.Local, "RemoteID:", reply.Remote)
-
-	// Send the RemoteID through the channel
-	log.Lvl2(s.ServerIdentity(), "Sending RemoteID", reply.Remote, "through channel")
-	s.LocalUUID[reply.Local] = make(chan uuid.UUID, 1) // TODO: shouldn't this be initialised in HandleStoreQuery?
-	s.LocalUUID[reply.Local] <- reply.Remote
-
-	log.Lvl3(s.ServerIdentity(), "Sent RemoteID", reply.Remote, "through channel")
+	// Store ciphertext under fresh ID1
+	s.DataBase[query.ID] = query.Ciphertext
 }

@@ -1,74 +1,230 @@
-//Contains the various messages used by the service and client architecture.
+// This file defines the data structure for every message exchanged "directly" (i.e. except those exchanged,
+// for example, by the protocols) by the service, both for client-server and server-root interaction.
+// It also defines a data structure containing the MessageTypeID of all those messages.
+// It also registers those message types to the underlying onet library, with the init method.
+
 package service
 
 import (
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	uuid "gopkg.in/satori/go.uuid.v1"
 	"lattigo-smc/protocols"
 )
 
-//MsgTypes different messages that can be used for the service.
+// MsgTypes contains the different message types that can be received or sent.
 type MsgTypes struct {
-	//Message for setup the keys.
 	msgSetupRequest network.MessageTypeID
 
-	//Messages to request keys
-	msgKeyQuery network.MessageTypeID
-	msgKeyReply network.MessageTypeID
+	msgKeyQuery   network.MessageTypeID // Unused
+	msgKeyRequest network.MessageTypeID
+	msgKeyReply   network.MessageTypeID
 
-	//Message to store ciphers
-	msgStoreQueryClient network.MessageTypeID //Store query when it comes from client.
-	msgStoreQuery       network.MessageTypeID
-	msgStoreReply       network.MessageTypeID
-	//Message for the key switch
+	msgStoreQuery   network.MessageTypeID // Unused
+	msgStoreRequest network.MessageTypeID
+
 	msgPlaintextQuery network.MessageTypeID
 	msgPlaintextReply network.MessageTypeID
 
-	//Messages for evaluations
-	msgSumQuery      network.MessageTypeID
-	msgMultiplyQuery network.MessageTypeID
-	msgSumReply      network.MessageTypeID
-	msgMultiplyReply network.MessageTypeID
-	msgRelinQuery    network.MessageTypeID
-	msgRefreshQuery  network.MessageTypeID
-	msgRotationReply network.MessageTypeID
+	msgSumQuery   network.MessageTypeID // Unused
+	msgSumRequest network.MessageTypeID
+	msgSumReply   network.MessageTypeID
+
+	msgMultiplyQuery   network.MessageTypeID // Unused
+	msgMultiplyRequest network.MessageTypeID
+	msgMultiplyReply   network.MessageTypeID
+
+	msgRelinQuery network.MessageTypeID
+
+	msgRefreshQuery network.MessageTypeID
+
 	msgRotationQuery network.MessageTypeID
+	msgRotationReply network.MessageTypeID
 }
 
 var msgTypes = MsgTypes{}
 
-func init() {
-	_, err := onet.RegisterNewService(ServiceName, NewLattigoSMCService)
-	if err != nil {
-		log.Error("Could not start the service")
-		panic(err)
-	}
-
-	//Register the messages
+// Registers all the message types to the onet library
+func init() { // TODO: complete
 	log.Lvl1("Registering messages")
-	msgTypes.msgStoreQueryClient = network.RegisterMessage(&QueryData{})
 
-	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
-	msgTypes.msgKeyQuery = network.RegisterMessage(&KeyRequest{})
+	msgTypes.msgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
+	msgTypes.msgKeyRequest = network.RegisterMessage(&KeyRequest{})
 	msgTypes.msgKeyReply = network.RegisterMessage(&KeyReply{})
 
-	msgTypes.msgStoreQuery = network.RegisterMessage(&StoreQuery{})
-	msgTypes.msgStoreReply = network.RegisterMessage(&StoreReply{})
+	msgTypes.msgStoreQuery = network.RegisterMessage(&StoreQuery{}) // Unused
+	msgTypes.msgStoreRequest = network.RegisterMessage(&StoreRequest{})
 
-	msgTypes.msgPlaintextQuery = network.RegisterMessage(&QueryPlaintext{})
-	msgTypes.msgPlaintextReply = network.RegisterMessage(&ReplyPlaintext{})
-
-	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{})
+	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{}) // Unused
+	msgTypes.msgSumRequest = network.RegisterMessage(&SumRequest{})
 	msgTypes.msgSumReply = network.RegisterMessage(&SumReply{})
-	msgTypes.msgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{})
+
+	msgTypes.msgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{}) // Unused
+	msgTypes.msgMultiplyRequest = network.RegisterMessage(&MultiplyRequest{})
 	msgTypes.msgMultiplyReply = network.RegisterMessage(&MultiplyReply{})
 
-	msgTypes.msgRelinQuery = network.RegisterMessage(&RelinQuery{})
-	msgTypes.msgRefreshQuery = network.RegisterMessage(&RefreshQuery{})
+	_ = network.RegisterMessage(&protocols.Start{}) // TODO: necessary?
+}
 
-	msgTypes.msgRotationQuery = network.RegisterMessage(&RotationQuery{})
-	msgTypes.msgRotationReply = network.RegisterMessage(&RotationReply{})
+/*********************** Message structs *********************/
 
-	network.RegisterMessage(&protocols.Start{})
+type CipherID uuid.UUID
+
+var nilCipherID = CipherID(uuid.Nil)
+
+type SwitchingParameters struct {
+	bfv.PublicKey
+	bfv.Ciphertext
+}
+
+type ServiceState struct {
+	Id      CipherID
+	Pending bool
+}
+
+type RemoteID struct {
+	Local   CipherID
+	Remote  CipherID
+	Pending bool
+}
+
+//StoreQuery contains the information server side for the query.
+type StoreQuery struct {
+	Roster onet.Roster // TODO: why?
+	Data   []byte
+}
+
+// StoreRequest is sent by server to root.
+// Contains new ciphertext to store, and a CipherID (generated by the server)
+type StoreRequest struct {
+	Ciphertext *bfv.Ciphertext
+	ID         CipherID
+}
+
+type PlaintextReply struct {
+	Data []byte
+	CipherID
+}
+
+type SetupRequest struct {
+	Roster onet.Roster
+
+	ParamsIdx             uint64
+	Seed                  []byte
+	GeneratePublicKey     bool
+	GenerateEvaluationKey bool
+	GenerateRotationKey   bool
+	K                     uint64
+	RotIdx                int
+}
+
+// KeyQuery is sent by client to server, and forwarded by server to root.
+// Contains flag signalling which keys to retrieve.
+type KeyQuery struct {
+	PublicKey     bool
+	EvaluationKey bool
+	RotationKey   bool
+	RotIdx        int
+}
+
+// KeyRequest is sent by the server to the root.
+type KeyRequest KeyQuery
+
+// KeyReply is sent by root to server, in response to KeyQuery.
+// Contains the requested keys, if they exist.
+type KeyReply struct {
+	*bfv.PublicKey
+	*bfv.EvaluationKey
+	*bfv.RotationKeys
+	RotIdx int
+}
+
+// Client asks to sum ciphertexts ID1 and ID2.
+type SumQuery struct {
+	ID1 CipherID
+	ID2 CipherID
+}
+
+// Server further assigns an ID to the query
+type SumRequestID uuid.UUID
+
+// Message sent by server to root.
+type SumRequest struct {
+	SumRequestID
+	ID1 CipherID
+	ID2 CipherID
+}
+
+// Root answers with the same SumRequestID, the CipherID of the new ciphertext,
+// and a flag indicating whether the operation succeeded.
+type SumReply struct {
+	SumRequestID
+	NewID CipherID
+	valid bool
+}
+
+// Client asks to multiply ID1 and ID2
+type MultiplyQuery struct {
+	ID1 CipherID
+	ID2 CipherID
+}
+
+type MultiplyRequestID uuid.UUID
+
+// Message sent by server to root.
+type MultiplyRequest struct {
+	MultiplyRequestID
+	ID1 CipherID
+	ID2 CipherID
+}
+
+// Root answers with the same SumRequestID, the CipherID of the new ciphertext,
+// and a flag indicating whether the operation succeeded.
+type MultiplyReply struct {
+	MultiplyRequestID
+	NewID CipherID
+	valid bool
+}
+
+//RefreshQuery query for ID1 to be refreshed.
+type RefreshQuery struct {
+	CipherID
+	InnerQuery bool
+	*bfv.Ciphertext
+}
+
+//RelinQuery query for ID1 to be relinearized
+type RelinQuery struct {
+	CipherID
+}
+
+//SetupReply reply of the setup. if < 0 then it failed.
+type SetupReply struct {
+	Done int
+}
+
+//QueryPlaintext query for a ciphertext represented by ID1 to be switched under publickey
+type QueryPlaintext struct {
+	PublicKey  *bfv.PublicKey
+	Ciphertext *bfv.Ciphertext
+	CipherID
+}
+
+//ReplyPlaintext contains the ciphertext switched under the key requested.
+type ReplyPlaintext struct {
+	CipherID
+	Ciphertext *bfv.Ciphertext
+}
+
+type RotationQuery struct {
+	CipherID
+	K      uint64
+	RotIdx int
+}
+
+type RotationReply struct {
+	Old CipherID
+	New CipherID
 }

@@ -1,45 +1,48 @@
 package service
 
 import (
+	"errors"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 )
 
-// HandleKeyQuery is the handler registered for message type KeyRequest: a client asks this server to retrieve keys
+// HandleKeyQuery is the handler registered for message type KeyQuery: a client asks this server to retrieve keys
 // from the root.
 // The request is forwarded to the root as-is, and the method returns a positive response without waiting for
-// the response (TODO: why?).
+// the response.
 // The root, however, does send a response, handled in the processKeyReply method.
-func (s *Service) HandleKeyQuery(query *KeyRequest) (network.Message, error) {
-	log.Lvl1("Received KeyRequest query. ReqPubKey:", query.PublicKey, "; ReqRotKey:", query.RotationKey,
+func (s *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
+	log.Lvl1(s.ServerIdentity(), "Received KeyQuery query. ReqPubKey:", query.PublicKey, "; ReqRotKey:", query.RotationKey,
 		"; ReqEvalKey:", query.EvaluationKey)
 
 	// Forward query to the root as-is.
-	log.Lvl2("Forwarding query to the root")
+	log.Lvl2(s.ServerIdentity(), "Forwarding request to the root")
 	tree := s.Roster.GenerateBinaryTree()
-	err := s.SendRaw(tree.Root.ServerIdentity, query)
+	req := (*KeyRequest)(query)
+	err := s.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
-		log.Error("Could not forward query to the root")
+		err = errors.New("Could not forward query to the root: " + err.Error())
+		log.Error(s.ServerIdentity(), err)
 		return nil, err
 	}
 
-	// TODO: why don't we wait for the response here?
+	log.Lvl2(s.ServerIdentity(), "Forwarded request to the root")
 
-	return &SetupReply{Done: 1}, nil
+	return &SetupReply{Done: 1}, nil // TODO: what?
 }
 
-// KeyRequest is received at root from server.
+// KeyQuery is received at root from server.
 // It comprises three flags, signalling which keys the server is asking for.
-func (s *Service) processKeyQuery(msg *network.Envelope) {
-	query := (msg.Msg).(*KeyRequest)
+func (s *Service) processKeyRequest(msg *network.Envelope) {
+	query := (msg.Msg).(*KeyQuery)
 
-	log.Lvl1(s.ServerIdentity(), "Root. Received KeyRequest. ReqPubKey:", query.PublicKey, "; ReqRotKey:",
+	log.Lvl1(s.ServerIdentity(), "Root. Received KeyQuery. ReqPubKey:", query.PublicKey, "; ReqRotKey:",
 		query.RotationKey, "; ReqEvalKey:", query.EvaluationKey)
 
 	// Build reply as desired by server.
 	reply := KeyReply{}
 	if query.PublicKey && s.pubKeyGenerated {
-		reply.PublicKey = (s.MasterPublicKey)
+		reply.PublicKey = s.MasterPublicKey
 	}
 	if query.EvaluationKey && s.evalKeyGenerated {
 		reply.EvaluationKey = s.EvaluationKey

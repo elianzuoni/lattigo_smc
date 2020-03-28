@@ -28,7 +28,7 @@ func (s *Service) HandlePlaintextQuery(query *QueryPlaintext) (network.Message, 
 	}
 
 	//Wait for CKS to complete
-	log.Lvl1("Waiting for ciphertext UUID :", query.UUID)
+	log.Lvl1("Waiting for ciphertext ID1 :", query.UUID)
 	for {
 		select {
 		case cipher := <-s.SwitchedCiphertext[query.UUID]:
@@ -97,12 +97,12 @@ func (s *Service) processPlaintextQuery(msg *network.Envelope) {
 
 func (s *Service) processPlaintextReply(msg *network.Envelope) {
 	tmp := (msg.Msg).(*ReplyPlaintext)
-	log.Lvl1("Got a ciphertext switched with UUID : ", tmp.UUID)
+	log.Lvl1("Got a ciphertext switched with ID1 : ", tmp.UUID)
 	s.SwitchedCiphertext[tmp.UUID] = make(chan bfv.Ciphertext, 1)
 	s.SwitchedCiphertext[tmp.UUID] <- *tmp.Ciphertext
 }
 
-func (s *Service) switchKeys(tree *onet.Tree, id uuid.UUID) (*ReplyPlaintext, error) {
+func (s *Service) switchKeys(tree *onet.Tree, id CipherID) (*ReplyPlaintext, error) {
 	log.Lvl1(s.ServerIdentity(), " Switching keys")
 	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectivePublicKeySwitchingProtocolName)
 	protocol, err := s.NewProtocol(tni, nil)

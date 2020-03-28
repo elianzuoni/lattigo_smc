@@ -110,7 +110,7 @@ func runLattigo(c *cli.Context) {
 		log.Lvl1("Request to get data from server")
 		id, err := uuid.FromString(get)
 		if err != nil {
-			log.Error("Incorrect UUID :", err)
+			log.Error("Incorrect ID1 :", err)
 			return
 		}
 		data, err := client.GetPlaintext(&id)
