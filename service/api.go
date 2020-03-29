@@ -31,7 +31,7 @@ func NewLattigoSMCClient(entryPoint *network.ServerIdentity, clientID string) *A
 func (c *API) SendSetupQuery(entities *onet.Roster, generatePublicKey, generateEvaluationKey, genRotationKey bool, K uint64, rotIdx int, paramsIdx uint64, seed []byte) error {
 	log.Lvl1(c, "Sending a setup query to the roster")
 
-	setupQuery := SetupRequest{*entities, paramsIdx, seed, generatePublicKey, generateEvaluationKey, genRotationKey, K, rotIdx}
+	setupQuery := SetupQuery{*entities, paramsIdx, seed, generatePublicKey, generateEvaluationKey, genRotationKey, K, rotIdx}
 	resp := SetupReply{}
 	err := c.SendProtobuf(c.entryPoint, &setupQuery, &resp)
 	if err != nil {
@@ -82,8 +82,8 @@ func (c *API) SendWriteQuery(roster *onet.Roster, data []byte) (*CipherID, error
 
 //GetPlaintext send a request to retrieve the plaintext of the ciphertetx encrypted under id
 func (c *API) GetPlaintext(id *CipherID) ([]byte, error) {
-	query := QueryPlaintext{UUID: *id}
-	response := PlaintextReply{}
+	query := RetrieveQuery{UUID: *id}
+	response := RetrieveResponse{}
 	err := c.SendProtobuf(c.entryPoint, &query, &response)
 	if err != nil {
 		log.Lvl1("Error while sending : ", err)
@@ -154,7 +154,7 @@ func (c *API) SendRefreshQuery(id *CipherID) (CipherID, error) {
 
 }
 
-//SendRotationQuery send a query to perform a rotation of type rotType-K on id
+//SendRotationQuery send a query to perform a rotation of type rotType-k on id
 func (c *API) SendRotationQuery(id CipherID, K uint64, rotType int) (CipherID, error) {
 	query := RotationQuery{
 		UUID:   id,

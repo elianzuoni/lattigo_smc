@@ -28,17 +28,17 @@ func main() {
 		cli.StringFlag{Name: "write, w", Usage: "Store data <data>"},
 		cli.StringFlag{Name: "type, t", Usage: "What is the type of data stored (string or byte)"},
 		cli.StringFlag{Name: "get, g", Usage: "Get data stored at <ID1>"},
-		cli.StringFlag{Name: "retrievekey", Usage: "Retrieve key with boolean <collkey>,<evalkey>,<rottype>,<rotType>,<K>"},
+		cli.StringFlag{Name: "retrievekey", Usage: "Retrieve key with boolean <collkey>,<evalkey>,<rottype>,<rotType>,<k>"},
 		cli.StringFlag{Name: "grouptoml, gt", Usage: "Give the gorup toml"},
 		cli.IntFlag{Name: "id", Usage: "id of the client"},
-		cli.StringFlag{Name: "setup", Usage: "Setup the server <paramsIdx>,<genColKey>,<genEvalKey>,<genRotKey>,<rottype>,<K>"},
+		cli.StringFlag{Name: "setup", Usage: "Setup the server <paramsIdx>,<genColKey>,<genEvalKey>,<genRotKey>,<rottype>,<k>"},
 
 		cli.StringFlag{Name: "sum ,s", Usage: "Get sum of two ciphers comma separated : <id1>,<id2>"},
 
 		cli.StringFlag{Name: "multiply ,m", Usage: "Get product of two ciphers comma separeted : <id1>,<id2>"},
 		cli.StringFlag{Name: "refresh, ref", Usage: "Refresh a ciphertext with <ID1>"},
 		cli.StringFlag{Name: "relin, rel", Usage: "Relinearize a cipher with <ID1>"},
-		cli.StringFlag{Name: "rotate , rot", Usage: "Rotate a ciphertext format <ID1>,<rotType>,<K>"},
+		cli.StringFlag{Name: "rotate , rot", Usage: "Rotate a ciphertext format <ID1>,<rotType>,<k>"},
 	}
 
 	serverFlags := []cli.Flag{

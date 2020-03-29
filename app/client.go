@@ -224,7 +224,7 @@ func runLattigo(c *cli.Context) {
 
 		K, err := strconv.ParseInt(values[1], 10, 32)
 		if err != nil {
-			log.Error("Could parse K ", err)
+			log.Error("Could parse k ", err)
 			return
 		}
 

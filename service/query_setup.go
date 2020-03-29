@@ -3,195 +3,245 @@ package service
 import (
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
-	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
 	"lattigo-smc/utils"
-	"time"
 )
 
-//------------HANDLES-QUERIES ---------------
-func (s *Service) HandleSetupQuery(request *SetupRequest) (network.Message, error) {
-	tree := request.Roster.GenerateBinaryTree()
+func (s *Service) HandleSetupQuery(query *SetupQuery) (network.Message, error) {
+	tree := query.Roster.GenerateBinaryTree()
 
-	log.Lvl1("Begin new setup with ", tree.Size(), " parties")
-	s.Roster = request.Roster
-	s.Params = bfv.DefaultParams[request.ParamsIdx]
-	keygen := bfv.NewKeyGenerator(s.Params)
-	s.SecretKey = keygen.GenSecretKey()
-	s.PublicKey = keygen.GenPublicKey(s.SecretKey)
-	s.crpGen = *dbfv.NewCRPGenerator(s.Params, request.Seed)
+	log.Lvl1("Received SetupQuery")
 
-	requestSent := false
+	// Delegate everything to the root
+	log.Lvl2(s.ServerIdentity(), "Forwarding request to the root")
+	req := (*SetupRequest)(query)
+	s.SendRaw(tree.Root.ServerIdentity, req)
 
-	//Collective Key Generation
-	if !s.pubKeyGenerated && request.GeneratePublicKey {
-		//send the information to the childrens.
-		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
-			err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
-			if err != nil {
-				return &SetupReply{-1}, err
-			}
-			requestSent = true
-			<-time.After(2 * time.Second)
-			err = s.genPublicKey(tree)
+	log.Lvl3(s.ServerIdentity(), "Forwarded request to the root")
 
-			if err != nil {
-				return &SetupReply{-1}, err
-			}
-
-		}
-
-	}
-
-	//Eval key generation
-	if request.GenerateEvaluationKey && !s.evalKeyGenerated {
-		log.Lvl1("Generate evalutation key ! ")
-		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
-			if !requestSent {
-				err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
-				if err != nil {
-					return &SetupReply{-1}, err
-				}
-				requestSent = true
-			}
-
-			err := s.genEvalKey(tree)
-
-			if err != nil {
-				return &SetupReply{-1}, err
-			}
-
-		}
-	}
-
-	if request.GenerateRotationKey && !s.rotKeyGenerated {
-		s.RotIdx = request.RotIdx
-		s.K = request.K
-		log.Lvl1("Generate evalutation key ! ")
-		if tree.Root.ServerIdentity.Equal(s.ServerIdentity()) {
-			if !requestSent {
-
-				err := utils.SendISMOthers(s.ServiceProcessor, &s.Roster, request)
-				if err != nil {
-					return &SetupReply{-1}, err
-				}
-				requestSent = true
-			}
-
-			err := s.genRotKey(tree, request.K, request.RotIdx)
-
-			if err != nil {
-				return &SetupReply{-1}, err
-			}
-
-		}
-
-	}
-
-	return &SetupReply{1}, nil
-
+	return nil, nil // TODO: fix
 }
 
-func (s *Service) genEvalKey(tree *onet.Tree) error {
-	log.Lvl1("Starting relinearization key protocol")
-	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
-	protocol, err := s.NewProtocol(tni, nil)
-	if err != nil {
-		panic(err)
+func (s *Service) processSetupRequest(msg *network.Envelope) {
+	log.Lvl1(s.ServerIdentity(), "Root. Received SetupRequest.")
+
+	req := (msg.Msg).(*SetupRequest)
+
+	// First, broadcast the request so that all nodes can be ready for the subsequent protocols.
+	log.Lvl2(s.ServerIdentity(), "Broadcasting SetupRequest to all nodes")
+	broad := (*SetupBroadcast)(req)
+	utils.Broadcast(s.ServiceProcessor, &req.Roster, broad)
+
+	// Then, generate the requested keys (if missing)
+	if req.GeneratePublicKey && !s.pubKeyGenerated {
+		log.Lvl3(s.ServerIdentity(), "PublicKey requested and missing. Generating it.")
+
+		s.genPublicKey()
+		s.pubKeyGenerated = true
 	}
-	rkg := protocol.(*protocols.RelinearizationKeyProtocol)
-	err = s.RegisterProtocolInstance(protocol)
-	if err != nil {
-		panic(err)
+	if req.GenerateEvaluationKey && !s.evalKeyGenerated {
+		log.Lvl3(s.ServerIdentity(), "EvaluationKey requested and missing. Generating it.")
+
+		s.genEvalKey()
+		s.evalKeyGenerated = true
 	}
-	<-time.After(1 * time.Second)
-	err = rkg.Start()
-	if err != nil {
-		return err
+	if req.GenerateRotationKey && !s.rotKeyGenerated {
+		log.Lvl3(s.ServerIdentity(), "RotationKey requested and missing. Generating it.")
+
+		s.genRotKey()
+		s.rotKeyGenerated = true
 	}
 
-	go rkg.Dispatch()
+	log.Lvl3(s.ServerIdentity(), "Generated requested (and missing) keys")
 
-	rkg.Wait()
-	log.Lvl1("Finished relin protocol")
-
-	s.EvaluationKey = rkg.EvaluationKey
-	s.evalKeyGenerated = true
-	return nil
+	return
 }
 
-func (s *Service) genPublicKey(tree *onet.Tree) error {
-	log.Lvl1(s.ServerIdentity(), "Starting collective key generation!")
+func (s *Service) processSetupBroadcast(msg *network.Envelope) {
+	log.Lvl1(s.ServerIdentity(), "Received SetupBroadcast")
 
+	prep := msg.Msg.(*SetupBroadcast) // This message prepares for the subsequent protocol
+
+	// Set parameters, if needed, and signal this on the appropriate locks
+	if !s.skSet && (prep.GeneratePublicKey || prep.GenerateEvaluationKey || prep.GenerateRotationKey) {
+		log.Lvl3(s.ServerIdentity(), "skShard not yet set. Generating from request")
+		s.Roster = prep.Roster
+		s.Params = bfv.DefaultParams[prep.ParamsIdx]
+		keygen := bfv.NewKeyGenerator(s.Params)
+		s.skShard = keygen.GenSecretKey()
+		s.partialPk = keygen.GenPublicKey(s.skShard)
+		s.crpGen = dbfv.NewCRPGenerator(s.Params, prep.Seed)
+		s.cipherCRPgen = dbfv.NewCipherCRPGenerator(s.Params, prep.Seed)
+
+		log.Lvl3(s.ServerIdentity(), "Unlocking locks for CKG and EKG protocol factories")
+		s.waitCKG.Unlock()
+		s.waitEKG.Unlock()
+
+		s.skSet = true
+	}
+	if !s.rotParamsSet && prep.GenerateRotationKey {
+		log.Lvl3(s.ServerIdentity(), "Rotation parameters not yet set. Generating from request")
+		s.rotIdx = prep.RotIdx
+		s.k = prep.K
+
+		log.Lvl3(s.ServerIdentity(), "Unlocking lock for RKG protocol factory")
+		s.waitRKG.Unlock()
+
+		s.rotParamsSet = true
+	}
+
+	return
+}
+
+func (s *Service) genPublicKey() error {
+	log.Lvl1(s.ServerIdentity(), "Root. Generating PublicKey")
+
+	// TODO: is all this really needed? Is there an equivalent of CreateProtocol?
+	// Instantiate protocol
+	log.Lvl3(s.ServerIdentity(), "Instantiating CKG protocol")
+	tree := s.Roster.GenerateBinaryTree()
 	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveKeyGenerationProtocolName)
 	protocol, err := s.NewProtocol(tni, nil)
 	if err != nil {
-		panic(err)
+		log.Error(s.ServerIdentity(), "Could not instantiate CKG protocol", err)
+		return err
 	}
+	// Register protocol instance
+	log.Lvl3(s.ServerIdentity(), "Registering CKG protocol")
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.ErrFatal(err, "Could not register protocol instance")
+		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err)
+		return err
 	}
 
 	ckgp := protocol.(*protocols.CollectiveKeyGenerationProtocol)
 
-	<-time.After(1 * time.Second) //dirty hack...
+	//<-time.After(1 * time.Second) //dirty hack...	// TODO: maybe avoidable with locks
 
-	//if ckgp.IsRoot(){
+	// Start the protocol
+	log.Lvl2(s.ServerIdentity(), "Starting CKG protocol")
 	err = ckgp.Start()
 	if err != nil {
-		log.ErrFatal(err, "Could not start collective key generation protocol")
+		log.Error(s.ServerIdentity(), "Could not start CKG protocol:", err)
+		return err
 	}
-	go ckgp.Dispatch()
-	//}
-
-	//we should wait until the above is done.
-	log.Lvl1(ckgp.ServerIdentity(), "Waiting for the protocol to be finished :x")
-	ckgp.Wait()
-	s.SecretKey = ckgp.Sk
-	s.Encoder = bfv.NewEncoder(s.Params)
-	s.DecryptorSk = bfv.NewDecryptor(s.Params, s.SecretKey)
-	s.MasterPublicKey = ckgp.Pk
-	s.pubKeyGenerated = true
-	log.Lvl1(s.ServerIdentity(), " got public key!")
-	return nil
-}
-
-func (s *Service) genRotKey(tree *onet.Tree, k uint64, rotIdx int) error {
-	log.Lvl1("Starting rotation key protocol")
-	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RotationProtocolName)
-	protocol, err := s.NewProtocol(tni, nil)
+	// Call dispatch (the main logic)
+	err = ckgp.Dispatch()
 	if err != nil {
-		panic(err)
-	}
-	rotkeygen := protocol.(*protocols.RotationKeyProtocol)
-	err = s.RegisterProtocolInstance(protocol)
-	if err != nil {
-		panic(err)
-	}
-	<-time.After(1 * time.Second)
-	err = rotkeygen.Start()
-	if err != nil {
+		log.Error(s.ServerIdentity(), "Could not dispatch CKG protocol:", err)
 		return err
 	}
 
-	go rotkeygen.Dispatch()
+	// Wait for termination of protocol
+	log.Lvl2(ckgp.ServerIdentity(), "Waiting for CKG protocol to terminate...")
+	ckgp.Wait()
 
-	rotkeygen.Wait()
-	log.Lvl1("Finished relin protocol")
+	// Retrieve PublicKey
+	s.MasterPublicKey = ckgp.Pk
+	s.pubKeyGenerated = true
+	log.Lvl1(s.ServerIdentity(), "Retrieved PublicKey!")
 
-	s.RotationKey = &rotkeygen.RotKey
-	s.rotKeyGenerated = true
 	return nil
 }
 
-func (s *Service) processSetupQuery(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "got a setup message! (in process) ")
-	tmp := (msg.Msg).(*SetupRequest)
-	_, err := s.HandleSetupQuery(tmp)
+func (s *Service) genEvalKey() error {
+	log.Lvl1(s.ServerIdentity(), "Root. Generating EvaluationKey (relinearisation key).")
+
+	// TODO: is all this really needed? Is there an equivalent of CreateProtocol?
+	// Instantiate protocol
+	log.Lvl3(s.ServerIdentity(), "Instantiating EKG protocol")
+	tree := s.Roster.GenerateBinaryTree()
+	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
+	protocol, err := s.NewProtocol(tni, nil)
 	if err != nil {
-		log.Error(err)
+		log.Error(s.ServerIdentity(), "Could not instantiate EKG protocol", err)
+		return err
 	}
+	// Register protocol instance
+	log.Lvl3(s.ServerIdentity(), "Registering EKG protocol")
+	err = s.RegisterProtocolInstance(protocol)
+	if err != nil {
+		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err.Error)
+		return err
+	}
+
+	ekg := protocol.(*protocols.RelinearizationKeyProtocol)
+
+	//<-time.After(1 * time.Second) // TODO: maybe not needed with locks
+
+	log.Lvl2(s.ServerIdentity(), "Starting EKG protocol")
+	err = ekg.Start()
+	if err != nil {
+		log.Error(s.ServerIdentity(), "Could not start EKG protocol:", err.Error)
+		return err
+	}
+	// Call dispatch (the main logic)
+	err = ekg.Dispatch()
+	if err != nil {
+		log.Error(s.ServerIdentity(), "Could not dispatch EKG protocol:", err.Error)
+		return err
+	}
+
+	// Wait for termination of protocol
+	log.Lvl2(ekg.ServerIdentity(), "Waiting for EKG protocol to terminate...")
+	ekg.Wait()
+
+	// Retrieve EvaluationKey
+	s.EvaluationKey = ekg.EvaluationKey
+	s.evalKeyGenerated = true
+	log.Lvl1(s.ServerIdentity(), "Retrieved EvaluationKey!")
+
+	return nil
+}
+
+func (s *Service) genRotKey() error {
+	log.Lvl1(s.ServerIdentity(), "Root. Generating RotationKey.")
+
+	// TODO: is all this really needed? Is there an equivalent of CreateProtocol?
+	// Instantiate protocol
+	log.Lvl3(s.ServerIdentity(), "Instantiating RKG protocol")
+	tree := s.Roster.GenerateBinaryTree()
+	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.RotationProtocolName)
+	protocol, err := s.NewProtocol(tni, nil)
+	if err != nil {
+		log.Error(s.ServerIdentity(), "Could not instantiate RKG protocol", err)
+		return err
+	}
+	// Register protocol instance
+	log.Lvl3(s.ServerIdentity(), "Registering RKG protocol")
+	err = s.RegisterProtocolInstance(protocol)
+	if err != nil {
+		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err.Error)
+		return err
+	}
+
+	rkg := protocol.(*protocols.RotationKeyProtocol)
+
+	//<-time.After(1 * time.Second) // TODO: maybe not needed with locks
+
+	log.Lvl2(s.ServerIdentity(), "Starting RKG protocol")
+	err = rkg.Start()
+	if err != nil {
+		log.Error(s.ServerIdentity(), "Could not start RKG protocol:", err.Error)
+		return err
+	}
+	// Call dispatch (the main logic)
+	err = rkg.Dispatch()
+	if err != nil {
+		log.Error(s.ServerIdentity(), "Could not dispatch RKG protocol:", err.Error)
+		return err
+	}
+
+	// Wait for termination of protocol
+	log.Lvl2(rkg.ServerIdentity(), "Waiting for RKG protocol to terminate...")
+	rkg.Wait()
+
+	// Retrieve RotationKey
+	s.rotationKey = &rkg.RotKey
+	s.rotKeyGenerated = true
+	log.Lvl1(s.ServerIdentity(), "Retrieved RotationKey!")
+
+	return nil
 }

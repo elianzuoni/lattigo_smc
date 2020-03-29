@@ -96,7 +96,7 @@ func NewRotationKeySimul(tni *onet.TreeNodeInstance, sim *RotationKeySim) (onet.
 	}
 
 	rotation := protocol.(*protocols.RotationKeyProtocol)
-	//err = rotation.Init(sim.Params, *sim.lt.SecretKeyShares0[tni.ServerIdentity().ID], sim.Rotation, uint64(sim.K), sim.CRP.A) // TODO: how to fix?
+	//err = rotation.Init(sim.Params, *sim.lt.SecretKeyShares0[tni.ServerIdentity().ID], sim.Rotation, uint64(sim.k), sim.CRP.A) // TODO: how to fix?
 	return rotation, err
 }
 

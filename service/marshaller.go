@@ -8,14 +8,14 @@ import (
 	uuid "gopkg.in/satori/go.uuid.v1"
 )
 
-func (rp *ReplyPlaintext) MarshalBinary() ([]byte, error) {
+func (rp *RetrieveReply) MarshalBinary() ([]byte, error) {
 	sq := StoreRequest{
 		Ciphertext: rp.Ciphertext,
 		UUID:       rp.UUID,
 	}
 	return sq.MarshalBinary()
 }
-func (rp *ReplyPlaintext) UnmarshalBinary(data []byte) error {
+func (rp *RetrieveReply) UnmarshalBinary(data []byte) error {
 	var sq StoreRequest
 	err := sq.UnmarshalBinary(data)
 	if err != nil {
@@ -77,7 +77,7 @@ func (sq *StoreRequest) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-func (qp *QueryPlaintext) MarshalBinary() ([]byte, error) {
+func (qp *RetrieveQuery) MarshalBinary() ([]byte, error) {
 	pkD := make([]byte, 0)
 	if qp.PublicKey != nil {
 		pkD, _ = qp.PublicKey.MarshalBinary()
@@ -115,7 +115,7 @@ func (qp *QueryPlaintext) MarshalBinary() ([]byte, error) {
 	return data, nil
 }
 
-func (qp *QueryPlaintext) UnmarshalBinary(data []byte) error {
+func (qp *RetrieveQuery) UnmarshalBinary(data []byte) error {
 	pointer := 0
 	lenPk := int(binary.BigEndian.Uint64(data[pointer : pointer+8]))
 	pointer += 8
@@ -150,7 +150,7 @@ func (qp *QueryPlaintext) UnmarshalBinary(data []byte) error {
 
 }
 
-func (rp *PlaintextReply) MarshalBinary() ([]byte, error) {
+func (rp *RetrieveResponse) MarshalBinary() ([]byte, error) {
 	data := make([]byte, len(rp.Data)+uuid.Size)
 	copy(data[0:len(rp.Data)], rp.Data)
 	id, err := rp.UUID.MarshalBinary()
@@ -163,7 +163,7 @@ func (rp *PlaintextReply) MarshalBinary() ([]byte, error) {
 	return data, nil
 }
 
-func (rp *PlaintextReply) UnmarshalBinary(data []byte) error {
+func (rp *RetrieveResponse) UnmarshalBinary(data []byte) error {
 	if len(data) < uuid.Size {
 		return errors.New("insufficient data size")
 	}
@@ -253,7 +253,7 @@ func (mr *MultiplyReply) UnmarshalBinary(data []byte) error {
 }
 
 func (rq *RefreshQuery) MarshalBinary() ([]byte, error) {
-	cast := new(ReplyPlaintext)
+	cast := new(RetrieveReply)
 
 	cast.UUID = rq.UUID
 	cast.Ciphertext = rq.Ciphertext
@@ -270,7 +270,7 @@ func (rq *RefreshQuery) MarshalBinary() ([]byte, error) {
 }
 
 func (rq *RefreshQuery) UnmarshalBinary(data []byte) error {
-	var cast ReplyPlaintext
+	var cast RetrieveReply
 	err := cast.UnmarshalBinary(data[:len(data)-1])
 	if err != nil {
 		return err

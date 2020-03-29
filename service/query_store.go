@@ -76,5 +76,5 @@ func (s *Service) processStoreRequest(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Root. Received forwarded request to store new ciphertext with ID:", query.ID)
 
 	// Store ciphertext under fresh ID1
-	s.DataBase[query.ID] = query.Ciphertext
+	s.database[query.ID] = query.Ciphertext
 }

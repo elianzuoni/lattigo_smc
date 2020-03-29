@@ -245,7 +245,7 @@ type StructSwitchParameters struct {
 	SwitchingParameters
 }
 
-//SwitchingParameters contains the public parameters for CKS
+//switchingParameters contains the public parameters for CKS
 type SwitchingParameters struct {
 	//Params parameters bfv
 	Params *bfv.Parameters

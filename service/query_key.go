@@ -28,7 +28,7 @@ func (s *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 
 	log.Lvl2(s.ServerIdentity(), "Forwarded request to the root")
 
-	return &SetupReply{Done: 1}, nil // TODO: what?
+	return nil, nil // TODO: fix
 }
 
 // KeyQuery is received at root from server.
@@ -48,7 +48,7 @@ func (s *Service) processKeyRequest(msg *network.Envelope) {
 		reply.EvaluationKey = s.EvaluationKey
 	}
 	if query.RotationKey && s.rotKeyGenerated {
-		reply.RotationKeys = s.RotationKey
+		reply.RotationKeys = s.rotationKey
 	}
 	// TODO what about rotationIdx?
 
@@ -75,6 +75,6 @@ func (s *Service) processKeyReply(msg *network.Envelope) {
 		s.EvaluationKey = reply.EvaluationKey
 	}
 	if reply.RotationKeys != nil {
-		s.RotationKey = reply.RotationKeys
+		s.rotationKey = reply.RotationKeys
 	}
 }

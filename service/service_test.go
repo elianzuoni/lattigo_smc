@@ -360,7 +360,7 @@ func TestRotation(t *testing.T) {
 	log.Lvl2("Query Id 1: ", queryID1)
 	<-time.After(1 * time.Second)
 
-	log.Lvl1("Rotation of cipher to the right of ", K, "K step")
+	log.Lvl1("Rotation of cipher to the right of ", K, "k step")
 
 	resultRot, err := client1.SendRotationQuery(*queryID1, uint64(K), rotIdx)
 	log.Lvl1("Rotation is stored in : ", resultRot)

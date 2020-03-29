@@ -25,10 +25,10 @@ func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, er
 
 	// Create MultiplyRequest with its ID
 	reqID := MultiplyRequestID(uuid.NewV1())
-	req := MultiplyRequest{reqID, query.ID1, query.ID2}
+	req := MultiplyRequest{reqID, query}
 
 	// Create channel before sending request to root.
-	s.MultiplyReplies[reqID] = make(chan CipherID)
+	s.multiplyReplies[reqID] = make(chan CipherID)
 
 	// Send request to root
 	log.Lvl2(s.ServerIdentity(), "Sending MulitplyRequest to root:", reqID)
@@ -42,7 +42,7 @@ func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, er
 
 	// Receive new CipherID from channel
 	log.Lvl3(s.ServerIdentity(), "Sent MultiplyRequest to root. Waiting on channel to receive new CipherID...")
-	newID := <-s.MultiplyReplies[reqID] // TODO: timeout if root cannot send reply
+	newID := <-s.multiplyReplies[reqID] // TODO: timeout if root cannot send reply
 	if newID == nilCipherID {
 		err := errors.New("Received nilCipherID: root couldn't perform multiplication")
 		log.Error(s.ServerIdentity(), err)
@@ -64,10 +64,9 @@ func (s *Service) processMultiplyRequest(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Root. Received MultiplyRequest ", req.MultiplyRequestID,
 		"for product:", req.ID1, "*", req.ID2)
 
-	// Evaluate the multiplication
-	log.Lvl3(s.ServerIdentity(), "Evaluating multiplication of ciphertexts")
-	eval := bfv.NewEvaluator(s.Params)
-	ct1, ok := s.DataBase[req.ID1]
+	// Check feasibilty
+	log.Lvl3(s.ServerIdentity(), "Checking existence of ciphertexts")
+	ct1, ok := s.database[req.ID1]
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.ID1, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity,
@@ -77,7 +76,7 @@ func (s *Service) processMultiplyRequest(msg *network.Envelope) {
 		}
 		return
 	}
-	ct2, ok := s.DataBase[req.ID2]
+	ct2, ok := s.database[req.ID2]
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.ID2, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity,
@@ -87,11 +86,15 @@ func (s *Service) processMultiplyRequest(msg *network.Envelope) {
 		}
 		return
 	}
+
+	// Evaluate multiplication
+	log.Lvl3(s.ServerIdentity(), "Evaluating multiplication of the ciphertexts")
+	eval := bfv.NewEvaluator(s.Params)
 	ct := eval.MulNew(ct1, ct2)
 
 	// Register in local database
 	id := CipherID(uuid.NewV1())
-	s.DataBase[id] = ct
+	s.database[id] = ct
 
 	// Send reply to server
 	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
@@ -115,12 +118,12 @@ func (s *Service) processMultiplyReply(msg *network.Envelope) {
 	// Check validity
 	if !rep.valid {
 		log.Error(s.ServerIdentity(), "The received MultiplyReply is invalid")
-		s.MultiplyReplies[rep.MultiplyRequestID] <- nilCipherID
+		s.multiplyReplies[rep.MultiplyRequestID] <- nilCipherID
 		return
 	}
 
 	log.Lvl3(s.ServerIdentity(), "The received MultiplyReply is valid. Sending through channel")
-	s.MultiplyReplies[rep.MultiplyRequestID] <- rep.NewID
+	s.multiplyReplies[rep.MultiplyRequestID] <- rep.NewID
 	log.Lvl4(s.ServerIdentity(), "Sent new CipherID through channel")
 
 	return

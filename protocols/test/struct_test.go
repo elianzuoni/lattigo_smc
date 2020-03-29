@@ -10,7 +10,7 @@ package test
 //
 //	//TODO check degree
 //	cipher := bfv.NewCiphertextRandom(params, 4)
-//	sp := protocols.SwitchingParameters{
+//	sp := protocols.switchingParameters{
 //		Params:       *bfv.DefaultParams[0],
 //		SkInputHash:  "123456",
 //		SkOutputHash: "hjkdsaufdsijfsoidajfoidscnmijdsahfiudsojfdsaihfiudsafdsij",
@@ -19,7 +19,7 @@ package test
 //
 //	data, err := sp.MarshalBinary()
 //
-//	sp1 := new(protocols.SwitchingParameters)
+//	sp1 := new(protocols.switchingParameters)
 //	err = sp1.UnmarshalBinary(data)
 //
 //	if err != nil {

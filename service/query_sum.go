@@ -2,7 +2,7 @@
 // HandleSumQuery forwards the query to the root, and waits for a response on a channel.
 // The root executes processSumRequest, which, depending on whether or not it can retrieve the requested
 // ciphertexts, either stores the sum-ciphertext under a new CipherID and returns it to the server, or
-// a value indicating the error.
+// returns a value indicating the error.
 // The root's reply is handled, at the server, by processSumReply: depending on whether or not the reply indicates
 // an error, it sends through the channel either the returned CipherID or a default nil value.
 // When HandleSumQuery wakes up, depending on what it received from the channel, it either returns (to the client)
@@ -25,10 +25,10 @@ func (s *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 
 	// Create SumRequest with its ID
 	reqID := SumRequestID(uuid.NewV1())
-	req := SumRequest{reqID, query.ID1, query.ID2}
+	req := SumRequest{reqID, query}
 
 	// Create channel before sending request to root.
-	s.SumReplies[reqID] = make(chan CipherID)
+	s.sumReplies[reqID] = make(chan CipherID)
 
 	// Send request to root
 	log.Lvl2(s.ServerIdentity(), "Sending SumRequest to root:", reqID)
@@ -42,7 +42,7 @@ func (s *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 
 	// Receive new CipherID from channel
 	log.Lvl3(s.ServerIdentity(), "Sent SumRequest to root. Waiting on channel to receive new CipherID...")
-	newID := <-s.SumReplies[reqID] // TODO: timeout if root cannot send reply
+	newID := <-s.sumReplies[reqID] // TODO: timeout if root cannot send reply
 	if newID == nilCipherID {
 		err := errors.New("Received nilCipherID: root couldn't perform sum")
 		log.Error(s.ServerIdentity(), err)
@@ -63,10 +63,9 @@ func (s *Service) processSumRequest(msg *network.Envelope) {
 
 	log.Lvl1(s.ServerIdentity(), "Root. Received SumRequest ", req.SumRequestID, "for sum:", req.ID1, "+", req.ID2)
 
-	// Evaluate the sum
-	log.Lvl3(s.ServerIdentity(), "Evaluating sum of ciphertexts")
-	eval := bfv.NewEvaluator(s.Params)
-	ct1, ok := s.DataBase[req.ID1]
+	// Check feasibility
+	log.Lvl3(s.ServerIdentity(), "Checking existence of ciphertexts")
+	ct1, ok := s.database[req.ID1]
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.ID1, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, nilCipherID, false})
@@ -75,7 +74,7 @@ func (s *Service) processSumRequest(msg *network.Envelope) {
 		}
 		return
 	}
-	ct2, ok := s.DataBase[req.ID2]
+	ct2, ok := s.database[req.ID2]
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.ID2, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, nilCipherID, false})
@@ -84,11 +83,15 @@ func (s *Service) processSumRequest(msg *network.Envelope) {
 		}
 		return
 	}
+
+	// Evaluate the sum
+	log.Lvl3(s.ServerIdentity(), "Evaluating the sum of the ciphertexts")
+	eval := bfv.NewEvaluator(s.Params)
 	ct := eval.AddNew(ct1, ct2)
 
 	// Register in local database
 	id := CipherID(uuid.NewV1())
-	s.DataBase[id] = ct
+	s.database[id] = ct
 
 	// Send reply to server
 	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
@@ -112,12 +115,12 @@ func (s *Service) processSumReply(msg *network.Envelope) {
 	// Check validity
 	if !rep.valid {
 		log.Error(s.ServerIdentity(), "The received SumReply is invalid")
-		s.SumReplies[rep.SumRequestID] <- nilCipherID
+		s.sumReplies[rep.SumRequestID] <- nilCipherID
 		return
 	}
 
 	log.Lvl3(s.ServerIdentity(), "The received SumReply is valid. Sending through channel")
-	s.SumReplies[rep.SumRequestID] <- rep.NewID
+	s.sumReplies[rep.SumRequestID] <- rep.NewID
 	log.Lvl4(s.ServerIdentity(), "Sent new CipherID through channel")
 
 	return
