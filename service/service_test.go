@@ -80,10 +80,10 @@ func TestWrite(t *testing.T) {
 
 	client1 := NewLattigoSMCClient(el.List[1], "1")
 
-	q, err := client1.SendKeyRequest(true, false, false, 0)
+	q, err := client1.SendKeyQuery(true, false, false, 0)
 	log.Lvl1("Response of query : ", q)
 
-	queryID, err := client1.SendWriteQuery(el, []byte("lattigood"))
+	queryID, err := client1.SendStoreQuery(el, []byte("lattigood"))
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
@@ -110,11 +110,11 @@ func TestSwitching(t *testing.T) {
 	}
 	<-time.After(2 * time.Second)
 	client1 := NewLattigoSMCClient(el.List[1], "1")
-	q, _ := client1.SendKeyRequest(true, false, false, 0)
+	q, _ := client1.SendKeyQuery(true, false, false, 0)
 	<-time.After(200 * time.Millisecond)
 	log.Lvl1("Reply of key request : ", q)
 	content := []byte("lattigood")
-	queryID, err := client1.SendWriteQuery(el, content)
+	queryID, err := client1.SendStoreQuery(el, content)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
@@ -125,7 +125,7 @@ func TestSwitching(t *testing.T) {
 
 	//Client 2 now requests to switch the key for him...
 	client2 := NewLattigoSMCClient(el.List[2], "2")
-	data, err := client2.GetPlaintext(queryID)
+	data, err := client2.SendRetrieveQuery(queryID)
 	log.Lvl1("Client retrieved data : ", data)
 
 	assert.Equal(t, "Result", string(data[0:9]), string(content))
@@ -150,14 +150,14 @@ func TestSumQuery(t *testing.T) {
 
 	client1 := NewLattigoSMCClient(el.List[1], "1")
 
-	q, err := client1.SendKeyRequest(true, false, false, 0)
+	q, err := client1.SendKeyQuery(true, false, false, 0)
 	log.Lvl1("Response of query : ", q)
 	d1 := make([]byte, COEFFSIZE)
 	n, err := rand.Read(d1)
 	if err != nil || n != COEFFSIZE {
 		t.Fatal(err, "could not initialize d1 ")
 	}
-	queryID1, err := client1.SendWriteQuery(el, d1)
+	queryID1, err := client1.SendStoreQuery(el, d1)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
@@ -172,7 +172,7 @@ func TestSumQuery(t *testing.T) {
 		t.Fatal(err, "could not initialize d1 ")
 	}
 
-	queryID2, err := client1.SendWriteQuery(el, d2)
+	queryID2, err := client1.SendStoreQuery(el, d2)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
@@ -189,7 +189,7 @@ func TestSumQuery(t *testing.T) {
 	//Try to do a key switch on it!!!
 	<-time.After(1 * time.Second)
 	client2 := NewLattigoSMCClient(el.List[2], "2")
-	dataSum, err := client2.GetPlaintext(&resultSum)
+	dataSum, err := client2.SendRetrieveQuery(&resultSum)
 	log.Lvl1("Client retrieved data for sum : ", dataSum)
 
 	resSum := make([]byte, COEFFSIZE)
@@ -222,7 +222,7 @@ func TestRelinearization(t *testing.T) {
 
 	client1 := NewLattigoSMCClient(el.List[1], "1")
 
-	q, err := client1.SendKeyRequest(true, false, false, 0)
+	q, err := client1.SendKeyQuery(true, false, false, 0)
 	<-time.After(500 * time.Millisecond)
 	log.Lvl1("Response of query : ", q)
 	d1 := make([]byte, COEFFSIZE)
@@ -230,7 +230,7 @@ func TestRelinearization(t *testing.T) {
 	if err != nil || n != COEFFSIZE {
 		t.Fatal(err, "could not initialize d1 ")
 	}
-	queryID1, err := client1.SendWriteQuery(el, d1)
+	queryID1, err := client1.SendStoreQuery(el, d1)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
@@ -245,7 +245,7 @@ func TestRelinearization(t *testing.T) {
 		t.Fatal(err, "could not initialize d2 ")
 	}
 
-	queryID2, err := client1.SendWriteQuery(el, d2)
+	queryID2, err := client1.SendStoreQuery(el, d2)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
@@ -265,7 +265,7 @@ func TestRelinearization(t *testing.T) {
 	//Try to do a key switch on it!!!
 	<-time.After(2 * time.Second)
 	client2 := NewLattigoSMCClient(el.List[2], "2")
-	data, err := client2.GetPlaintext(&result)
+	data, err := client2.SendRetrieveQuery(&result)
 	log.Lvl1("Client retrieved data for multiply : ", data)
 
 	res := make([]byte, COEFFSIZE)
@@ -293,11 +293,11 @@ func TestRefresh(t *testing.T) {
 	}
 	<-time.After(2 * time.Second)
 	client1 := NewLattigoSMCClient(el.List[1], "1")
-	q, _ := client1.SendKeyRequest(true, false, false, 0)
+	q, _ := client1.SendKeyQuery(true, false, false, 0)
 	<-time.After(200 * time.Millisecond)
 	log.Lvl1("Reply of key request : ", q)
 	content := []byte("lattigood")
-	queryID, err := client1.SendWriteQuery(el, content)
+	queryID, err := client1.SendStoreQuery(el, content)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
@@ -316,7 +316,7 @@ func TestRefresh(t *testing.T) {
 	<-time.After(3 * time.Second)
 	//Client 2 now requests to switch the key for him...
 	client2 := NewLattigoSMCClient(el.List[2], "2")
-	data, err := client2.GetPlaintext(&result)
+	data, err := client2.SendRetrieveQuery(&result)
 	log.Lvl1("Client retrieved data : ", data)
 
 	assert.Equal(t, "Result", string(data[0:9]), string(content))
@@ -343,7 +343,7 @@ func TestRotation(t *testing.T) {
 
 	client1 := NewLattigoSMCClient(el.List[1], "1")
 
-	q, err := client1.SendKeyRequest(true, false, false, 0)
+	q, err := client1.SendKeyQuery(true, false, false, 0)
 	log.Lvl1("Response of query : ", q)
 	<-time.After(time.Second)
 	data := make([]byte, COEFFSIZE)
@@ -351,7 +351,7 @@ func TestRotation(t *testing.T) {
 	if err != nil || n != COEFFSIZE {
 		t.Fatal(err, "could not initialize data ")
 	}
-	queryID1, err := client1.SendWriteQuery(el, data)
+	queryID1, err := client1.SendStoreQuery(el, data)
 	if err != nil {
 		t.Fatal("Could not start client :", err)
 
@@ -368,7 +368,7 @@ func TestRotation(t *testing.T) {
 	//Try to do a key switch on it!!!
 	<-time.After(1 * time.Second)
 	client2 := NewLattigoSMCClient(el.List[2], "2")
-	got, err := client2.GetPlaintext(&resultRot)
+	got, err := client2.SendRetrieveQuery(&resultRot)
 
 	//We need to split it in two
 	got1, got2 := got[:COEFFSIZE/2], got[COEFFSIZE/2:]

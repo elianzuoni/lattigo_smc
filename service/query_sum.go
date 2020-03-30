@@ -59,7 +59,7 @@ func (s *Service) processSumRequest(msg *network.Envelope) {
 	ct1, ok := s.database[req.CipherID1]
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID1, "does not exist.")
-		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, nilCipherID, false})
+		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
@@ -68,7 +68,7 @@ func (s *Service) processSumRequest(msg *network.Envelope) {
 	ct2, ok := s.database[req.CipherID2]
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID2, "does not exist.")
-		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, nilCipherID, false})
+		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}

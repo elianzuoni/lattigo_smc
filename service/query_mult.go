@@ -60,7 +60,7 @@ func (s *Service) processMultiplyRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID1, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity,
-			&MultiplyReply{req.MultiplyRequestID, nilCipherID, false})
+			&MultiplyReply{req.MultiplyRequestID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
@@ -70,7 +70,7 @@ func (s *Service) processMultiplyRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID2, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity,
-			&MultiplyReply{req.MultiplyRequestID, nilCipherID, false})
+			&MultiplyReply{req.MultiplyRequestID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}

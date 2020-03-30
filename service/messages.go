@@ -126,7 +126,7 @@ func init() {
 
 type CipherID uuid.UUID
 
-var nilCipherID = CipherID(uuid.Nil)
+var NilCipherID = CipherID(uuid.Nil)
 
 func newCipherID() CipherID {
 	return CipherID(uuid.NewV1())

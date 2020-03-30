@@ -72,7 +72,7 @@ func runLattigo(c *cli.Context) {
 		genEvalKey, _ := strconv.ParseBool(values[1])
 		genRotKey, _ := strconv.ParseBool(values[2])
 		rotIdx, _ := strconv.ParseInt(values[3], 10, 32)
-		d, err := client.SendKeyRequest(genPublicKey, genEvalKey, genRotKey, int(rotIdx))
+		d, err := client.SendKeyQuery(genPublicKey, genEvalKey, genRotKey, int(rotIdx))
 		if err != nil {
 			log.Error("Could not retrieve keys : ", err)
 		}
@@ -89,11 +89,11 @@ func runLattigo(c *cli.Context) {
 		var err error
 		var id *uuid.UUID
 		if typeData == "string" {
-			id, err = client.SendWriteQuery(roster, []byte(write))
+			id, err = client.SendStoreQuery(roster, []byte(write))
 		} else if typeData == "byte" {
 			data := strings.Split(write, ",")
 			dBytes := utils.StringToBytes(data)
-			id, err = client.SendWriteQuery(roster, dBytes)
+			id, err = client.SendStoreQuery(roster, dBytes)
 		} else {
 			log.Error("unknown type of data : ", typeData)
 			return
@@ -113,7 +113,7 @@ func runLattigo(c *cli.Context) {
 			log.Error("Incorrect ID1 :", err)
 			return
 		}
-		data, err := client.GetPlaintext(&id)
+		data, err := client.SendRetrieveQuery(&id)
 		if typeData == "string" {
 			log.Lvl1("Retrieved data at id ", id, " : ", string(data))
 

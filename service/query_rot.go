@@ -59,7 +59,7 @@ func (s *Service) processRotationRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity,
-			&RotationReply{req.RotationRequestID, nilCipherID, nilCipherID, false})
+			&RotationReply{req.RotationRequestID, NilCipherID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
