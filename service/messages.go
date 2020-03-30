@@ -14,86 +14,110 @@ import (
 	"lattigo-smc/protocols"
 )
 
-// MsgTypes contains the different message types that can be received.
+// MsgTypes contains the different message types.
 type MsgTypes struct {
 	msgSetupQuery     network.MessageTypeID // Unused
 	msgSetupRequest   network.MessageTypeID
 	msgSetupBroadcast network.MessageTypeID
+	msgSetupReply     network.MessageTypeID
+	msgSetupResponse  network.MessageTypeID // Unused
 
-	msgKeyQuery   network.MessageTypeID // Unused
-	msgKeyRequest network.MessageTypeID
-	msgKeyReply   network.MessageTypeID
+	msgKeyQuery    network.MessageTypeID // Unused
+	msgKeyRequest  network.MessageTypeID
+	msgKeyReply    network.MessageTypeID
+	msgKeyResponse network.MessageTypeID // Unused
 
-	msgStoreQuery   network.MessageTypeID // Unused
-	msgStoreRequest network.MessageTypeID
+	msgStoreQuery    network.MessageTypeID // Unused
+	msgStoreRequest  network.MessageTypeID
+	msgStoreReply    network.MessageTypeID
+	msgStoreResponse network.MessageTypeID // Unused
 
-	msgRetrieveQuery     network.MessageTypeID
+	msgRetrieveQuery     network.MessageTypeID // Unused
 	msgRetrieveRequest   network.MessageTypeID
 	msgRetrieveBroadcast network.MessageTypeID
 	msgRetrieveReply     network.MessageTypeID
+	msgRetrieveResponse  network.MessageTypeID // Unused
 
-	msgSumQuery   network.MessageTypeID // Unused
-	msgSumRequest network.MessageTypeID
-	msgSumReply   network.MessageTypeID
+	msgSumQuery    network.MessageTypeID // Unused
+	msgSumRequest  network.MessageTypeID
+	msgSumReply    network.MessageTypeID
+	msgSumResponse network.MessageTypeID // Unused
 
-	msgMultiplyQuery   network.MessageTypeID // Unused
-	msgMultiplyRequest network.MessageTypeID
-	msgMultiplyReply   network.MessageTypeID
+	msgMultiplyQuery    network.MessageTypeID // Unused
+	msgMultiplyRequest  network.MessageTypeID
+	msgMultiplyReply    network.MessageTypeID
+	msgMultiplyResponse network.MessageTypeID // Unused
 
-	msgRelinQuery   network.MessageTypeID
-	msgRelinRequest network.MessageTypeID
+	msgRelinQuery    network.MessageTypeID // Unused
+	msgRelinRequest  network.MessageTypeID
+	msgRelinReply    network.MessageTypeID
+	msgRelinResponse network.MessageTypeID // Unused
 
-	msgRefreshQuery     network.MessageTypeID
+	msgRefreshQuery     network.MessageTypeID // Unused
 	msgRefreshRequest   network.MessageTypeID
 	msgRefreshBroadcast network.MessageTypeID
 	msgRefreshReply     network.MessageTypeID
+	msgRefreshResponse  network.MessageTypeID // Unused
 
-	msgRotationQuery   network.MessageTypeID
-	msgRotationRequest network.MessageTypeID
-	msgRotationReply   network.MessageTypeID
+	msgRotationQuery    network.MessageTypeID // Unused
+	msgRotationRequest  network.MessageTypeID
+	msgRotationReply    network.MessageTypeID
+	msgRotationResponse network.MessageTypeID // Unused
 }
 
 var msgTypes = MsgTypes{}
 
 // Registers all the message types to the onet library
-func init() { // TODO: complete
+func init() {
 	log.Lvl1("Registering messages")
 
 	msgTypes.msgSetupQuery = network.RegisterMessage(&SetupQuery{}) // Unused
 	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
 	msgTypes.msgSetupBroadcast = network.RegisterMessage(&SetupBroadcast{})
+	msgTypes.msgSetupReply = network.RegisterMessage(&SetupReply{})
+	msgTypes.msgSetupResponse = network.RegisterMessage(&SetupResponse{}) // Unused
 
 	msgTypes.msgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
 	msgTypes.msgKeyRequest = network.RegisterMessage(&KeyRequest{})
 	msgTypes.msgKeyReply = network.RegisterMessage(&KeyReply{})
+	msgTypes.msgKeyResponse = network.RegisterMessage(&KeyResponse{}) // Unused
 
 	msgTypes.msgStoreQuery = network.RegisterMessage(&StoreQuery{}) // Unused
 	msgTypes.msgStoreRequest = network.RegisterMessage(&StoreRequest{})
+	msgTypes.msgStoreReply = network.RegisterMessage(&StoreReply{})
+	msgTypes.msgStoreResponse = network.RegisterMessage(&StoreResponse{}) // Unused
 
 	msgTypes.msgRetrieveQuery = network.RegisterMessage(&RetrieveQuery{}) // Unused
 	msgTypes.msgRetrieveRequest = network.RegisterMessage(&RetrieveRequest{})
 	msgTypes.msgRetrieveBroadcast = network.RegisterMessage(&RetrieveBroadcast{})
 	msgTypes.msgRetrieveReply = network.RegisterMessage(&RetrieveReply{})
+	msgTypes.msgRetrieveResponse = network.RegisterMessage(&RetrieveResponse{}) // Unused
 
 	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{}) // Unused
 	msgTypes.msgSumRequest = network.RegisterMessage(&SumRequest{})
 	msgTypes.msgSumReply = network.RegisterMessage(&SumReply{})
+	msgTypes.msgSumResponse = network.RegisterMessage(&SumResponse{}) // Unused
 
 	msgTypes.msgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{}) // Unused
 	msgTypes.msgMultiplyRequest = network.RegisterMessage(&MultiplyRequest{})
 	msgTypes.msgMultiplyReply = network.RegisterMessage(&MultiplyReply{})
+	msgTypes.msgMultiplyResponse = network.RegisterMessage(&MultiplyResponse{}) // Unused
 
 	msgTypes.msgRelinQuery = network.RegisterMessage(&RelinQuery{}) // Unused
 	msgTypes.msgRelinRequest = network.RegisterMessage(&RelinRequest{})
+	msgTypes.msgRelinReply = network.RegisterMessage(&RelinReply{})
+	msgTypes.msgRelinResponse = network.RegisterMessage(&RelinResponse{}) // Unused
 
 	msgTypes.msgRefreshQuery = network.RegisterMessage(&RefreshQuery{}) // Unused
 	msgTypes.msgRefreshRequest = network.RegisterMessage(&RefreshRequest{})
 	msgTypes.msgRefreshBroadcast = network.RegisterMessage(&RefreshBroadcast{})
 	msgTypes.msgRefreshReply = network.RegisterMessage(&RefreshReply{})
+	msgTypes.msgRefreshResponse = network.RegisterMessage(&RefreshResponse{}) // Unused
 
 	msgTypes.msgRotationQuery = network.RegisterMessage(&RotationQuery{}) // Unused
 	msgTypes.msgRotationRequest = network.RegisterMessage(&RotationRequest{})
 	msgTypes.msgRotationReply = network.RegisterMessage(&RotationReply{})
+	msgTypes.msgRotationResponse = network.RegisterMessage(&RotationResponse{}) // Unused
 
 	_ = network.RegisterMessage(&protocols.Start{}) // TODO: necessary?
 }
@@ -104,12 +128,11 @@ type CipherID uuid.UUID
 
 var nilCipherID = CipherID(uuid.Nil)
 
-// TODO: remove
-type ServiceState struct {
-	Id      CipherID
-	Pending bool
+func newCipherID() CipherID {
+	return CipherID(uuid.NewV1())
 }
 
+// TODO: why a query? Why not load from cfg file?
 type SetupQuery struct {
 	Roster onet.Roster
 
@@ -122,12 +145,33 @@ type SetupQuery struct {
 	RotIdx                int
 }
 
-type SetupRequest SetupQuery
+type SetupRequestID uuid.UUID
 
-type SetupBroadcast SetupQuery
+func newSetupRequestID() SetupRequestID {
+	return SetupRequestID(uuid.NewV1())
+}
 
-// KeyQuery is sent by client to server, and forwarded by server to root.
-// Contains flag signalling which keys to retrieve.
+type SetupRequest struct {
+	SetupRequestID
+	*SetupQuery
+}
+
+type SetupBroadcast SetupRequest
+
+type SetupReply struct {
+	SetupRequestID
+
+	pubKeyGenerated  bool
+	evalKeyGenerated bool
+	rotKeyGenerated  bool
+}
+
+type SetupResponse struct {
+	PubKeyGenerated  bool
+	EvalKeyGenerated bool
+	RotKeyGenerated  bool
+}
+
 type KeyQuery struct {
 	PublicKey     bool
 	EvaluationKey bool
@@ -135,58 +179,109 @@ type KeyQuery struct {
 	RotIdx        int
 }
 
-// KeyRequest is sent by the server to the root.
-type KeyRequest KeyQuery
+type KeyRequestID uuid.UUID
+
+func newKeyRequestID() KeyRequestID {
+	return KeyRequestID(uuid.NewV1())
+}
+
+type KeyRequest struct {
+	KeyRequestID
+	*KeyQuery
+}
 
 // KeyReply is sent by root to server, in response to KeyQuery.
 // Contains the requested keys, if they exist.
 type KeyReply struct {
-	*bfv.PublicKey
-	*bfv.EvaluationKey
-	*bfv.RotationKeys
+	KeyRequestID
+
+	pk     *bfv.PublicKey
+	evk    *bfv.EvaluationKey
+	rtk    *bfv.RotationKeys
 	RotIdx int
 }
 
-// StoreQuery contains the data to encrypt and store.
+type KeyResponse struct {
+	PubKeyObtained  bool
+	EvalKeyObtained bool
+	RotKeyObtained  bool
+}
+
+// StoreQuery contains the data to store.
 type StoreQuery struct {
-	Roster onet.Roster // TODO: why?
-	Data   []byte
+	Ciphertext *bfv.Ciphertext
+}
+
+type StoreRequestID uuid.UUID
+
+func newStoreRequestID() StoreRequestID {
+	return StoreRequestID(uuid.NewV1())
 }
 
 // StoreRequest is sent by server to root.
-// Contains new ciphertext to store, and a CipherID (generated by the server)
+// Contains new ciphertext to store.
 type StoreRequest struct {
-	Ciphertext *bfv.Ciphertext
-	ID         CipherID
+	StoreRequestID
+	*StoreQuery
 }
 
-//RetrieveQuery query for a ciphertext represented by ID1 to be switched under publickey
+type StoreReply struct {
+	StoreRequestID
+
+	cipherID CipherID
+}
+
+type StoreResponse struct {
+	CipherID CipherID
+}
+
+//RetrieveQuery query for a ciphertext represented by ID to be switched under PublicKey
 type RetrieveQuery struct {
 	PublicKey *bfv.PublicKey
-	ID        CipherID
+	CipherID  CipherID
 }
 
-type RetrieveRequest RetrieveQuery
+type RetrieveRequestID uuid.UUID
 
-type RetrieveBroadcast SwitchingParameters
+func newRetrieveRequestID() RetrieveRequestID {
+	return RetrieveRequestID(uuid.NewV1())
+}
+
+type RetrieveRequest struct {
+	RetrieveRequestID
+	*RetrieveQuery
+}
+
+type RetrieveBroadcast struct {
+	RetrieveRequestID
+	params *SwitchingParameters
+}
 
 //RetrieveReply contains the ciphertext switched under the key requested.
 type RetrieveReply struct {
-	ID         CipherID
-	Ciphertext *bfv.Ciphertext
+	RetrieveRequestID
+
+	ciphertext *bfv.Ciphertext
 	valid      bool
 }
 
-type RetrieveResponse RetrieveReply
+type RetrieveResponse struct {
+	Ciphertext *bfv.Ciphertext
+	Valid      bool
+}
 
 // Client asks to sum ciphertexts ID1 and ID2.
 type SumQuery struct {
-	ID1 CipherID
-	ID2 CipherID
+	CipherID1 CipherID
+	CipherID2 CipherID
 }
 
 // Server further assigns an ID to the query
 type SumRequestID uuid.UUID
+
+func newSumRequestID() SumRequestID {
+	return SumRequestID(uuid.NewV1())
+}
 
 // Message sent by server to root.
 type SumRequest struct {
@@ -198,17 +293,27 @@ type SumRequest struct {
 // and a flag indicating whether the operation succeeded.
 type SumReply struct {
 	SumRequestID
-	NewID CipherID
-	valid bool
+
+	newCipherID CipherID
+	valid       bool
+}
+
+type SumResponse struct {
+	NewCipherID CipherID
+	Valid       bool
 }
 
 // Client asks to multiply ID1 and ID2
 type MultiplyQuery struct {
-	ID1 CipherID
-	ID2 CipherID
+	CipherID1 CipherID
+	CipherID2 CipherID
 }
 
 type MultiplyRequestID uuid.UUID
+
+func newMultiplyRequestID() MultiplyRequestID {
+	return MultiplyRequestID(uuid.NewV1())
+}
 
 // Message sent by server to root.
 type MultiplyRequest struct {
@@ -220,43 +325,82 @@ type MultiplyRequest struct {
 // and a flag indicating whether the operation succeeded.
 type MultiplyReply struct {
 	MultiplyRequestID
-	NewID CipherID
-	valid bool
+	newCipherID CipherID
+	valid       bool
+}
+
+type MultiplyResponse struct {
+	NewCipherID CipherID
+	Valid       bool
 }
 
 // Client asks to relinearise the given CipherID
 type RelinQuery struct {
-	ID CipherID
+	CipherID CipherID
 }
 
-type RelinRequest RelinQuery
+type RelinRequestID uuid.UUID
+
+func newRelinRequestID() RelinRequestID {
+	return RelinRequestID(uuid.NewV1())
+}
+
+type RelinRequest struct {
+	RelinRequestID
+	*RelinQuery
+}
+
+type RelinReply struct {
+	RelinRequestID
+	valid bool
+}
+
+type RelinResponse struct {
+	Valid bool
+}
 
 //RefreshQuery query for ID1 to be refreshed.
 type RefreshQuery struct {
-	ID CipherID
+	CipherID CipherID
 }
 
-type RefreshRequest RefreshQuery
+type RefreshRequestID uuid.UUID
+
+func newRefreshRequestID() RefreshRequestID {
+	return RefreshRequestID(uuid.NewV1())
+}
+
+type RefreshRequest struct {
+	RefreshRequestID
+	*RefreshQuery
+}
 
 type RefreshBroadcast struct {
+	RefreshRequestID
 	ct *bfv.Ciphertext
 }
 
 type RefreshReply struct {
-	ID    CipherID
-	ct    *bfv.Ciphertext
+	RefreshRequestID
+
 	valid bool
 }
 
-type RefreshResponse RefreshReply
+type RefreshResponse struct {
+	Valid bool
+}
 
 type RotationQuery struct {
-	ID     CipherID
-	K      uint64
-	RotIdx int
+	CipherID CipherID
+	K        uint64
+	RotIdx   int
 }
 
 type RotationRequestID uuid.UUID
+
+func newRotationRequestID() RotationRequestID {
+	return RotationRequestID(uuid.NewV1())
+}
 
 type RotationRequest struct {
 	RotationRequestID
@@ -265,7 +409,14 @@ type RotationRequest struct {
 
 type RotationReply struct {
 	RotationRequestID
+
 	Old   CipherID
 	New   CipherID
 	valid bool
+}
+
+type RotationResponse struct {
+	Old   CipherID
+	New   CipherID
+	Valid bool
 }

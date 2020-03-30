@@ -1,3 +1,5 @@
+// The goal of the Key Query is to have the server retrieve the specified keys.
+
 package service
 
 import (
@@ -8,17 +10,22 @@ import (
 
 // HandleKeyQuery is the handler registered for message type KeyQuery: a client asks this server to retrieve keys
 // from the root.
-// The request is forwarded to the root as-is, and the method returns a positive response without waiting for
-// the response.
-// The root, however, does send a response, handled in the processKeyReply method.
+// The request is forwarded to the root, and the method returns a response based on the reply sent by the server,
+// indicating which keys were retrieved.
 func (s *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 	log.Lvl1(s.ServerIdentity(), "Received KeyQuery query. ReqPubKey:", query.PublicKey, "; ReqRotKey:", query.RotationKey,
 		"; ReqEvalKey:", query.EvaluationKey)
 
-	// Forward query to the root as-is.
-	log.Lvl2(s.ServerIdentity(), "Forwarding request to the root")
+	// Create KeyRequest with its ID
+	reqID := newKeyRequestID()
+	req := KeyRequest{reqID, query}
+
+	// Create channel before sending request to root.
+	s.keyReplies[reqID] = make(chan *KeyReply)
+
+	// Send request to root
+	log.Lvl2(s.ServerIdentity(), "Sending KeyRequest to root:", reqID)
 	tree := s.Roster.GenerateBinaryTree()
-	req := (*KeyRequest)(query)
 	err := s.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Could not forward query to the root: " + err.Error())
@@ -28,7 +35,18 @@ func (s *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 
 	log.Lvl2(s.ServerIdentity(), "Forwarded request to the root")
 
-	return nil, nil // TODO: fix
+	// Receive reply from channel
+	log.Lvl3(s.ServerIdentity(), "Sent KeyRequest to root. Waiting on channel to receive reply...")
+	reply := <-s.keyReplies[reqID] // TODO: timeout if root cannot send reply
+
+	log.Lvl4(s.ServerIdentity(), "Received reply from channel")
+	// TODO: close channel?
+
+	return &KeyResponse{
+		PubKeyObtained:  reply.pk != nil,
+		EvalKeyObtained: reply.evk != nil,
+		RotKeyObtained:  reply.rtk != nil,
+	}, nil
 }
 
 // KeyQuery is received at root from server.
@@ -42,13 +60,13 @@ func (s *Service) processKeyRequest(msg *network.Envelope) {
 	// Build reply as desired by server.
 	reply := KeyReply{}
 	if query.PublicKey && s.pubKeyGenerated {
-		reply.PublicKey = s.MasterPublicKey
+		reply.pk = s.MasterPublicKey
 	}
 	if query.EvaluationKey && s.evalKeyGenerated {
-		reply.EvaluationKey = s.EvaluationKey
+		reply.evk = s.evalKey
 	}
 	if query.RotationKey && s.rotKeyGenerated {
-		reply.RotationKeys = s.rotationKey
+		reply.rtk = s.rotationKey
 	}
 	// TODO what about rotationIdx?
 
@@ -60,21 +78,25 @@ func (s *Service) processKeyRequest(msg *network.Envelope) {
 	}
 }
 
-// KeyReply is received at server from root.
-// This method only parses the received KeyReply: there is no waiting goroutine to wake up.
+// This method is executed at the server when receiving the root's KeyReply.
+// It stores the received keys, then it sends the reply through the channel.
 func (s *Service) processKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*KeyReply)
-	log.Lvl1(s.ServerIdentity(), "Server. Received KeyReply. PubKeyRcvd:", reply.PublicKey != nil,
-		"; RotKeyRcvd:", reply.RotationKeys != nil, "EvalKeyRcvd:", reply.EvaluationKey != nil)
+	log.Lvl1(s.ServerIdentity(), "Server. Received KeyReply. PubKeyRcvd:", reply.pk != nil,
+		"; RotKeyRcvd:", reply.rtk != nil, "EvalKeyRcvd:", reply.evk != nil)
 
 	// Save (in the Service struct) the received keys.
-	if reply.PublicKey != nil {
-		s.MasterPublicKey = reply.PublicKey
+	if reply.pk != nil {
+		s.MasterPublicKey = reply.pk
 	}
-	if reply.EvaluationKey != nil {
-		s.EvaluationKey = reply.EvaluationKey
+	if reply.evk != nil {
+		s.evalKey = reply.evk
 	}
-	if reply.RotationKeys != nil {
-		s.rotationKey = reply.RotationKeys
+	if reply.rtk != nil {
+		s.rotationKey = reply.rtk
 	}
+
+	// Send reply through channel
+	s.keyReplies[reply.KeyRequestID] <- reply
+	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 }

@@ -1,80 +1,76 @@
-// This file defines the behaviour of the service when a StoreRequest is received.
-// HandleStoreQuery is charged with handling the client query: the query contains a clear-text vector, which
-// is encrypted and sent to the root, alongside an ID.
-// processStoreRequest is the method - executed at the root - charged with dealing with the StoreRequest received
-// from the server: it stores the ciphertext in the local database under the received ID.
-// No protocol is fired while handling this query.
+// The goal of the Store Query is to store a new ciphertext into the system. The root decides its CipherID.
 
 package service
 
 import (
 	"errors"
-	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
-	uuid "gopkg.in/satori/go.uuid.v1"
-	"lattigo-smc/utils"
 )
 
-// HandleStoreQuery is the handler registered for message type StoreQuery: a client asks to store new data into the system.
-// After some checks, the data is encrypted (TODO: WTF???) and associated to an ID: both are sent in a StoreRequest
-// to the root. The root will store the ciphertext in its database under the provided ID.
+// HandleStoreQuery is the handler registered for message type StoreQuery:
+// a client asks to store new data into the system.
+// The server forwards the request to the root, which stores the ciphertext and assigns it a CipherID which is returned
+// in the reply.
 func (s *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error) {
 	log.Lvl1(s.ServerIdentity(), "Received StoreRequest query")
 
-	data := query.Data
-	tree := query.Roster.GenerateBinaryTree()
+	// Create SumRequest with its ID
+	reqID := newStoreRequestID()
+	req := StoreRequest{reqID, query}
 
-	// Check if the requested operation can be performed.
-	log.Lvl3(s.ServerIdentity(), "Checking existence of MasterPublicKey")
-	if !s.pubKeyGenerated {
-		//here we can not yet do the answer
-		return nil, errors.New("Key has not yet been generated.")
-	}
-	if s.MasterPublicKey == nil {
-		log.Error(s.ServerIdentity(), "Master public key not available")
-		// TODO: what do we return here?
-		return &ServiceState{
-			Id:      CipherID{},
-			Pending: true,
-		}, nil
-	}
+	// Create channel before sending request to root.
+	s.storeReplies[reqID] = make(chan *StoreReply)
 
-	// Encrypt the received data (TODO: why?).
-	log.Lvl3(s.ServerIdentity(), "Encrypting received data")
-	encoder := bfv.NewEncoder(s.Params)
-	coeffs, err := utils.BytesToUint64(data, true)
-	if err != nil {
-		return nil, err
-	}
-	pt := bfv.NewPlaintext(s.Params)
-	encoder.EncodeUint(coeffs, pt)
-	encryptorPk := bfv.NewEncryptorFromPk(s.Params, s.MasterPublicKey)
-	cipher := encryptorPk.EncryptNew(pt)
-	// Generate a fresh ID1 for this ciphertext.
-	id := CipherID(uuid.NewV1())
-
-	// Send the StoreRequest to the root.
+	// Send request to root
 	log.Lvl2(s.ServerIdentity(), "Sending StoreRequest to the root")
-	err = s.SendRaw(tree.Root.ServerIdentity, &StoreRequest{cipher, id})
+	tree := s.Roster.GenerateBinaryTree()
+	err := s.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Couldn't send StoreRequest to the root: " + err.Error())
 		log.Error(s.ServerIdentity(), err)
 		return nil, err
 	}
 
-	return &ServiceState{
-		Id:      id,
-		Pending: true,
-	}, nil
+	// Receive reply from channel
+	log.Lvl3(s.ServerIdentity(), "Sent StoreRequest to root. Waiting on channel to receive reply...")
+	reply := <-s.storeReplies[reqID] // TODO: timeout if root cannot send reply
+
+	log.Lvl4(s.ServerIdentity(), "Received reply from channel:", reply.cipherID)
+	// TODO: close channel?
+
+	return &StoreResponse{reply.cipherID}, nil
 }
 
 // StoreRequest is received at root from server.
-// The ciphertext is stored under the provided ID.
+// The ciphertext is stored under a fresh CipherID, which is returned in the reply.
 func (s *Service) processStoreRequest(msg *network.Envelope) {
-	query := (msg.Msg).(*StoreRequest)
-	log.Lvl1(s.ServerIdentity(), "Root. Received forwarded request to store new ciphertext with ID:", query.ID)
+	req := (msg.Msg).(*StoreRequest)
+	log.Lvl1(s.ServerIdentity(), "Root. Received forwarded request to store new ciphertext")
 
-	// Store ciphertext under fresh ID1
-	s.database[query.ID] = query.Ciphertext
+	// Register in local database
+	newCipherID := newCipherID()
+	s.database[newCipherID] = req.Ciphertext
+
+	// Send reply to server
+	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
+	err := s.SendRaw(msg.ServerIdentity, &StoreReply{req.StoreRequestID, newCipherID})
+	if err != nil {
+		log.Error("Could not reply (positively) to server:", err)
+	}
+	log.Lvl4(s.ServerIdentity(), "Sent positive reply to server")
+}
+
+// This method is executed at the server when receiving the root's StoreReply.
+// It simply sends the reply through the channel.
+func (s *Service) processStoreReply(msg *network.Envelope) {
+	reply := (msg.Msg).(*StoreReply)
+
+	log.Lvl1(s.ServerIdentity(), "Received StoreReply:", reply.StoreRequestID)
+
+	// Simply send reply through channel
+	s.storeReplies[reply.StoreRequestID] <- reply
+	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
+
+	return
 }
