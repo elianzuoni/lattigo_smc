@@ -171,6 +171,8 @@ type EncryptionToSharesProtocol struct {
 
 	// Function to output the result: needed because non-roots also have a result.
 	finalise func(*dbfv.AdditiveShare)
+	// Still, the root may need to synchronise with the execution of the protocol.
+	done sync.Mutex
 }
 
 // SharesToEncryptionProtocol implements the onet.Protocol interface.

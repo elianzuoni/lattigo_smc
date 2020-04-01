@@ -2127,3 +2127,610 @@ func (resp *RotationResponse) UnmarshalBinary(data []byte) (err error) {
 
 	return
 }
+
+// Encryption to shares
+
+func (query *EncToSharesQuery) MarshalBinary() (data []byte, err error) {
+	// Marshal CipherID
+	ctIdData, err := marshUUID((uuid.UUID)(query.CipherID))
+	if err != nil {
+		return
+	}
+	ctIdLen := len(ctIdData)
+
+	// Build data as [<ctIdLen>, <CipherID1>]
+	data = make([]byte, 8+ctIdLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctIdLen))
+	ptr += 8
+	copy(data[ptr:ptr+ctIdLen], ctIdData)
+	ptr += ctIdLen
+
+	return
+}
+
+func (query *EncToSharesQuery) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ctIdLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if ctIdLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+ctIdLen])
+		query.CipherID = (CipherID)(id)
+		ptr += ctIdLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+
+	return
+}
+
+func (req *EncToSharesRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	idData, err := marshUUID((uuid.UUID)(req.EncToSharesRequestID))
+	if err != nil {
+		return
+	}
+	idLen := len(idData)
+
+	// Marshal EncToSharesQuery
+	queryData := make([]byte, 0)
+	if req.EncToSharesQuery != nil {
+		queryData, err = req.EncToSharesQuery.MarshalBinary()
+		if err != nil {
+			return
+		}
+	}
+	queryLen := len(queryData)
+
+	// Build data as [<idLen>, <queryLen>, <RequestID>, <EncToSharesQuery>]
+	data = make([]byte, 8+8+idLen+queryLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(queryLen))
+	ptr += 8
+	copy(data[ptr:ptr+idLen], idData)
+	ptr += idLen
+	copy(data[ptr:ptr+queryLen], queryData)
+	ptr += queryLen
+
+	return
+}
+
+func (req *EncToSharesRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	idLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	queryLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if idLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+idLen])
+		req.EncToSharesRequestID = (EncToSharesRequestID)(id)
+		ptr += idLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+	if queryLen > 0 {
+		err = req.EncToSharesQuery.UnmarshalBinary(data[ptr : ptr+queryLen])
+		ptr += queryLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+
+	return
+}
+
+func (params *E2SParameters) MarshalBinary() (data []byte, err error) {
+	// Marshal CipherID
+	ctIdData, err := marshUUID((uuid.UUID)(params.cipherID))
+	if err != nil {
+		return
+	}
+	ctIdLen := len(ctIdData)
+
+	// Marshal Ciphertext
+	ctData := make([]byte, 0)
+	if params.ct != nil {
+		ctData, err = params.ct.MarshalBinary()
+		if err != nil {
+			return
+		}
+	}
+	ctLen := len(ctData)
+
+	// Build data as [<ctIdLen>, <ctLen>, <CipherID>, <Ciphertext>]
+	data = make([]byte, 8+8+ctIdLen+ctLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctIdLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctLen))
+	ptr += 8
+	copy(data[ptr:ptr+ctIdLen], ctIdData)
+	ptr += ctIdLen
+	copy(data[ptr:ptr+ctLen], ctData)
+	ptr += ctLen
+
+	return
+}
+
+func (params *E2SParameters) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ctIdLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	ctLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if ctIdLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+ctIdLen])
+		params.cipherID = (CipherID)(id)
+		ptr += ctIdLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+	if ctLen > 0 {
+		err = params.ct.UnmarshalBinary(data[ptr : ptr+ctLen])
+		ptr += ctLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+
+	return
+}
+
+func (prep *EncToSharesBroadcast) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	idData, err := marshUUID((uuid.UUID)(prep.EncToSharesRequestID))
+	if err != nil {
+		return
+	}
+	idLen := len(idData)
+
+	// Marshal E2SParameters
+	paramsData := make([]byte, 0)
+	if prep.params != nil {
+		paramsData, err = prep.params.MarshalBinary()
+		if err != nil {
+			return
+		}
+	}
+	paramsLen := len(paramsData)
+
+	// Build data as [<idLen>, <paramsLen>, <RequestID>, <E2SParameters>]
+	data = make([]byte, 8+8+idLen+paramsLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(paramsLen))
+	ptr += 8
+	copy(data[ptr:ptr+idLen], idData)
+	ptr += idLen
+	copy(data[ptr:ptr+paramsLen], paramsData)
+	ptr += paramsLen
+
+	return
+}
+
+func (prep *EncToSharesBroadcast) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	idLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	paramsLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if idLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+idLen])
+		prep.EncToSharesRequestID = (EncToSharesRequestID)(id)
+		ptr += idLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+	if paramsLen > 0 {
+		err = prep.params.UnmarshalBinary(data[ptr : ptr+paramsLen])
+		ptr += paramsLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+
+	return
+}
+
+func (reply *EncToSharesReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	idData, err := marshUUID((uuid.UUID)(reply.EncToSharesRequestID))
+	if err != nil {
+		return
+	}
+	idLen := len(idData)
+
+	// Transform the rest to a Response, then marshal it
+	resp := &EncToSharesResponse{reply.valid}
+	respData, err := resp.MarshalBinary()
+	if err != nil {
+		return
+	}
+	respLen := len(respData)
+
+	// Build data as [<idLen>, <respLen>, <RequestID>, <EncToSharesResponse>]
+	data = make([]byte, 8+8+idLen+respLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(respLen))
+	ptr += 8
+	copy(data[ptr:ptr+idLen], idData)
+	ptr += idLen
+	copy(data[ptr:ptr+respLen], respData)
+	ptr += respLen
+
+	return
+}
+
+func (reply *EncToSharesReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	idLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	respLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if idLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+idLen])
+		reply.EncToSharesRequestID = (EncToSharesRequestID)(id)
+		ptr += idLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+	if respLen > 0 {
+		resp := &EncToSharesResponse{}
+		err = resp.UnmarshalBinary(data[ptr : ptr+respLen])
+		ptr += respLen
+		if err != nil {
+			return
+		}
+
+		reply.valid = resp.Valid
+	} // TODO: else?
+
+	return
+}
+
+func (resp *EncToSharesResponse) MarshalBinary() (data []byte, err error) {
+	// Build data as [<Valid>]
+	data = make([]byte, 1)
+	ptr := 0 // Used to index data
+	data[ptr] = marshBool(resp.Valid)
+	ptr += 1
+
+	return
+}
+
+func (resp *EncToSharesResponse) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read field
+	resp.Valid = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
+}
+
+// Shares to encryption
+
+func (query *SharesToEncQuery) MarshalBinary() (data []byte, err error) {
+	// Marshal CipherID
+	ctIdData, err := marshUUID((uuid.UUID)(query.CipherID))
+	if err != nil {
+		return
+	}
+	ctIdLen := len(ctIdData)
+
+	// Build data as [<ctIdLen>, <CipherID1>]
+	data = make([]byte, 8+ctIdLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctIdLen))
+	ptr += 8
+	copy(data[ptr:ptr+ctIdLen], ctIdData)
+	ptr += ctIdLen
+
+	return
+}
+
+func (query *SharesToEncQuery) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ctIdLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if ctIdLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+ctIdLen])
+		query.CipherID = (CipherID)(id)
+		ptr += ctIdLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+
+	return
+}
+
+func (req *SharesToEncRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	idData, err := marshUUID((uuid.UUID)(req.SharesToEncRequestID))
+	if err != nil {
+		return
+	}
+	idLen := len(idData)
+
+	// Marshal SharesToEncQuery
+	queryData := make([]byte, 0)
+	if req.SharesToEncQuery != nil {
+		queryData, err = req.SharesToEncQuery.MarshalBinary()
+		if err != nil {
+			return
+		}
+	}
+	queryLen := len(queryData)
+
+	// Build data as [<idLen>, <queryLen>, <RequestID>, <SharesToEncQuery>]
+	data = make([]byte, 8+8+idLen+queryLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(queryLen))
+	ptr += 8
+	copy(data[ptr:ptr+idLen], idData)
+	ptr += idLen
+	copy(data[ptr:ptr+queryLen], queryData)
+	ptr += queryLen
+
+	return
+}
+
+func (req *SharesToEncRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	idLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	queryLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if idLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+idLen])
+		req.SharesToEncRequestID = (SharesToEncRequestID)(id)
+		ptr += idLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+	if queryLen > 0 {
+		err = req.SharesToEncQuery.UnmarshalBinary(data[ptr : ptr+queryLen])
+		ptr += queryLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+
+	return
+}
+
+func (params *S2EParameters) MarshalBinary() (data []byte, err error) {
+	// Marshal CipherID
+	ctIdData, err := marshUUID((uuid.UUID)(params.cipherID))
+	if err != nil {
+		return
+	}
+	ctIdLen := len(ctIdData)
+
+	// Build data as [<ctIdLen>, <CipherID>]
+	data = make([]byte, 8+ctIdLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctIdLen))
+	ptr += 8
+	copy(data[ptr:ptr+ctIdLen], ctIdData)
+	ptr += ctIdLen
+
+	return
+}
+
+func (params *S2EParameters) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ctIdLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if ctIdLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+ctIdLen])
+		params.cipherID = (CipherID)(id)
+		ptr += ctIdLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+
+	return
+}
+
+func (prep *SharesToEncBroadcast) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	idData, err := marshUUID((uuid.UUID)(prep.SharesToEncRequestID))
+	if err != nil {
+		return
+	}
+	idLen := len(idData)
+
+	// Marshal S2EParameters
+	paramsData := make([]byte, 0)
+	if prep.params != nil {
+		paramsData, err = prep.params.MarshalBinary()
+		if err != nil {
+			return
+		}
+	}
+	paramsLen := len(paramsData)
+
+	// Build data as [<idLen>, <paramsLen>, <RequestID>, <S2EParameters>]
+	data = make([]byte, 8+8+idLen+paramsLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(paramsLen))
+	ptr += 8
+	copy(data[ptr:ptr+idLen], idData)
+	ptr += idLen
+	copy(data[ptr:ptr+paramsLen], paramsData)
+	ptr += paramsLen
+
+	return
+}
+
+func (prep *SharesToEncBroadcast) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	idLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	paramsLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if idLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+idLen])
+		prep.SharesToEncRequestID = (SharesToEncRequestID)(id)
+		ptr += idLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+	if paramsLen > 0 {
+		err = prep.params.UnmarshalBinary(data[ptr : ptr+paramsLen])
+		ptr += paramsLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+
+	return
+}
+
+func (reply *SharesToEncReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	idData, err := marshUUID((uuid.UUID)(reply.SharesToEncRequestID))
+	if err != nil {
+		return
+	}
+	idLen := len(idData)
+
+	// Transform the rest to a Response, then marshal it
+	resp := &SharesToEncResponse{reply.valid}
+	respData, err := resp.MarshalBinary()
+	if err != nil {
+		return
+	}
+	respLen := len(respData)
+
+	// Build data as [<idLen>, <respLen>, <RequestID>, <SharesToEncResponse>]
+	data = make([]byte, 8+8+idLen+respLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(respLen))
+	ptr += 8
+	copy(data[ptr:ptr+idLen], idData)
+	ptr += idLen
+	copy(data[ptr:ptr+respLen], respData)
+	ptr += respLen
+
+	return
+}
+
+func (reply *SharesToEncReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	idLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	respLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if idLen > 0 {
+		var id uuid.UUID
+		id, err = unmarshUUID(data[ptr : ptr+idLen])
+		reply.SharesToEncRequestID = (SharesToEncRequestID)(id)
+		ptr += idLen
+		if err != nil {
+			return
+		}
+	} // TODO: else?
+	if respLen > 0 {
+		resp := &SharesToEncResponse{}
+		err = resp.UnmarshalBinary(data[ptr : ptr+respLen])
+		ptr += respLen
+		if err != nil {
+			return
+		}
+
+		reply.valid = resp.Valid
+	} // TODO: else?
+
+	return
+}
+
+func (resp *SharesToEncResponse) MarshalBinary() (data []byte, err error) {
+	// Build data as [<Valid>]
+	data = make([]byte, 1)
+	ptr := 0 // Used to index data
+	data[ptr] = marshBool(resp.Valid)
+	ptr += 1
+
+	return
+}
+
+func (resp *SharesToEncResponse) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read field
+	resp.Valid = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
+}

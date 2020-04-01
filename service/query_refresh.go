@@ -136,10 +136,10 @@ func (s *Service) refreshCiphertext() (*bfv.Ciphertext, error) {
 		return nil, err
 	}
 	// Register protocol instance
-	log.Lvl3(s.ServerIdentity(), "Registering refresh protocol")
+	log.Lvl3(s.ServerIdentity(), "Registering refresh protocol instance")
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err)
+		log.Error(s.ServerIdentity(), "Could not register refresh protocol instance:", err)
 		return nil, err
 	}
 

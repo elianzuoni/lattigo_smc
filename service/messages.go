@@ -63,6 +63,18 @@ type MsgTypes struct {
 	msgRotationRequest  network.MessageTypeID
 	msgRotationReply    network.MessageTypeID
 	msgRotationResponse network.MessageTypeID // Unused
+
+	msgEncToSharesQuery     network.MessageTypeID // Unused
+	msgEncToSharesRequest   network.MessageTypeID
+	msgEncToSharesBroadcast network.MessageTypeID
+	msgEncToSharesReply     network.MessageTypeID
+	msgEncToSharesResponse  network.MessageTypeID // Unused
+
+	msgSharesToEncQuery     network.MessageTypeID // Unused
+	msgSharesToEncRequest   network.MessageTypeID
+	msgSharesToEncBroadcast network.MessageTypeID
+	msgSharesToEncReply     network.MessageTypeID
+	msgSharesToEncResponse  network.MessageTypeID // Unused
 }
 
 var msgTypes = MsgTypes{}
@@ -119,6 +131,18 @@ func init() {
 	msgTypes.msgRotationReply = network.RegisterMessage(&RotationReply{})
 	msgTypes.msgRotationResponse = network.RegisterMessage(&RotationResponse{}) // Unused
 
+	msgTypes.msgEncToSharesQuery = network.RegisterMessage(&EncToSharesQuery{}) // Unused
+	msgTypes.msgEncToSharesRequest = network.RegisterMessage(&EncToSharesRequest{})
+	msgTypes.msgEncToSharesBroadcast = network.RegisterMessage(&EncToSharesBroadcast{})
+	msgTypes.msgEncToSharesReply = network.RegisterMessage(&EncToSharesReply{})
+	msgTypes.msgEncToSharesResponse = network.RegisterMessage(&EncToSharesResponse{}) // Unused
+
+	msgTypes.msgSharesToEncQuery = network.RegisterMessage(&SharesToEncQuery{}) // Unused
+	msgTypes.msgSharesToEncRequest = network.RegisterMessage(&SharesToEncRequest{})
+	msgTypes.msgSharesToEncBroadcast = network.RegisterMessage(&SharesToEncBroadcast{})
+	msgTypes.msgSharesToEncReply = network.RegisterMessage(&SharesToEncReply{})
+	msgTypes.msgSharesToEncResponse = network.RegisterMessage(&SharesToEncResponse{}) // Unused
+
 	_ = network.RegisterMessage(&protocols.Start{}) // TODO: necessary?
 }
 
@@ -131,6 +155,12 @@ var NilCipherID = CipherID(uuid.Nil)
 func newCipherID() CipherID {
 	return CipherID(uuid.NewV1())
 }
+
+func (id CipherID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+// Setup
 
 // TODO: why a query? Why not load from cfg file?
 type SetupQuery struct {
@@ -172,6 +202,8 @@ type SetupResponse struct {
 	RotKeyGenerated  bool
 }
 
+// Key
+
 type KeyQuery struct {
 	PublicKey     bool
 	EvaluationKey bool
@@ -207,6 +239,8 @@ type KeyResponse struct {
 	RotKeyObtained  bool
 }
 
+// Store
+
 // StoreQuery contains the data to store.
 type StoreQuery struct {
 	Ciphertext *bfv.Ciphertext
@@ -235,6 +269,8 @@ type StoreResponse struct {
 	CipherID CipherID
 }
 
+// Retrieve
+
 //RetrieveQuery query for a ciphertext represented by ID to be switched under PublicKey
 type RetrieveQuery struct {
 	PublicKey *bfv.PublicKey
@@ -250,6 +286,11 @@ func newRetrieveRequestID() RetrieveRequestID {
 type RetrieveRequest struct {
 	RetrieveRequestID
 	*RetrieveQuery
+}
+
+type SwitchingParameters struct {
+	*bfv.PublicKey
+	*bfv.Ciphertext
 }
 
 type RetrieveBroadcast struct {
@@ -269,6 +310,8 @@ type RetrieveResponse struct {
 	Ciphertext *bfv.Ciphertext
 	Valid      bool
 }
+
+// Sum
 
 // Client asks to sum ciphertexts ID1 and ID2.
 type SumQuery struct {
@@ -303,6 +346,8 @@ type SumResponse struct {
 	Valid       bool
 }
 
+// Multiply
+
 // Client asks to multiply ID1 and ID2
 type MultiplyQuery struct {
 	CipherID1 CipherID
@@ -334,6 +379,8 @@ type MultiplyResponse struct {
 	Valid       bool
 }
 
+// Relinearise
+
 // Client asks to relinearise the given CipherID
 type RelinQuery struct {
 	CipherID CipherID
@@ -358,6 +405,8 @@ type RelinReply struct {
 type RelinResponse struct {
 	Valid bool
 }
+
+// Refresh
 
 //RefreshQuery query for ID1 to be refreshed.
 type RefreshQuery struct {
@@ -390,6 +439,8 @@ type RefreshResponse struct {
 	Valid bool
 }
 
+// Rotation
+
 type RotationQuery struct {
 	CipherID CipherID
 	K        uint64
@@ -418,5 +469,80 @@ type RotationReply struct {
 type RotationResponse struct {
 	Old   CipherID
 	New   CipherID
+	Valid bool
+}
+
+// Encryption to shares
+
+type EncToSharesQuery struct {
+	CipherID CipherID
+}
+
+type EncToSharesRequestID uuid.UUID
+
+func newEncToSharesRequestID() EncToSharesRequestID {
+	return EncToSharesRequestID(uuid.NewV1())
+}
+
+type EncToSharesRequest struct {
+	EncToSharesRequestID
+	*EncToSharesQuery
+}
+
+type E2SParameters struct {
+	cipherID CipherID
+	ct       *bfv.Ciphertext
+}
+
+type EncToSharesBroadcast struct {
+	EncToSharesRequestID
+	// No params: it assumes it is already set. sigmaSmudging is extracted form params.Sigma in a static way.
+	params *E2SParameters
+}
+
+type EncToSharesReply struct {
+	EncToSharesRequestID
+	// The CipherID will be the same
+	valid bool
+}
+
+type EncToSharesResponse struct {
+	Valid bool
+}
+
+// Shares to encryption
+
+type SharesToEncQuery struct {
+	CipherID CipherID
+}
+
+type SharesToEncRequestID uuid.UUID
+
+func newSharesToEncRequestID() SharesToEncRequestID {
+	return SharesToEncRequestID(uuid.NewV1())
+}
+
+type SharesToEncRequest struct {
+	SharesToEncRequestID
+	*SharesToEncQuery
+}
+
+type S2EParameters struct {
+	cipherID CipherID
+}
+
+type SharesToEncBroadcast struct {
+	SharesToEncRequestID
+	// No params: it assumes it is already set. sigmaSmudging is extracted form params.Sigma in a static way.
+	params *S2EParameters
+}
+
+type SharesToEncReply struct {
+	SharesToEncRequestID
+	// The CipherID will be the same
+	valid bool
+}
+
+type SharesToEncResponse struct {
 	Valid bool
 }

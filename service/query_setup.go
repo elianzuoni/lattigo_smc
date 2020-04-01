@@ -123,6 +123,7 @@ func (s *Service) processSetupBroadcast(msg *network.Envelope) {
 	prep := msg.Msg.(*SetupBroadcast) // This message prepares for the subsequent protocol
 
 	// Set parameters, if needed, and signal this on the appropriate locks
+	// TODO: this assumes that the first setup query is not just for rotation
 	if !s.skSet && (prep.GeneratePublicKey || prep.GenerateEvaluationKey || prep.GenerateRotationKey) {
 		log.Lvl3(s.ServerIdentity(), "skShard not yet set. Generating from request")
 		s.Roster = prep.Roster
@@ -167,7 +168,7 @@ func (s *Service) genPublicKey() error {
 		return err
 	}
 	// Register protocol instance
-	log.Lvl3(s.ServerIdentity(), "Registering CKG protocol")
+	log.Lvl3(s.ServerIdentity(), "Registering CKG protocol instance")
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err)
@@ -216,7 +217,7 @@ func (s *Service) genEvalKey() error {
 		return err
 	}
 	// Register protocol instance
-	log.Lvl3(s.ServerIdentity(), "Registering EKG protocol")
+	log.Lvl3(s.ServerIdentity(), "Registering EKG protocol instance")
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err.Error)
@@ -264,7 +265,7 @@ func (s *Service) genRotKey() error {
 		return err
 	}
 	// Register protocol instance
-	log.Lvl3(s.ServerIdentity(), "Registering RKG protocol")
+	log.Lvl3(s.ServerIdentity(), "Registering RKG protocol instance")
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err.Error)

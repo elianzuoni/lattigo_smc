@@ -46,7 +46,11 @@ func NewEncryptionToSharesProtocol(t *onet.TreeNodeInstance, params *bfv.Paramet
 		sk:               sk,
 		ct:               ct,
 		finalise:         finalise,
+		// No need to initialise the Mutex
 	}
+
+	// The zero value of a Mutex is an unlocked one.
+	proto.done.Lock()
 
 	// No need to initialise the channels: RegisterChannels will do it for us.
 	if err := proto.RegisterChannels(&proto.channelStart, &proto.channelDecShares); err != nil {
@@ -131,10 +135,23 @@ func (p *EncryptionToSharesProtocol) Dispatch() error {
 	log.Lvl3(p.ServerIdentity(), "Finalising AdditiveShare")
 	// Step 4: return the generated additive by feeding it to the finalise
 	p.finalise(addShare)
+	// Also signal that the protocol is finished
+	p.done.Unlock()
 
 	p.Done() // Onet requirement to finalise the protocol.
 
 	return nil
+}
+
+/*********************** Not onet handlers ************************/
+
+// By calling this method, the root can wait for termination of the protocol.
+// It is safe to call multiple times.
+func (p *EncryptionToSharesProtocol) WaitDone() {
+	log.Lvl3("Waiting for protocol to end")
+	p.done.Lock()
+	// Unlock again so that subsequent calls to WaitDone do not block forever
+	p.done.Unlock()
 }
 
 // Check that *EncryptionToSharesProtocol implements onet.ProtocolInstance

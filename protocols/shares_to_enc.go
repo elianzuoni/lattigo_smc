@@ -106,7 +106,7 @@ func (p *SharesToEncryptionProtocol) Dispatch() error {
 		p.ChannelCiphertext <- cipher
 	}
 
-	p.Done() //Onet requirement to finalise the protocol
+	p.Done() // Onet requirement to finalise the protocol
 
 	return nil
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
+	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -28,6 +29,7 @@ type Service struct {
 	k      uint64
 
 	// CRP generators for PublicKey and Ciphertext
+	// TODO: if we can have concurrent queries, we should either lock these, or choose CRP at root and propagate it
 	crpGen       *ring.CRPGenerator
 	cipherCRPgen *ring.CRPGenerator
 
@@ -40,30 +42,34 @@ type Service struct {
 
 	// Stores ciphertexts. Only used at the root.
 	database map[CipherID]*bfv.Ciphertext
+	// Stores additive shares. Used at every node.
+	shares map[CipherID]*dbfv.AdditiveShare
 
-	// Synchronisation structures for protocol factories
+	// Synchronisation points between protocol factories and their corresponding
+	// processBroadcast (that sets up the variables needed).
+	// All queries use, for example, the secret key shard, but only CKG and EKG wait
+	// until they become available. // TODO: is this fair?
 	waitCKG sync.Mutex // CKG protocol factory waits here to read variables
 	waitEKG sync.Mutex // EKG protocol factory waits here to read variables
 	waitRKG sync.Mutex // RKG protocol factory waits here to read variables
 	// TODO: should these be maps as well?
-	refreshParams       chan *bfv.Ciphertext      // Refresh protocol factory reads variables from here
-	switchingParameters chan *SwitchingParameters // CKS protocol factory reads variables from here
+	refreshParams     chan *bfv.Ciphertext      // Refresh protocol factory reads variables from here
+	switchingParams   chan *SwitchingParameters // CKS protocol factory reads variables from here
+	encToSharesParams chan *E2SParameters       // E2S protocol factory reads variables from here
+	sharesToEncParams chan *S2EParameters       // S2E protocol factory reads variables from here
 
-	// Structures for synchronisation between HandleQuery and processReply
-	setupReplies    map[SetupRequestID]chan *SetupReply
-	keyReplies      map[KeyRequestID]chan *KeyReply
-	storeReplies    map[StoreRequestID]chan *StoreReply
-	sumReplies      map[SumRequestID]chan *SumReply
-	multiplyReplies map[MultiplyRequestID]chan *MultiplyReply
-	relinReplies    map[RelinRequestID]chan *RelinReply
-	rotationReplies map[RotationRequestID]chan *RotationReply
-	retrieveReplies map[RetrieveRequestID]chan *RetrieveReply
-	refreshReplies  map[RefreshRequestID]chan *RefreshReply
-}
-
-type SwitchingParameters struct {
-	*bfv.PublicKey
-	*bfv.Ciphertext
+	// Synchronisation point between HandleQuery and the corresponding processReply
+	setupReplies       map[SetupRequestID]chan *SetupReply
+	keyReplies         map[KeyRequestID]chan *KeyReply
+	storeReplies       map[StoreRequestID]chan *StoreReply
+	sumReplies         map[SumRequestID]chan *SumReply
+	multiplyReplies    map[MultiplyRequestID]chan *MultiplyReply
+	relinReplies       map[RelinRequestID]chan *RelinReply
+	rotationReplies    map[RotationRequestID]chan *RotationReply
+	retrieveReplies    map[RetrieveRequestID]chan *RetrieveReply
+	refreshReplies     map[RefreshRequestID]chan *RefreshReply
+	encToSharesReplies map[EncToSharesRequestID]chan *EncToSharesReply
+	sharesToEncReplies map[SharesToEncRequestID]chan *SharesToEncReply
 }
 
 const ServiceName = "LattigoSMC"
@@ -84,20 +90,25 @@ func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
 		ServiceProcessor: onet.NewServiceProcessor(c),
 
 		database: make(map[CipherID]*bfv.Ciphertext),
+		shares:   make(map[CipherID]*dbfv.AdditiveShare),
 
 		// No need to initialise Locks
-		refreshParams:       make(chan *bfv.Ciphertext),
-		switchingParameters: make(chan *SwitchingParameters),
+		refreshParams:     make(chan *bfv.Ciphertext),
+		switchingParams:   make(chan *SwitchingParameters),
+		encToSharesParams: make(chan *E2SParameters),
+		sharesToEncParams: make(chan *S2EParameters),
 
-		setupReplies:    make(map[SetupRequestID]chan *SetupReply),
-		keyReplies:      make(map[KeyRequestID]chan *KeyReply),
-		storeReplies:    make(map[StoreRequestID]chan *StoreReply),
-		sumReplies:      make(map[SumRequestID]chan *SumReply),
-		multiplyReplies: make(map[MultiplyRequestID]chan *MultiplyReply),
-		relinReplies:    make(map[RelinRequestID]chan *RelinReply),
-		rotationReplies: make(map[RotationRequestID]chan *RotationReply),
-		retrieveReplies: make(map[RetrieveRequestID]chan *RetrieveReply),
-		refreshReplies:  make(map[RefreshRequestID]chan *RefreshReply),
+		setupReplies:       make(map[SetupRequestID]chan *SetupReply),
+		keyReplies:         make(map[KeyRequestID]chan *KeyReply),
+		storeReplies:       make(map[StoreRequestID]chan *StoreReply),
+		sumReplies:         make(map[SumRequestID]chan *SumReply),
+		multiplyReplies:    make(map[MultiplyRequestID]chan *MultiplyReply),
+		relinReplies:       make(map[RelinRequestID]chan *RelinReply),
+		rotationReplies:    make(map[RotationRequestID]chan *RotationReply),
+		retrieveReplies:    make(map[RetrieveRequestID]chan *RetrieveReply),
+		refreshReplies:     make(map[RefreshRequestID]chan *RefreshReply),
+		encToSharesReplies: make(map[EncToSharesRequestID]chan *EncToSharesReply),
+		sharesToEncReplies: make(map[SharesToEncRequestID]chan *SharesToEncReply),
 	}
 
 	// The zero value of a Mutex is an unlocked one
@@ -139,20 +150,27 @@ func registerClientQueryHandlers(smcService *Service) error {
 		return errors.New("Couldn't register HandleKeyQuery: " + err.Error())
 	}
 	if err := smcService.RegisterHandler(smcService.HandleRelinearisationQuery); err != nil {
-		return errors.New("HandleRelinearizationquery: " + err.Error())
+		return errors.New("Couldn't register HandleRelinearizationquery: " + err.Error())
 	}
 	if err := smcService.RegisterHandler(smcService.HandleRefreshQuery); err != nil {
 		return errors.New("Couldn't register HandleRefreshQuery: " + err.Error())
 	}
 	if err := smcService.RegisterHandler(smcService.HandleRotationQuery); err != nil {
-		return errors.New("HandleRotationQuery: " + err.Error())
+		return errors.New("Couldn't register HandleRotationQuery: " + err.Error())
 	}
+	if err := smcService.RegisterHandler(smcService.HandleEncToSharesQuery); err != nil {
+		return errors.New("Couldn't register HandleEncToSharesQuery: " + err.Error())
+	}
+	if err := smcService.RegisterHandler(smcService.HandleSharesToEncQuery); err != nil {
+		return errors.New("Couldn't register HandleSharesToEncQuery: " + err.Error())
+	}
+
 	return nil
 }
 
 // Registers smcService to the underlying onet.Context as a processor for all the possible types of messages
 // received by another server (every client request is forwarded to the root, so every query entails some
-// server-to-server interaction). Upon reception of one of these messages, the method Process will be invoked.
+// server-root interaction). Upon reception of one of these messages, the method Process will be invoked.
 func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 	// Setup
 	c.RegisterProcessor(smcService, msgTypes.msgSetupRequest)
@@ -192,6 +210,16 @@ func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 	// Rotation
 	c.RegisterProcessor(smcService, msgTypes.msgRotationReply)
 	c.RegisterProcessor(smcService, msgTypes.msgRotationReply)
+
+	// Encryption to shares
+	c.RegisterProcessor(smcService, msgTypes.msgEncToSharesRequest)
+	c.RegisterProcessor(smcService, msgTypes.msgEncToSharesBroadcast)
+	c.RegisterProcessor(smcService, msgTypes.msgEncToSharesReply)
+
+	// Shares to encryption
+	c.RegisterProcessor(smcService, msgTypes.msgSharesToEncRequest)
+	c.RegisterProcessor(smcService, msgTypes.msgSharesToEncBroadcast)
+	c.RegisterProcessor(smcService, msgTypes.msgSharesToEncReply)
 }
 
 // Process processes messages from servers. It is called by the onet library upon reception of any of
@@ -297,6 +325,34 @@ func (s *Service) Process(msg *network.Envelope) {
 	}
 	if msg.MsgType.Equal(msgTypes.msgRotationReply) {
 		s.processRotationReply(msg)
+		return
+	}
+
+	// Encryption to shares
+	if msg.MsgType.Equal(msgTypes.msgEncToSharesRequest) {
+		s.processEncToSharesRequest(msg)
+		return
+	}
+	if msg.MsgType.Equal(msgTypes.msgEncToSharesBroadcast) {
+		s.processEncToSharesBroadcast(msg)
+		return
+	}
+	if msg.MsgType.Equal(msgTypes.msgEncToSharesReply) {
+		s.processEncToSharesReply(msg)
+		return
+	}
+
+	// Shares to encryption
+	if msg.MsgType.Equal(msgTypes.msgSharesToEncRequest) {
+		s.processSharesToEncRequest(msg)
+		return
+	}
+	if msg.MsgType.Equal(msgTypes.msgEncToSharesBroadcast) {
+		s.processSharesToEncBroadcast(msg)
+		return
+	}
+	if msg.MsgType.Equal(msgTypes.msgEncToSharesReply) {
+		s.processSharesToEncReply(msg)
 		return
 	}
 

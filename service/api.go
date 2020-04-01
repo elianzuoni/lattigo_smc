@@ -117,6 +117,7 @@ func (c *API) SendKeyQuery(getPK, getEvK, getRtK bool, RotIdx int) error {
 }
 
 // SendStoreQuery sends a query to store in the system the provided vector. The vector is encrypted locally.
+// TODO: FIX!!!!!!! What was on your mind? You have to use the MasterPublicKey to encrypt, not your own one, you idiot!
 func (c *API) SendStoreQuery(data []uint64) (CipherID, error) {
 	log.Lvl1(c, "Called to send a store query")
 
@@ -292,6 +293,62 @@ func (c *API) SendRotationQuery(cipherID CipherID, K uint64, rotType int) (Ciphe
 	log.Lvl2(c, "Refresh query was successful")
 
 	return resp.New, nil
+}
+
+// SendEncToSharesQuery sends a query to share the ciphertext indexed by cipherID.
+func (c *API) SendEncToSharesQuery(cipherID CipherID) (CipherID, error) {
+	log.Lvl1(c, "Called to send an enc-to-shares query")
+
+	// Build query
+	query := EncToSharesQuery{cipherID}
+
+	resp := EncToSharesResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	if err != nil {
+		log.Error(c, "Enc-to-shares query returned error:", err)
+		return NilCipherID, err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid. Service could not share.")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
+
+	log.Lvl2(c, "Enc-to-shares query was successful")
+
+	// We know the Service will store the shares under the same CipherID as before.
+	return cipherID, nil
+}
+
+// SendSharesToEncQuery sends a query to share the ciphertext indexed by cipherID.
+func (c *API) SendSharesToEncQuery(cipherID CipherID) (CipherID, error) {
+	log.Lvl1(c, "Called to send a shares-to-enc query")
+
+	// Build query
+	query := SharesToEncQuery{cipherID}
+
+	resp := SharesToEncResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	if err != nil {
+		log.Error(c, "Shares-to-enc query returned error:", err)
+		return NilCipherID, err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid. Service could not share.")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
+
+	log.Lvl2(c, "Shares-to-enc query was successful")
+
+	// We know the Service will store the re-encrypted ciphertext under the same CipherID as before.
+	return cipherID, nil
 }
 
 // String returns the string representation of the client.

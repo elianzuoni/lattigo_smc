@@ -114,7 +114,7 @@ func (s *Service) processRetrieveBroadcast(msg *network.Envelope) {
 
 	// Send the SwitchingParameters through the channel, on which the protocol factory waits
 	log.Lvl3(s.ServerIdentity(), "Sending switching parameters through channel")
-	s.switchingParameters <- prep.params
+	s.switchingParams <- prep.params
 
 	log.Lvl4(s.ServerIdentity(), "Sent switching parameters through channel")
 
@@ -135,7 +135,7 @@ func (s *Service) switchCiphertext() (*bfv.Ciphertext, error) {
 		return nil, err
 	}
 	// Register protocol instance
-	log.Lvl3(s.ServerIdentity(), "Registering PCKS protocol")
+	log.Lvl3(s.ServerIdentity(), "Registering PCKS protocol instance")
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err)
