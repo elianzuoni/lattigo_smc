@@ -32,16 +32,16 @@ func (s *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 	// Receive reply from channel
 	log.Lvl3(s.ServerIdentity(), "Sent SumRequest to root. Waiting on channel to receive reply...")
 	reply := <-s.sumReplies[reqID] // TODO: timeout if root cannot send reply
-	if !reply.valid {
+	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform sum")
 		log.Error(s.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	} else {
-		log.Lvl4(s.ServerIdentity(), "Received valid reply from channel:", reply.newCipherID)
+		log.Lvl4(s.ServerIdentity(), "Received valid reply from channel:", reply.NewCipherID)
 	}
 	// TODO: close channel?
 
-	return &SumResponse{reply.newCipherID, reply.valid}, nil
+	return &SumResponse{reply.NewCipherID, reply.Valid}, nil
 }
 
 // This method is executed at the root when receiving a SumRequest.
@@ -51,24 +51,24 @@ func (s *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 func (s *Service) processSumRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*SumRequest)
 
-	log.Lvl1(s.ServerIdentity(), "Root. Received SumRequest ", req.SumRequestID, "for sum:",
-		req.CipherID1, "+", req.CipherID2)
+	log.Lvl1(s.ServerIdentity(), "Root. Received SumRequest ", req.ReqID, "for sum:",
+		req.Query.CipherID1, "+", req.Query.CipherID2)
 
 	// Check feasibility
 	log.Lvl3(s.ServerIdentity(), "Checking existence of ciphertexts")
-	ct1, ok := s.database[req.CipherID1]
+	ct1, ok := s.database[req.Query.CipherID1]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID1, "does not exist.")
-		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, NilCipherID, false})
+		log.Error(s.ServerIdentity(), "Ciphertext", req.Query.CipherID1, "does not exist.")
+		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.ReqID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
 		return
 	}
-	ct2, ok := s.database[req.CipherID2]
+	ct2, ok := s.database[req.Query.CipherID2]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID2, "does not exist.")
-		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, NilCipherID, false})
+		log.Error(s.ServerIdentity(), "Ciphertext", req.Query.CipherID2, "does not exist.")
+		err := s.SendRaw(msg.ServerIdentity, &SumReply{req.ReqID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
@@ -86,7 +86,7 @@ func (s *Service) processSumRequest(msg *network.Envelope) {
 
 	// Send reply to server
 	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
-	err := s.SendRaw(msg.ServerIdentity, &SumReply{req.SumRequestID, newCipherID, true})
+	err := s.SendRaw(msg.ServerIdentity, &SumReply{req.ReqID, newCipherID, true})
 	if err != nil {
 		log.Error("Could not reply (positively) to server:", err)
 	}
@@ -100,10 +100,10 @@ func (s *Service) processSumRequest(msg *network.Envelope) {
 func (s *Service) processSumReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*SumReply)
 
-	log.Lvl1(s.ServerIdentity(), "Received SumReply:", reply.SumRequestID)
+	log.Lvl1(s.ServerIdentity(), "Received SumReply:", reply.ReqID)
 
 	// Simply send reply through channel
-	s.sumReplies[reply.SumRequestID] <- reply
+	s.sumReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

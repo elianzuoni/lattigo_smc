@@ -32,7 +32,7 @@ func (s *Service) HandleRotationQuery(query *RotationQuery) (network.Message, er
 	log.Lvl3(s.ServerIdentity(), "Sent RotationRequest to root. Waiting on channel to receive new CipherID...")
 	reply := <-s.rotationReplies[reqID] // TODO: timeout if root cannot send reply
 	// Check validity
-	if !reply.valid {
+	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform sum")
 		log.Error(s.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
@@ -41,7 +41,7 @@ func (s *Service) HandleRotationQuery(query *RotationQuery) (network.Message, er
 	}
 	// TODO: close channel?
 
-	return &RotationResponse{reply.Old, reply.New, reply.valid}, nil
+	return &RotationResponse{reply.NewCipherID, reply.Valid}, nil
 }
 
 // This method is executed at the root when receiving a RotationRequest.
@@ -51,15 +51,15 @@ func (s *Service) HandleRotationQuery(query *RotationQuery) (network.Message, er
 func (s *Service) processRotationRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*RotationRequest)
 
-	log.Lvl1(s.ServerIdentity(), "Root. Received RotationRequest for ciphertext", req.CipherID)
+	log.Lvl1(s.ServerIdentity(), "Root. Received RotationRequest for ciphertext", req.Query.CipherID)
 
 	// Check feasibility
 	log.Lvl3(s.ServerIdentity(), "Checking existence of ciphertext")
-	ct, ok := s.database[req.CipherID]
+	ct, ok := s.database[req.Query.CipherID]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID, "does not exist.")
+		log.Error(s.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity,
-			&RotationReply{req.RotationRequestID, NilCipherID, NilCipherID, false})
+			&RotationReply{req.ReqID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
@@ -75,13 +75,13 @@ func (s *Service) processRotationRequest(msg *network.Envelope) {
 	log.Lvl3(s.ServerIdentity(), "Evaluating the rotation of the ciphertexts")
 	eval := bfv.NewEvaluator(s.Params)
 	var ctRot *bfv.Ciphertext
-	switch bfv.Rotation(req.RotIdx) {
+	switch bfv.Rotation(req.Query.RotIdx) {
 	case bfv.RotationRow:
 		ctRot = eval.RotateRowsNew(ct, s.rotationKey)
 	case bfv.RotationLeft:
-		ctRot = eval.RotateColumnsNew(ct, req.K, s.rotationKey)
+		ctRot = eval.RotateColumnsNew(ct, req.Query.K, s.rotationKey)
 	case bfv.RotationRight:
-		ctRot = eval.RotateColumnsNew(ct, req.K, s.rotationKey)
+		ctRot = eval.RotateColumnsNew(ct, req.Query.K, s.rotationKey)
 	}
 
 	// Register in local database
@@ -91,7 +91,7 @@ func (s *Service) processRotationRequest(msg *network.Envelope) {
 	// Send reply to server
 	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
 	err := s.SendRaw(msg.ServerIdentity,
-		&RotationReply{req.RotationRequestID, req.CipherID, idRot, true})
+		&RotationReply{req.ReqID, idRot, true})
 	if err != nil {
 		log.Error("Could not reply (positively) to server:", err)
 	}
@@ -105,10 +105,10 @@ func (s *Service) processRotationRequest(msg *network.Envelope) {
 func (s *Service) processRotationReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*RotationReply)
 
-	log.Lvl1(s.ServerIdentity(), "Received RotationReply:", reply.RotationRequestID)
+	log.Lvl1(s.ServerIdentity(), "Received RotationReply:", reply.ReqID)
 
 	// Simply send reply through channel
-	s.rotationReplies[reply.RotationRequestID] <- reply
+	s.rotationReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

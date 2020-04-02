@@ -32,16 +32,16 @@ func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, er
 	// Receive reply from channel
 	log.Lvl3(s.ServerIdentity(), "Sent MultiplyRequest to root. Waiting on channel to receive reply...")
 	reply := <-s.multiplyReplies[reqID] // TODO: timeout if root cannot send reply
-	if !reply.valid {
+	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform multiplication")
 		log.Error(s.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	} else {
-		log.Lvl4(s.ServerIdentity(), "Received valid reply from channel:", reply.newCipherID)
+		log.Lvl4(s.ServerIdentity(), "Received valid reply from channel:", reply.NewCipherID)
 	}
 	// TODO: close channel?
 
-	return &MultiplyResponse{reply.newCipherID, reply.valid}, nil
+	return &MultiplyResponse{reply.NewCipherID, reply.Valid}, nil
 }
 
 // This method is executed at the root when receiving a MultiplyRequest.
@@ -51,26 +51,26 @@ func (s *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, er
 func (s *Service) processMultiplyRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*MultiplyRequest)
 
-	log.Lvl1(s.ServerIdentity(), "Root. Received MultiplyRequest ", req.MultiplyRequestID,
-		"for product:", req.CipherID1, "*", req.CipherID2)
+	log.Lvl1(s.ServerIdentity(), "Root. Received MultiplyRequest ", req.ReqID,
+		"for product:", req.Query.CipherID1, "*", req.Query.CipherID2)
 
 	// Check feasibilty
 	log.Lvl3(s.ServerIdentity(), "Checking existence of ciphertexts")
-	ct1, ok := s.database[req.CipherID1]
+	ct1, ok := s.database[req.Query.CipherID1]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID1, "does not exist.")
+		log.Error(s.ServerIdentity(), "Ciphertext", req.Query.CipherID1, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity,
-			&MultiplyReply{req.MultiplyRequestID, NilCipherID, false})
+			&MultiplyReply{req.ReqID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
 		return
 	}
-	ct2, ok := s.database[req.CipherID2]
+	ct2, ok := s.database[req.Query.CipherID2]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID2, "does not exist.")
+		log.Error(s.ServerIdentity(), "Ciphertext", req.Query.CipherID2, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity,
-			&MultiplyReply{req.MultiplyRequestID, NilCipherID, false})
+			&MultiplyReply{req.ReqID, NilCipherID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
@@ -89,7 +89,7 @@ func (s *Service) processMultiplyRequest(msg *network.Envelope) {
 	// Send reply to server
 	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
 	err := s.SendRaw(msg.ServerIdentity,
-		&MultiplyReply{req.MultiplyRequestID, newCipherID, true})
+		&MultiplyReply{req.ReqID, newCipherID, true})
 	if err != nil {
 		log.Error("Could not reply (positively) to server:", err)
 	}
@@ -103,10 +103,10 @@ func (s *Service) processMultiplyRequest(msg *network.Envelope) {
 func (s *Service) processMultiplyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*MultiplyReply)
 
-	log.Lvl1(s.ServerIdentity(), "Received MultiplyReply:", reply.MultiplyRequestID)
+	log.Lvl1(s.ServerIdentity(), "Received MultiplyReply:", reply.ReqID)
 
 	// Simply send reply through channel
-	s.multiplyReplies[reply.MultiplyRequestID] <- reply
+	s.multiplyReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

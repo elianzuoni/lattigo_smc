@@ -164,7 +164,7 @@ func (id CipherID) String() string {
 
 // TODO: why a query? Why not load from cfg file?
 type SetupQuery struct {
-	Roster onet.Roster
+	Roster *onet.Roster
 
 	ParamsIdx             uint64
 	Seed                  []byte
@@ -181,19 +181,26 @@ func newSetupRequestID() SetupRequestID {
 	return SetupRequestID(uuid.NewV1())
 }
 
+func (id *SetupRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *SetupRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 type SetupRequest struct {
-	SetupRequestID
-	*SetupQuery
+	ReqID SetupRequestID
+	Query *SetupQuery
 }
 
 type SetupBroadcast SetupRequest
 
 type SetupReply struct {
-	SetupRequestID
+	ReqID SetupRequestID
 
-	pubKeyGenerated  bool
-	evalKeyGenerated bool
-	rotKeyGenerated  bool
+	PubKeyGenerated  bool
+	EvalKeyGenerated bool
+	RotKeyGenerated  bool
 }
 
 type SetupResponse struct {
@@ -217,20 +224,27 @@ func newKeyRequestID() KeyRequestID {
 	return KeyRequestID(uuid.NewV1())
 }
 
+func (id *KeyRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *KeyRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 type KeyRequest struct {
-	KeyRequestID
-	*KeyQuery
+	ReqID KeyRequestID
+	Query *KeyQuery
 }
 
 // KeyReply is sent by root to server, in response to KeyQuery.
 // Contains the requested keys, if they exist.
 type KeyReply struct {
-	KeyRequestID
+	ReqID KeyRequestID
 
-	pk     *bfv.PublicKey
-	evk    *bfv.EvaluationKey
-	rtk    *bfv.RotationKeys
-	RotIdx int
+	PublicKey *bfv.PublicKey
+	EvalKey   *bfv.EvaluationKey
+	RotKeys   *bfv.RotationKeys
+	RotIdx    int
 }
 
 type KeyResponse struct {
@@ -252,17 +266,24 @@ func newStoreRequestID() StoreRequestID {
 	return StoreRequestID(uuid.NewV1())
 }
 
+func (id *StoreRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *StoreRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 // StoreRequest is sent by server to root.
 // Contains new ciphertext to store.
 type StoreRequest struct {
-	StoreRequestID
-	*StoreQuery
+	ReqID StoreRequestID
+	Query *StoreQuery
 }
 
 type StoreReply struct {
-	StoreRequestID
+	ReqID StoreRequestID
 
-	cipherID CipherID
+	CipherID CipherID
 }
 
 type StoreResponse struct {
@@ -283,27 +304,34 @@ func newRetrieveRequestID() RetrieveRequestID {
 	return RetrieveRequestID(uuid.NewV1())
 }
 
+func (id *RetrieveRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *RetrieveRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 type RetrieveRequest struct {
-	RetrieveRequestID
-	*RetrieveQuery
+	ReqID RetrieveRequestID
+	Query *RetrieveQuery
 }
 
 type SwitchingParameters struct {
-	*bfv.PublicKey
-	*bfv.Ciphertext
+	PublicKey  *bfv.PublicKey
+	Ciphertext *bfv.Ciphertext
 }
 
 type RetrieveBroadcast struct {
-	RetrieveRequestID
-	params *SwitchingParameters
+	ReqID  RetrieveRequestID
+	Params *SwitchingParameters
 }
 
 //RetrieveReply contains the ciphertext switched under the key requested.
 type RetrieveReply struct {
-	RetrieveRequestID
+	ReqID RetrieveRequestID
 
-	ciphertext *bfv.Ciphertext
-	valid      bool
+	Ciphertext *bfv.Ciphertext
+	Valid      bool
 }
 
 type RetrieveResponse struct {
@@ -326,19 +354,26 @@ func newSumRequestID() SumRequestID {
 	return SumRequestID(uuid.NewV1())
 }
 
+func (id *SumRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *SumRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 // Message sent by server to root.
 type SumRequest struct {
-	SumRequestID
-	*SumQuery
+	ReqID SumRequestID
+	Query *SumQuery
 }
 
 // Root answers with the same SumRequestID, the CipherID of the new ciphertext,
 // and a flag indicating whether the operation succeeded.
 type SumReply struct {
-	SumRequestID
+	ReqID SumRequestID
 
-	newCipherID CipherID
-	valid       bool
+	NewCipherID CipherID
+	Valid       bool
 }
 
 type SumResponse struct {
@@ -360,18 +395,25 @@ func newMultiplyRequestID() MultiplyRequestID {
 	return MultiplyRequestID(uuid.NewV1())
 }
 
+func (id *MultiplyRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *MultiplyRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 // Message sent by server to root.
 type MultiplyRequest struct {
-	MultiplyRequestID
-	*MultiplyQuery
+	ReqID MultiplyRequestID
+	Query *MultiplyQuery
 }
 
 // Root answers with the same SumRequestID, the CipherID of the new ciphertext,
 // and a flag indicating whether the operation succeeded.
 type MultiplyReply struct {
-	MultiplyRequestID
-	newCipherID CipherID
-	valid       bool
+	ReqID       MultiplyRequestID
+	NewCipherID CipherID
+	Valid       bool
 }
 
 type MultiplyResponse struct {
@@ -392,14 +434,21 @@ func newRelinRequestID() RelinRequestID {
 	return RelinRequestID(uuid.NewV1())
 }
 
+func (id *RelinRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *RelinRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 type RelinRequest struct {
-	RelinRequestID
-	*RelinQuery
+	ReqID RelinRequestID
+	Query *RelinQuery
 }
 
 type RelinReply struct {
-	RelinRequestID
-	valid bool
+	ReqID RelinRequestID
+	Valid bool
 }
 
 type RelinResponse struct {
@@ -419,20 +468,27 @@ func newRefreshRequestID() RefreshRequestID {
 	return RefreshRequestID(uuid.NewV1())
 }
 
+func (id *RefreshRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *RefreshRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 type RefreshRequest struct {
-	RefreshRequestID
-	*RefreshQuery
+	ReqID RefreshRequestID
+	Query *RefreshQuery
 }
 
 type RefreshBroadcast struct {
-	RefreshRequestID
-	ct *bfv.Ciphertext
+	ReqID      RefreshRequestID
+	Ciphertext *bfv.Ciphertext
 }
 
 type RefreshReply struct {
-	RefreshRequestID
+	ReqID RefreshRequestID
 
-	valid bool
+	Valid bool
 }
 
 type RefreshResponse struct {
@@ -453,23 +509,28 @@ func newRotationRequestID() RotationRequestID {
 	return RotationRequestID(uuid.NewV1())
 }
 
+func (id *RotationRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *RotationRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 type RotationRequest struct {
-	RotationRequestID
-	*RotationQuery
+	ReqID RotationRequestID
+	Query *RotationQuery
 }
 
 type RotationReply struct {
-	RotationRequestID
+	ReqID RotationRequestID
 
-	Old   CipherID
-	New   CipherID
-	valid bool
+	NewCipherID CipherID
+	Valid       bool
 }
 
 type RotationResponse struct {
-	Old   CipherID
-	New   CipherID
-	Valid bool
+	NewCipherID CipherID
+	Valid       bool
 }
 
 // Encryption to shares
@@ -484,26 +545,33 @@ func newEncToSharesRequestID() EncToSharesRequestID {
 	return EncToSharesRequestID(uuid.NewV1())
 }
 
+func (id *EncToSharesRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *EncToSharesRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 type EncToSharesRequest struct {
-	EncToSharesRequestID
-	*EncToSharesQuery
+	ReqID EncToSharesRequestID
+	Query *EncToSharesQuery
 }
 
 type E2SParameters struct {
-	cipherID CipherID
-	ct       *bfv.Ciphertext
+	CipherID   CipherID
+	Ciphertext *bfv.Ciphertext
 }
 
 type EncToSharesBroadcast struct {
-	EncToSharesRequestID
-	// No params: it assumes it is already set. sigmaSmudging is extracted form params.Sigma in a static way.
-	params *E2SParameters
+	ReqID EncToSharesRequestID
+
+	Params *E2SParameters
 }
 
 type EncToSharesReply struct {
-	EncToSharesRequestID
+	ReqID EncToSharesRequestID
 	// The CipherID will be the same
-	valid bool
+	Valid bool
 }
 
 type EncToSharesResponse struct {
@@ -522,25 +590,32 @@ func newSharesToEncRequestID() SharesToEncRequestID {
 	return SharesToEncRequestID(uuid.NewV1())
 }
 
+func (id *SharesToEncRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *SharesToEncRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
 type SharesToEncRequest struct {
-	SharesToEncRequestID
-	*SharesToEncQuery
+	ReqID SharesToEncRequestID
+	Query *SharesToEncQuery
 }
 
 type S2EParameters struct {
-	cipherID CipherID
+	CipherID CipherID
 }
 
 type SharesToEncBroadcast struct {
-	SharesToEncRequestID
+	ReqID SharesToEncRequestID
 	// No params: it assumes it is already set. sigmaSmudging is extracted form params.Sigma in a static way.
-	params *S2EParameters
+	Params *S2EParameters
 }
 
 type SharesToEncReply struct {
-	SharesToEncRequestID
+	ReqID SharesToEncRequestID
 	// The CipherID will be the same
-	valid bool
+	Valid bool
 }
 
 type SharesToEncResponse struct {

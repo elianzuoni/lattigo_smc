@@ -95,7 +95,7 @@ func testLocalPCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.Loca
 	if err != nil {
 		t.Fatal(err)
 	}
-	pcks.Wait()
+	pcks.WaitDone()
 	elapsed := time.Since(now)
 	log.Lvl1("*************Public Collective key switching done. ************")
 	log.Lvl1("*********** Time elaspsed ", elapsed, "***************")

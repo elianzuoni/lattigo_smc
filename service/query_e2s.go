@@ -31,7 +31,7 @@ func (s *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Messa
 	// Receive reply from channel
 	log.Lvl3(s.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
 	reply := <-s.encToSharesReplies[reqID] // TODO: timeout if root cannot send reply
-	if !reply.valid {
+	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform enc-to-shares")
 		log.Error(s.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
@@ -39,19 +39,19 @@ func (s *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Messa
 	log.Lvl4(s.ServerIdentity(), "Received valid reply from channel")
 	// TODO: close channel?
 
-	return &EncToSharesResponse{reply.valid}, nil
+	return &EncToSharesResponse{reply.Valid}, nil
 }
 
 func (s *Service) processEncToSharesRequest(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Root. Received EncToSharesRequest.")
 
 	req := (msg.Msg).(*EncToSharesRequest)
-	reply := EncToSharesReply{EncToSharesRequestID: req.EncToSharesRequestID}
+	reply := EncToSharesReply{ReqID: req.ReqID}
 
 	// Check existence of ciphertext
-	ct, ok := s.database[req.CipherID]
+	ct, ok := s.database[req.Query.CipherID]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID, "does not exist.")
+		log.Error(s.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
@@ -61,12 +61,12 @@ func (s *Service) processEncToSharesRequest(msg *network.Envelope) {
 	}
 
 	// Build preparation message to broadcast
-	prep := EncToSharesBroadcast{req.EncToSharesRequestID,
-		&E2SParameters{req.CipherID, ct}}
+	prep := EncToSharesBroadcast{req.ReqID,
+		&E2SParameters{req.Query.CipherID, ct}}
 
 	// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
 	log.Lvl2(s.ServerIdentity(), "Broadcasting preparation message to all nodes")
-	err := utils.Broadcast(s.ServiceProcessor, &s.Roster, prep)
+	err := utils.Broadcast(s.ServiceProcessor, s.Roster, prep)
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not broadcast preparation message:", err)
 		err = s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -94,7 +94,7 @@ func (s *Service) processEncToSharesRequest(msg *network.Envelope) {
 	log.Lvl3(s.ServerIdentity(), "Successfully shared ciphertext")
 
 	// Set fields in the reply
-	reply.valid = true
+	reply.Valid = true
 
 	// Send the positive reply to the server
 	log.Lvl2(s.ServerIdentity(), "Replying (positively) to server")
@@ -114,7 +114,7 @@ func (s *Service) processEncToSharesBroadcast(msg *network.Envelope) {
 
 	// Send the enc-to-shares parameters through the channel, on which the protocol factory waits
 	log.Lvl3(s.ServerIdentity(), "Sending encToShares parameters through channel")
-	s.encToSharesParams <- prep.params
+	s.encToSharesParams <- prep.Params
 
 	log.Lvl4(s.ServerIdentity(), "Sent encToShares parameters through channel")
 
@@ -174,7 +174,7 @@ func (s *Service) processEncToSharesReply(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Received EncToSharesReply")
 
 	// Simply send reply through channel
-	s.encToSharesReplies[reply.EncToSharesRequestID] <- reply
+	s.encToSharesReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

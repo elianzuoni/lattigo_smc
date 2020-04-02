@@ -61,7 +61,7 @@ func (c *API) SendSetupQuery(entities *onet.Roster, genPublicKey, genEvaluationK
 
 	// Build query
 	query := SetupQuery{
-		Roster:                *entities,
+		Roster:                entities,
 		ParamsIdx:             c.paramsIdx,
 		Seed:                  seed,
 		GeneratePublicKey:     genPublicKey,
@@ -292,7 +292,7 @@ func (c *API) SendRotationQuery(cipherID CipherID, K uint64, rotType int) (Ciphe
 
 	log.Lvl2(c, "Refresh query was successful")
 
-	return resp.New, nil
+	return resp.NewCipherID, nil
 }
 
 // SendEncToSharesQuery sends a query to share the ciphertext indexed by cipherID.

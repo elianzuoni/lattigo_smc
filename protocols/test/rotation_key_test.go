@@ -161,7 +161,7 @@ func testLocalRotKG(t *testing.T, params *bfv.Parameters, N int, local *onet.Loc
 		t.Fatal(err)
 	}
 
-	rotproto.Wait()
+	rotproto.WaitDone()
 	elapsed := time.Since(now)
 	log.Lvl1("**********ROTATION KEY PROTOCOL DONE ***************")
 	log.Lvl1("**********Time elapsed :", elapsed, "***************")

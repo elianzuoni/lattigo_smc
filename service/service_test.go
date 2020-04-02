@@ -1,8 +1,6 @@
 package service
 
 import (
-	"crypto/rand"
-	"github.com/golangplus/testing/assert"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -13,87 +11,100 @@ import (
 
 const COEFFSIZE = 4096
 
-func TestSetupCollectiveKeyGen(t *testing.T) {
-	log.SetDebugVisible(1)
-	log.Lvl1("Testing if setup is done properly for the service")
-	//turning off test.
+func genTestLocalRoster(size int) *onet.Roster {
+	local := onet.NewLocalTest(utils.SUITE)
+	_, roster, _ := local.GenTree(size, true)
+	return roster
+}
+
+func TestSetupPublicKeyGen(t *testing.T) {
+	log.SetDebugVisible(3)
+	log.Lvl1("Testing Setup with PublicKeyGeneration")
+
 	size := 3
-	local := onet.NewLocalTest(utils.SUITE)
-	_, el, _ := local.GenTree(size, true)
-	client := NewLattigoSMCClient(el.List[0], "0")
-	//First the client needs to ask the parties to generate the keys.
+	paramsIdx := uint64(0)
+	clientID := "ClientTestGenPK"
+	roster := genTestLocalRoster(size)
+	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
-	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
-	if err != nil {
-		t.Fatal("Could not setup the roster", err)
-	}
 
+	err := client.SendSetupQuery(roster, true, false, false,
+		0, 0, seed)
+
+	if err != nil {
+		t.Fatal("Setup Query returned error:", err)
+	}
 }
 
-func TestSetupEvalKey(t *testing.T) {
-	log.SetDebugVisible(1)
-	log.Lvl1("Testing if setup for evaluation key is done properly for the service")
-	//turning off test.
+func TestSetupEvalKeyGen(t *testing.T) {
+	log.SetDebugVisible(3)
+	log.Lvl1("Testing Setup with EvalKeyGeneration")
+
 	size := 3
-	local := onet.NewLocalTest(utils.SUITE)
-	_, el, _ := local.GenTree(size, true)
-	client := NewLattigoSMCClient(el.List[0], "0")
-	//First the client needs to ask the parties to generate the keys.
+	paramsIdx := uint64(0)
+	clientID := "ClientTestGenEvK"
+	roster := genTestLocalRoster(size)
+	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
-	err := client.SendSetupQuery(el, false, true, false, 0, 0, 0, seed)
+
+	err := client.SendSetupQuery(roster, false, true, false,
+		0, 0, seed)
+
 	if err != nil {
-		t.Fatal("Could not setup the roster", err)
+		t.Fatal("Setup Query returned error:", err)
 	}
 }
 
-func TestSetupRotKey(t *testing.T) {
-	log.SetDebugVisible(1)
-	log.Lvl1("Testing if setup for rotation key is done properly for the service")
-	//turning off test.
+func TestSetupRotKeyGen(t *testing.T) {
+	log.SetDebugVisible(3)
+	log.Lvl1("Testing Setup with RotationKeyGeneration")
+
 	size := 3
-	local := onet.NewLocalTest(utils.SUITE)
-	_, el, _ := local.GenTree(size, true)
-	client := NewLattigoSMCClient(el.List[0], "0")
-	//First the client needs to ask the parties to generate the keys.
+	paramsIdx := uint64(0)
+	clientID := "ClientTestGenRtK"
+	roster := genTestLocalRoster(size)
+	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
-	err := client.SendSetupQuery(el, false, false, true, 1, 0, 0, seed)
+	err := client.SendSetupQuery(roster, false, false, true,
+		1, 0, seed)
+
 	if err != nil {
-		t.Fatal("Could not setup the roster", err)
+		t.Fatal("Setup Query returned error:", err)
 	}
 }
 
-func TestWrite(t *testing.T) {
-	log.SetDebugVisible(4)
-	size := 5
-	local := onet.NewLocalTest(utils.SUITE)
-	_, el, _ := local.GenTree(size, true)
+// TODO: why is KeyQuery even needed?
 
-	client := NewLattigoSMCClient(el.List[0], "0")
+// TODO: doesn't work. Modify client so as to use MasterPublicKey
+func TestStore(t *testing.T) {
+	log.SetDebugVisible(3)
+	log.Lvl1("Testing Store")
+
+	size := 3
+	paramsIdx := uint64(0)
+	clientID := "ClientTestStore"
+	roster := genTestLocalRoster(size)
+	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
+	err := client.SendSetupQuery(roster, true, false, false,
+		0, 0, seed)
 	if err != nil {
-		t.Fatal(err)
-		return
-	}
-	<-time.After(2 * time.Second)
-
-	client1 := NewLattigoSMCClient(el.List[1], "1")
-
-	q, err := client1.SendKeyQuery(true, false, false, 0)
-	log.Lvl1("Response of query : ", q)
-
-	queryID, err := client1.SendStoreQuery(el, []byte("lattigood"))
-	if err != nil {
-		t.Fatal("Could not start client :", err)
-
+		t.Fatal("Setup Query returned error:", err)
 	}
 
-	log.Lvl2("Query Id : ", queryID)
-	<-time.After(1 * time.Second)
+	log.Lvl2("Setup Query succeeded")
 
+	data := []uint64{0, 1, 2, 3, 4}
+	CipherID, err := client.SendStoreQuery(data)
+	if err != nil {
+		t.Fatal("Store Query returned error:", err)
+	}
+
+	log.Lvl2("Store Query succeeded; new CipherID: ", CipherID)
 }
 
+/*
 func TestSwitching(t *testing.T) {
 	log.SetDebugVisible(4)
 	size := 3
@@ -131,6 +142,7 @@ func TestSwitching(t *testing.T) {
 	assert.Equal(t, "Result", string(data[0:9]), string(content))
 
 }
+*/
 
 func TestSumQuery(t *testing.T) {
 	log.SetDebugVisible(4)

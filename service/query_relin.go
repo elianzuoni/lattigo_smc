@@ -21,14 +21,14 @@ func (s *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Message
 	tree := s.Roster.GenerateBinaryTree()
 	err := s.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Couldn't send RelinRequest to root: ", err.Error)
+		log.Error(s.ServerIdentity(), "Couldn't send RelinRequest to root: ", err)
 		return nil, err
 	}
 
 	// Receive reply from channel
 	log.Lvl3(s.ServerIdentity(), "Sent RelinRequest to root. Waiting on channel to receive new CipherID...")
 	reply := <-s.relinReplies[reqID] // TODO: timeout if root cannot send reply
-	if !reply.valid {
+	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform sum")
 		log.Error(s.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
@@ -37,7 +37,7 @@ func (s *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Message
 	}
 	// TODO: close channel?
 
-	return &RelinResponse{reply.valid}, nil
+	return &RelinResponse{reply.Valid}, nil
 
 }
 
@@ -48,14 +48,14 @@ func (s *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Message
 func (s *Service) processRelinRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*RelinRequest)
 
-	log.Lvl1(s.ServerIdentity(), "Root. Received RelinRequest for ciphertext", req.CipherID)
+	log.Lvl1(s.ServerIdentity(), "Root. Received RelinRequest for ciphertext", req.Query.CipherID)
 
 	// Check feasibility
 	log.Lvl3(s.ServerIdentity(), "Checking existence of ciphertext and evaluation key")
-	ct, ok := s.database[req.CipherID]
+	ct, ok := s.database[req.Query.CipherID]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Requested ciphertext does not exist:", req.CipherID)
-		err := s.SendRaw(msg.ServerIdentity, &RelinReply{req.RelinRequestID, false})
+		log.Error(s.ServerIdentity(), "Requested ciphertext does not exist:", req.Query.CipherID)
+		err := s.SendRaw(msg.ServerIdentity, &RelinReply{req.ReqID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
@@ -63,7 +63,7 @@ func (s *Service) processRelinRequest(msg *network.Envelope) {
 	}
 	if !s.evalKeyGenerated {
 		log.Error(s.ServerIdentity(), "Evaluation key not generated")
-		err := s.SendRaw(msg.ServerIdentity, &RelinReply{req.RelinRequestID, false})
+		err := s.SendRaw(msg.ServerIdentity, &RelinReply{req.ReqID, false})
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
@@ -76,11 +76,11 @@ func (s *Service) processRelinRequest(msg *network.Envelope) {
 	ctRelin := eval.RelinearizeNew(ct, s.evalKey)
 
 	// Register (overwrite) in local database
-	s.database[req.CipherID] = ctRelin
+	s.database[req.Query.CipherID] = ctRelin
 
 	// Send reply to server
 	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
-	err := s.SendRaw(msg.ServerIdentity, &RelinReply{req.RelinRequestID, true})
+	err := s.SendRaw(msg.ServerIdentity, &RelinReply{req.ReqID, true})
 	if err != nil {
 		log.Error("Could not reply (positively) to server:", err)
 	}
@@ -94,10 +94,10 @@ func (s *Service) processRelinRequest(msg *network.Envelope) {
 func (s *Service) processRelinReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*RelinReply)
 
-	log.Lvl1(s.ServerIdentity(), "Received RelinReply:", reply.RelinRequestID)
+	log.Lvl1(s.ServerIdentity(), "Received RelinReply:", reply.ReqID)
 
 	// Simply send reply through channel
-	s.relinReplies[reply.RelinRequestID] <- reply
+	s.relinReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

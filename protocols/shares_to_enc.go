@@ -42,6 +42,8 @@ func NewSharesToEncryptionProtocol(t *onet.TreeNodeInstance, params *bfv.Paramet
 		ChannelCiphertext: make(chan *bfv.Ciphertext),
 	}
 
+	proto.done.Lock()
+
 	// No need to initialise the channels: RegisterChannels will do it for us.
 	err := proto.RegisterChannels(&proto.channelStart, &proto.channelReencShares)
 
@@ -106,7 +108,20 @@ func (p *SharesToEncryptionProtocol) Dispatch() error {
 		p.ChannelCiphertext <- cipher
 	}
 
+	p.done.Unlock() // Signal that the protocol is finished
+
 	p.Done() // Onet requirement to finalise the protocol
 
 	return nil
+}
+
+/*********************** Not onet handlers ************************/
+
+// By calling this method, the root can wait for termination of the protocol.
+// It is safe to call multiple times.
+func (p *SharesToEncryptionProtocol) WaitDone() {
+	log.Lvl3("Waiting for protocol to end")
+	p.done.Lock()
+	// Unlock again so that subsequent calls to WaitDone do not block forever
+	p.done.Unlock()
 }

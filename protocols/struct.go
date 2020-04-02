@@ -14,7 +14,6 @@ import (
 type CollectiveKeyGenerationProtocol struct {
 	*onet.TreeNodeInstance
 	*dbfv.CKGProtocol
-	*sync.Cond
 
 	//Params parameters of the protocol
 	Params *bfv.Parameters
@@ -34,29 +33,28 @@ type CollectiveKeyGenerationProtocol struct {
 
 	//ChannelPublicKeyShares to send the public key shares
 	ChannelPublicKeyShares chan StructPublicKeyShare
-	//ChannelPublicKey send the key at the end.
-	ChannelPublicKey chan StructPublicKey
 	//ChannelStart to get the wake up
 	ChannelStart chan StructStart
+
+	done sync.Mutex
 }
 
 //CollectiveKeySwitchingProtocol struct for onet
 type CollectiveKeySwitchingProtocol struct {
 	*onet.TreeNodeInstance
 	*dbfv.CKSProtocol
-	*sync.Cond
 	//Params used for the key switching
 	Params        SwitchingParameters
 	CKSShare      dbfv.CKSShare
 	CiphertextOut *bfv.Ciphertext
 
-	//ChannelCiphertext to send the ciphertext in the end - for testing
-	ChannelCiphertext chan StructCiphertext
 	//ChannelCKSShare to forward the CKSS share
 	ChannelCKSShare chan StructCKSShare
 
 	//ChannelStart to wake up
 	ChannelStart chan StructStart
+
+	done sync.Mutex
 }
 
 //CollectivePublicKeySwitchingProtocol Structure for onet for the pcks
@@ -76,14 +74,12 @@ type CollectivePublicKeySwitchingProtocol struct {
 	PCKSShare               dbfv.PCKSShare
 	CiphertextOut           bfv.Ciphertext
 
-	*sync.Cond
-
-	//ChannelCiphertext to send the ciphertext in the end
-	ChannelCiphertext chan StructCiphertext
 	//ChannelPCKS to forward the shares.
 	ChannelPCKS chan StructPCKS
 	//ChannelStart to wake up
 	ChannelStart chan StructStart
+
+	done sync.Mutex
 }
 
 //RelinearizationKeyProtocol handler for onet for RLK
@@ -96,7 +92,6 @@ type RelinearizationKeyProtocol struct {
 	//SK the secret key of the party
 	Sk bfv.SecretKey
 
-	*sync.Cond
 	RelinProto      *dbfv.RKGProtocol
 	RoundOneShare   dbfv.RKGShareRoundOne
 	RoundTwoShare   dbfv.RKGShareRoundTwo
@@ -111,18 +106,15 @@ type RelinearizationKeyProtocol struct {
 	//ChannelRoundThree to send the different parts of the key
 	ChannelRoundThree chan StructRelinKeyRoundThree
 
-	//ChannelEvalKey These are used for testing.
-	ChannelEvalKey chan StructEvalKey
-
 	//Chan to wake up nodes
 	ChannelStart chan StructStart
+
+	done sync.Mutex
 }
 
 //RefreshProtocol handler for onet for the refresh protocol
 type RefreshProtocol struct {
 	*onet.TreeNodeInstance
-
-	*sync.Cond
 
 	Sk              bfv.SecretKey
 	Ciphertext      bfv.Ciphertext
@@ -133,15 +125,15 @@ type RefreshProtocol struct {
 
 	RefreshProto *dbfv.RefreshProtocol
 
-	ChannelCiphertext chan StructCiphertext
-	ChannelRShare     chan StructRShare
-	ChannelStart      chan StructStart
+	ChannelRShare chan StructRShare
+	ChannelStart  chan StructStart
+
+	done sync.Mutex
 }
 
-//RotationKeyProtocol handler for onet for the rotaiton key protocol
+//RotationKeyProtocol handler for onet for the rotation key protocol
 type RotationKeyProtocol struct {
 	*onet.TreeNodeInstance
-	*sync.Cond
 
 	Params           bfv.Parameters
 	RotationProtocol *dbfv.RTGProtocol
@@ -152,6 +144,8 @@ type RotationKeyProtocol struct {
 
 	ChannelRTShare chan StructRTGShare
 	ChannelStart   chan StructStart
+
+	done sync.Mutex
 }
 
 // EncryptionToSharesProtocol implements the onet.Protocol interface.
@@ -193,6 +187,8 @@ type SharesToEncryptionProtocol struct {
 
 	//Channel to return the ciphertext to the caller (only if root)
 	ChannelCiphertext chan *bfv.Ciphertext
+
+	done sync.Mutex
 }
 
 //StructRTGShare handler for onet

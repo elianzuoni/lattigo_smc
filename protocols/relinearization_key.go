@@ -19,7 +19,6 @@ import (
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"sync"
 )
 
 const RelinearizationKeyProtocolName = "RelinearizationKeyProtocol"
@@ -48,10 +47,11 @@ func (rkp *RelinearizationKeyProtocol) Init(params bfv.Parameters, sk bfv.Secret
 func NewRelinearizationKey(n *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
 	p := &RelinearizationKeyProtocol{
 		TreeNodeInstance: n,
-		Cond:             sync.NewCond(&sync.Mutex{}),
 	}
 
-	if e := p.RegisterChannels(&p.ChannelStart, &p.ChannelRoundOne, &p.ChannelRoundTwo, &p.ChannelRoundThree, &p.ChannelEvalKey); e != nil {
+	p.done.Lock()
+
+	if e := p.RegisterChannels(&p.ChannelStart, &p.ChannelRoundOne, &p.ChannelRoundTwo, &p.ChannelRoundThree); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 
@@ -140,16 +140,21 @@ func (rlp *RelinearizationKeyProtocol) Dispatch() error {
 		rlp.RelinProto.GenRelinearizationKey(rlp.RoundTwoShare, rlp.RoundThreeShare, rlp.EvaluationKey)
 	}
 
+	rlp.done.Unlock()
+
 	rlp.Done()
 
-	rlp.Cond.Broadcast()
 	log.Lvl3(rlp.ServerIdentity(), " : exiting dispatch ")
 	return nil
 }
 
-//Wait blocks until the protocol completes.
-func (rlp *RelinearizationKeyProtocol) Wait() {
-	rlp.Cond.L.Lock()
-	rlp.Cond.Wait()
-	rlp.Cond.L.Unlock()
+/*********************** Not onet handlers ************************/
+
+// By calling this method, the root can wait for termination of the protocol.
+// It is safe to call multiple times.
+func (p *RelinearizationKeyProtocol) WaitDone() {
+	log.Lvl3("Waiting for protocol to end")
+	p.done.Lock()
+	// Unlock again so that subsequent calls to WaitDone do not block forever
+	p.done.Unlock()
 }

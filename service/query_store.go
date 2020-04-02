@@ -36,10 +36,10 @@ func (s *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error) {
 	log.Lvl3(s.ServerIdentity(), "Sent StoreRequest to root. Waiting on channel to receive reply...")
 	reply := <-s.storeReplies[reqID] // TODO: timeout if root cannot send reply
 
-	log.Lvl4(s.ServerIdentity(), "Received reply from channel:", reply.cipherID)
+	log.Lvl4(s.ServerIdentity(), "Received reply from channel:", reply.CipherID)
 	// TODO: close channel?
 
-	return &StoreResponse{reply.cipherID}, nil
+	return &StoreResponse{reply.CipherID}, nil
 }
 
 // StoreRequest is received at root from server.
@@ -50,11 +50,11 @@ func (s *Service) processStoreRequest(msg *network.Envelope) {
 
 	// Register in local database
 	newCipherID := newCipherID()
-	s.database[newCipherID] = req.Ciphertext
+	s.database[newCipherID] = req.Query.Ciphertext
 
 	// Send reply to server
 	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
-	err := s.SendRaw(msg.ServerIdentity, &StoreReply{req.StoreRequestID, newCipherID})
+	err := s.SendRaw(msg.ServerIdentity, &StoreReply{req.ReqID, newCipherID})
 	if err != nil {
 		log.Error("Could not reply (positively) to server:", err)
 	}
@@ -66,10 +66,10 @@ func (s *Service) processStoreRequest(msg *network.Envelope) {
 func (s *Service) processStoreReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*StoreReply)
 
-	log.Lvl1(s.ServerIdentity(), "Received StoreReply:", reply.StoreRequestID)
+	log.Lvl1(s.ServerIdentity(), "Received StoreReply:", reply.ReqID)
 
 	// Simply send reply through channel
-	s.storeReplies[reply.StoreRequestID] <- reply
+	s.storeReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

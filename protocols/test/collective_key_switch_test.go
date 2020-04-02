@@ -96,7 +96,7 @@ func testLocalCKS(t *testing.T, params *bfv.Parameters, N int, local *onet.Local
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
 	}
-	cksp.Wait()
+	cksp.WaitDone()
 
 	elapsed := time.Since(now)
 	log.Lvl1("*****************Collective key switching done.******************")

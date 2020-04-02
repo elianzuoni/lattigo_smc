@@ -93,7 +93,7 @@ func testLocalCKG(t *testing.T, params *bfv.Parameters, N int, local *onet.Local
 		t.Fatal("Could not start the tree : ", err)
 	}
 
-	ckgp.Wait()
+	ckgp.WaitDone()
 	elapsed := time.Since(now)
 	log.Lvl1("**********Collective Key Generated for ", len(ckgp.Roster().List), " nodes.****************")
 	log.Lvl1("**********Time elapsed : ", elapsed, "*************")

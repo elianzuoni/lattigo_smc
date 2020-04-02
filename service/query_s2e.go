@@ -32,7 +32,7 @@ func (s *Service) HandleSharesToEncQuery(query *SharesToEncQuery) (network.Messa
 	// Receive reply from channel
 	log.Lvl3(s.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
 	reply := <-s.sharesToEncReplies[reqID] // TODO: timeout if root cannot send reply
-	if !reply.valid {
+	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform shares-to-enc")
 		log.Error(s.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
@@ -40,24 +40,24 @@ func (s *Service) HandleSharesToEncQuery(query *SharesToEncQuery) (network.Messa
 	log.Lvl4(s.ServerIdentity(), "Received valid reply from channel")
 	// TODO: close channel?
 
-	return &SharesToEncResponse{reply.valid}, nil
+	return &SharesToEncResponse{reply.Valid}, nil
 }
 
 func (s *Service) processSharesToEncRequest(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Root. Received SharesToEncRequest.")
 
 	req := (msg.Msg).(*SharesToEncRequest)
-	reply := SharesToEncReply{SharesToEncRequestID: req.SharesToEncRequestID}
+	reply := SharesToEncReply{ReqID: req.ReqID}
 
 	// The check for existence of the share is done in the protocol factory, since it is a problem of every node
 
 	// Build preparation message to broadcast
-	prep := SharesToEncBroadcast{req.SharesToEncRequestID,
-		&S2EParameters{req.CipherID}}
+	prep := SharesToEncBroadcast{req.ReqID,
+		&S2EParameters{req.Query.CipherID}}
 
 	// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
 	log.Lvl2(s.ServerIdentity(), "Broadcasting preparation message to all nodes")
-	err := utils.Broadcast(s.ServiceProcessor, &s.Roster, prep)
+	err := utils.Broadcast(s.ServiceProcessor, s.Roster, prep)
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not broadcast preparation message:", err)
 		err = s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -81,12 +81,12 @@ func (s *Service) processSharesToEncRequest(msg *network.Envelope) {
 	}
 
 	// Register (overwrite) in the local database
-	s.database[req.CipherID] = ctReenc
+	s.database[req.Query.CipherID] = ctReenc
 
 	log.Lvl3(s.ServerIdentity(), "Successfully re-encrypted ciphertext")
 
 	// Set fields in the reply
-	reply.valid = true
+	reply.Valid = true
 
 	// Send the positive reply to the server
 	log.Lvl2(s.ServerIdentity(), "Replying (positively) to server")
@@ -106,7 +106,7 @@ func (s *Service) processSharesToEncBroadcast(msg *network.Envelope) {
 
 	// Send the shares-to-enc parameters through the channel, on which the protocol factory waits
 	log.Lvl3(s.ServerIdentity(), "Sending sharesToEnc parameters through channel")
-	s.sharesToEncParams <- prep.params
+	s.sharesToEncParams <- prep.Params
 
 	log.Lvl4(s.ServerIdentity(), "Sent sharesToEnc parameters through channel")
 
@@ -166,7 +166,7 @@ func (s *Service) processSharesToEncReply(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Received SharesToEncReply")
 
 	// Simply send reply through channel
-	s.sharesToEncReplies[reply.SharesToEncRequestID] <- reply
+	s.sharesToEncReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

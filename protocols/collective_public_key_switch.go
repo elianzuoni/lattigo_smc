@@ -14,7 +14,6 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"sync"
 )
 
 const CollectivePublicKeySwitchingProtocolName = "CollectivePublicKeySwitching"
@@ -45,10 +44,11 @@ func NewCollectivePublicKeySwitching(n *onet.TreeNodeInstance) (onet.ProtocolIns
 
 	p := &CollectivePublicKeySwitchingProtocol{
 		TreeNodeInstance: n,
-		Cond:             sync.NewCond(&sync.Mutex{}),
 	}
 
-	if e := p.RegisterChannels(&p.ChannelStart, &p.ChannelCiphertext, &p.ChannelPCKS); e != nil {
+	p.done.Lock()
+
+	if e := p.RegisterChannels(&p.ChannelStart, &p.ChannelPCKS); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 
@@ -91,7 +91,7 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Dispatch() error {
 		pcks.PublicKeySwitchProtocol.KeySwitch(pcks.PCKSShare, &pcks.Ciphertext, &pcks.CiphertextOut)
 	}
 
-	pcks.Cond.Broadcast()
+	pcks.done.Unlock()
 
 	pcks.Done()
 
@@ -99,9 +99,13 @@ func (pcks *CollectivePublicKeySwitchingProtocol) Dispatch() error {
 
 }
 
-//Wait blocks until protocol completes
-func (pcks *CollectivePublicKeySwitchingProtocol) Wait() {
-	pcks.Cond.L.Lock()
-	pcks.Cond.Wait()
-	pcks.Cond.L.Unlock()
+/*********************** Not onet handlers ************************/
+
+// By calling this method, the root can wait for termination of the protocol.
+// It is safe to call multiple times.
+func (p *CollectivePublicKeySwitchingProtocol) WaitDone() {
+	log.Lvl3("Waiting for protocol to end")
+	p.done.Lock()
+	// Unlock again so that subsequent calls to WaitDone do not block forever
+	p.done.Unlock()
 }

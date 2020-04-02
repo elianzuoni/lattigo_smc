@@ -99,7 +99,7 @@ func testLocalRefresh(t *testing.T, params *bfv.Parameters, N int, local *onet.L
 	if err != nil {
 		t.Fatal("Could not start the tree : ", err)
 	}
-	rkp.Wait()
+	rkp.WaitDone()
 	elapsed := time.Since(now)
 	log.Lvl1("*****************Refresh key done.******************")
 	log.Lvl1("*****************Time elapsed : ", elapsed, "*******************")

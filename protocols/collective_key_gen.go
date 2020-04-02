@@ -17,7 +17,6 @@ import (
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"sync"
 )
 
 //CollectiveKeyGenerationProtocolName name of protocol for onet
@@ -99,18 +98,22 @@ func (ckgp *CollectiveKeyGenerationProtocol) Dispatch() error {
 	}
 
 	log.Lvl2(ckgp.ServerIdentity(), "completed Collective Public Key Generation protocol ")
-	ckgp.Cond.Broadcast()
+	ckgp.done.Unlock()
 
 	ckgp.Done()
 
 	return nil
 }
 
-//Wait blocks until the dispatch is finished
-func (ckgp *CollectiveKeyGenerationProtocol) Wait() {
-	ckgp.Cond.L.Lock()
-	ckgp.Cond.Wait()
-	ckgp.Cond.L.Unlock()
+/*********************** Not onet handlers ************************/
+
+// By calling this method, the root can wait for termination of the protocol.
+// It is safe to call multiple times.
+func (p *CollectiveKeyGenerationProtocol) WaitDone() {
+	log.Lvl3("Waiting for protocol to end")
+	p.done.Lock()
+	// Unlock again so that subsequent calls to WaitDone do not block forever
+	p.done.Unlock()
 }
 
 //NewCollectiveKeyGeneration is called when a new protocol is started. Will initialize the channels used to communicate between the nodes.
@@ -119,11 +122,11 @@ func NewCollectiveKeyGeneration(n *onet.TreeNodeInstance) (onet.ProtocolInstance
 
 	p := &CollectiveKeyGenerationProtocol{
 		TreeNodeInstance: n,
-		Cond:             sync.NewCond(&sync.Mutex{}),
-		Initialized:      make(chan bool),
 	}
 
-	if e := p.RegisterChannels(&p.ChannelPublicKeyShares, &p.ChannelPublicKey, &p.ChannelStart); e != nil {
+	p.done.Lock()
+
+	if e := p.RegisterChannels(&p.ChannelPublicKeyShares, &p.ChannelStart); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 

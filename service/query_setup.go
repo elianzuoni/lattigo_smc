@@ -13,18 +13,18 @@ import (
 )
 
 func (s *Service) HandleSetupQuery(query *SetupQuery) (network.Message, error) {
-	log.Lvl1("Received SetupQuery")
+	log.Lvl1(s.ServerIdentity(), "Received SetupQuery")
 
 	// Create SumRequest with its ID
 	reqID := newSetupRequestID()
-	req := SetupRequest{reqID, query}
+	req := &SetupRequest{reqID, query}
 
 	// Create channel before sending request to root.
 	s.setupReplies[reqID] = make(chan *SetupReply)
 
 	// Send request to root
-	log.Lvl2(s.ServerIdentity(), "Sending SetupRequest to root:", reqID)
-	tree := s.Roster.GenerateBinaryTree()
+	log.Lvl2(s.ServerIdentity(), "Sending SetupRequest to root")
+	tree := query.Roster.GenerateBinaryTree()
 	err := s.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Couldn't send SetupRequest to root: " + err.Error())
@@ -42,9 +42,9 @@ func (s *Service) HandleSetupQuery(query *SetupQuery) (network.Message, error) {
 	// TODO: close channel?
 
 	return &SetupResponse{
-		PubKeyGenerated:  reply.pubKeyGenerated,
-		EvalKeyGenerated: reply.evalKeyGenerated,
-		RotKeyGenerated:  reply.rotKeyGenerated,
+		PubKeyGenerated:  reply.PubKeyGenerated,
+		EvalKeyGenerated: reply.EvalKeyGenerated,
+		RotKeyGenerated:  reply.RotKeyGenerated,
 	}, nil
 }
 
@@ -52,12 +52,15 @@ func (s *Service) processSetupRequest(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Root. Received SetupRequest.")
 
 	req := (msg.Msg).(*SetupRequest)
-	reply := SetupReply{SetupRequestID: req.SetupRequestID}
+	reply := &SetupReply{ReqID: req.ReqID} // Incomplete
+
+	// Start by setting the Roster, which will be immediately needed
+	s.Roster = req.Query.Roster
 
 	// First, broadcast the request so that all nodes can be ready for the subsequent protocols.
 	log.Lvl2(s.ServerIdentity(), "Broadcasting preparation message to all nodes")
 	prep := (*SetupBroadcast)(req)
-	err := utils.Broadcast(s.ServiceProcessor, &req.Roster, prep)
+	err := utils.Broadcast(s.ServiceProcessor, req.Query.Roster, prep)
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not broadcast preparation message:", err)
 		// TODO: maybe not return anything and let it timeout?
@@ -70,7 +73,7 @@ func (s *Service) processSetupRequest(msg *network.Envelope) {
 	}
 
 	// Then, generate the requested keys (if missing)
-	if req.GeneratePublicKey && !s.pubKeyGenerated {
+	if req.Query.GeneratePublicKey && !s.pubKeyGenerated {
 		log.Lvl3(s.ServerIdentity(), "PublicKey requested and missing. Generating it.")
 
 		err = s.genPublicKey()
@@ -78,10 +81,10 @@ func (s *Service) processSetupRequest(msg *network.Envelope) {
 			log.Error(s.ServerIdentity(), "Could not generate public key:", err)
 		} else {
 			s.pubKeyGenerated = true
-			reply.pubKeyGenerated = true
+			reply.PubKeyGenerated = true
 		}
 	}
-	if req.GenerateEvaluationKey && !s.evalKeyGenerated {
+	if req.Query.GenerateEvaluationKey && !s.evalKeyGenerated {
 		log.Lvl3(s.ServerIdentity(), "EvaluationKey requested and missing. Generating it.")
 
 		err = s.genEvalKey()
@@ -89,10 +92,10 @@ func (s *Service) processSetupRequest(msg *network.Envelope) {
 			log.Error(s.ServerIdentity(), "Could not generate evaluation key:", err)
 		} else {
 			s.evalKeyGenerated = true
-			reply.evalKeyGenerated = true
+			reply.EvalKeyGenerated = true
 		}
 	}
-	if req.GenerateRotationKey && !s.rotKeyGenerated {
+	if req.Query.GenerateRotationKey && !s.rotKeyGenerated {
 		log.Lvl3(s.ServerIdentity(), "RotationKey requested and missing. Generating it.")
 
 		err = s.genRotKey()
@@ -100,7 +103,7 @@ func (s *Service) processSetupRequest(msg *network.Envelope) {
 			log.Error(s.ServerIdentity(), "Could not generate rotation key:", err)
 		} else {
 			s.rotKeyGenerated = true
-			reply.rotKeyGenerated = true
+			reply.RotKeyGenerated = true
 		}
 	}
 
@@ -124,15 +127,15 @@ func (s *Service) processSetupBroadcast(msg *network.Envelope) {
 
 	// Set parameters, if needed, and signal this on the appropriate locks
 	// TODO: this assumes that the first setup query is not just for rotation
-	if !s.skSet && (prep.GeneratePublicKey || prep.GenerateEvaluationKey || prep.GenerateRotationKey) {
+	if !s.skSet && (prep.Query.GeneratePublicKey || prep.Query.GenerateEvaluationKey || prep.Query.GenerateRotationKey) {
 		log.Lvl3(s.ServerIdentity(), "skShard not yet set. Generating from request")
-		s.Roster = prep.Roster
-		s.Params = bfv.DefaultParams[prep.ParamsIdx]
+		s.Roster = prep.Query.Roster
+		s.Params = bfv.DefaultParams[prep.Query.ParamsIdx]
 		keygen := bfv.NewKeyGenerator(s.Params)
 		s.skShard = keygen.GenSecretKey()
 		s.partialPk = keygen.GenPublicKey(s.skShard)
-		s.crpGen = dbfv.NewCRPGenerator(s.Params, prep.Seed)
-		s.cipherCRPgen = dbfv.NewCipherCRPGenerator(s.Params, prep.Seed)
+		s.crpGen = dbfv.NewCRPGenerator(s.Params, prep.Query.Seed)
+		s.cipherCRPgen = dbfv.NewCipherCRPGenerator(s.Params, prep.Query.Seed)
 
 		log.Lvl3(s.ServerIdentity(), "Unlocking locks for CKG and EKG protocol factories")
 		s.waitCKG.Unlock()
@@ -140,10 +143,10 @@ func (s *Service) processSetupBroadcast(msg *network.Envelope) {
 
 		s.skSet = true
 	}
-	if !s.rotParamsSet && prep.GenerateRotationKey {
+	if !s.rotParamsSet && prep.Query.GenerateRotationKey {
 		log.Lvl3(s.ServerIdentity(), "Rotation parameters not yet set. Generating from request")
-		s.rotIdx = prep.RotIdx
-		s.k = prep.K
+		s.rotIdx = prep.Query.RotIdx
+		s.k = prep.Query.K
 
 		log.Lvl3(s.ServerIdentity(), "Unlocking lock for RKG protocol factory")
 		s.waitRKG.Unlock()
@@ -193,7 +196,7 @@ func (s *Service) genPublicKey() error {
 
 	// Wait for termination of protocol
 	log.Lvl2(ckgp.ServerIdentity(), "Waiting for CKG protocol to terminate...")
-	ckgp.Wait()
+	ckgp.WaitDone()
 
 	// Retrieve PublicKey
 	s.MasterPublicKey = ckgp.Pk
@@ -220,7 +223,7 @@ func (s *Service) genEvalKey() error {
 	log.Lvl3(s.ServerIdentity(), "Registering EKG protocol instance")
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err.Error)
+		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err)
 		return err
 	}
 
@@ -229,19 +232,19 @@ func (s *Service) genEvalKey() error {
 	log.Lvl2(s.ServerIdentity(), "Starting EKG protocol")
 	err = ekg.Start()
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not start EKG protocol:", err.Error)
+		log.Error(s.ServerIdentity(), "Could not start EKG protocol:", err)
 		return err
 	}
 	// Call dispatch (the main logic)
 	err = ekg.Dispatch()
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not dispatch EKG protocol:", err.Error)
+		log.Error(s.ServerIdentity(), "Could not dispatch EKG protocol:", err)
 		return err
 	}
 
 	// Wait for termination of protocol
 	log.Lvl2(ekg.ServerIdentity(), "Waiting for EKG protocol to terminate...")
-	ekg.Wait()
+	ekg.WaitDone()
 
 	// Retrieve EvaluationKey
 	s.evalKey = ekg.EvaluationKey
@@ -268,7 +271,7 @@ func (s *Service) genRotKey() error {
 	log.Lvl3(s.ServerIdentity(), "Registering RKG protocol instance")
 	err = s.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err.Error)
+		log.Error(s.ServerIdentity(), "Could not register protocol instance:", err)
 		return err
 	}
 
@@ -277,19 +280,19 @@ func (s *Service) genRotKey() error {
 	log.Lvl2(s.ServerIdentity(), "Starting RKG protocol")
 	err = rkg.Start()
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not start RKG protocol:", err.Error)
+		log.Error(s.ServerIdentity(), "Could not start RKG protocol:", err)
 		return err
 	}
 	// Call dispatch (the main logic)
 	err = rkg.Dispatch()
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not dispatch RKG protocol:", err.Error)
+		log.Error(s.ServerIdentity(), "Could not dispatch RKG protocol:", err)
 		return err
 	}
 
 	// Wait for termination of protocol
 	log.Lvl2(rkg.ServerIdentity(), "Waiting for RKG protocol to terminate...")
-	rkg.Wait()
+	rkg.WaitDone()
 
 	// Retrieve RotationKey
 	s.rotationKey = &rkg.RotKey
@@ -304,10 +307,10 @@ func (s *Service) genRotKey() error {
 func (s *Service) processSetupReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*SetupReply)
 
-	log.Lvl1(s.ServerIdentity(), "Received SetupReply:", reply.SetupRequestID)
+	log.Lvl1(s.ServerIdentity(), "Received SetupReply:", reply.ReqID)
 
 	// Simply send reply through channel
-	s.setupReplies[reply.SetupRequestID] <- reply
+	s.setupReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

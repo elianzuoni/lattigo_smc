@@ -7,7 +7,6 @@ import (
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"sync"
 )
 
 //CollectiveKeyGenerationProtocolName name of protocol for onet
@@ -43,10 +42,11 @@ func NewCollectiveRefresh(n *onet.TreeNodeInstance) (onet.ProtocolInstance, erro
 
 	p := &RefreshProtocol{
 		TreeNodeInstance: n,
-		Cond:             sync.NewCond(&sync.Mutex{}),
 	}
 
-	if e := p.RegisterChannels(&p.ChannelCiphertext, &p.ChannelRShare, &p.ChannelStart); e != nil {
+	p.done.Lock()
+
+	if e := p.RegisterChannels(&p.ChannelRShare, &p.ChannelStart); e != nil {
 		return nil, errors.New("Could not register channel: " + e.Error())
 	}
 
@@ -64,7 +64,6 @@ func (rkp *RefreshProtocol) Start() error {
 func (rkp *RefreshProtocol) Dispatch() error {
 
 	log.Lvl2(rkp.ServerIdentity(), " Dispatching ; is root = ", rkp.IsRoot())
-	defer rkp.Cond.Broadcast()
 
 	//When running a simulation we need to send a wake up message to the children so all nodes can run!
 	log.Lvl4("Sending wake up message")
@@ -98,13 +97,20 @@ func (rkp *RefreshProtocol) Dispatch() error {
 	}
 
 	log.Lvl2(rkp.ServerIdentity(), "Completed Collective Public Refresh protocol ")
+
+	rkp.done.Unlock()
+
 	rkp.Done()
 	return nil
 }
 
-//Wait block until the protocol completes.
-func (rkp *RefreshProtocol) Wait() {
-	rkp.Cond.L.Lock()
-	rkp.Cond.Wait()
-	rkp.Cond.L.Unlock()
+/*********************** Not onet handlers ************************/
+
+// By calling this method, the root can wait for termination of the protocol.
+// It is safe to call multiple times.
+func (p *RefreshProtocol) WaitDone() {
+	log.Lvl3("Waiting for protocol to end")
+	p.done.Lock()
+	// Unlock again so that subsequent calls to WaitDone do not block forever
+	p.done.Unlock()
 }

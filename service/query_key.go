@@ -43,9 +43,9 @@ func (s *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 	// TODO: close channel?
 
 	return &KeyResponse{
-		PubKeyObtained:  reply.pk != nil,
-		EvalKeyObtained: reply.evk != nil,
-		RotKeyObtained:  reply.rtk != nil,
+		PubKeyObtained:  reply.PublicKey != nil,
+		EvalKeyObtained: reply.EvalKey != nil,
+		RotKeyObtained:  reply.RotKeys != nil,
 	}, nil
 }
 
@@ -60,13 +60,13 @@ func (s *Service) processKeyRequest(msg *network.Envelope) {
 	// Build reply as desired by server.
 	reply := KeyReply{}
 	if query.PublicKey && s.pubKeyGenerated {
-		reply.pk = s.MasterPublicKey
+		reply.PublicKey = s.MasterPublicKey
 	}
 	if query.EvaluationKey && s.evalKeyGenerated {
-		reply.evk = s.evalKey
+		reply.EvalKey = s.evalKey
 	}
 	if query.RotationKey && s.rotKeyGenerated {
-		reply.rtk = s.rotationKey
+		reply.RotKeys = s.rotationKey
 	}
 	// TODO what about rotationIdx?
 
@@ -82,21 +82,21 @@ func (s *Service) processKeyRequest(msg *network.Envelope) {
 // It stores the received keys, then it sends the reply through the channel.
 func (s *Service) processKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*KeyReply)
-	log.Lvl1(s.ServerIdentity(), "Server. Received KeyReply. PubKeyRcvd:", reply.pk != nil,
-		"; RotKeyRcvd:", reply.rtk != nil, "EvalKeyRcvd:", reply.evk != nil)
+	log.Lvl1(s.ServerIdentity(), "Server. Received KeyReply. PubKeyRcvd:", reply.PublicKey != nil,
+		"; RotKeyRcvd:", reply.RotKeys != nil, "EvalKeyRcvd:", reply.EvalKey != nil)
 
 	// Save (in the Service struct) the received keys.
-	if reply.pk != nil {
-		s.MasterPublicKey = reply.pk
+	if reply.PublicKey != nil {
+		s.MasterPublicKey = reply.PublicKey
 	}
-	if reply.evk != nil {
-		s.evalKey = reply.evk
+	if reply.EvalKey != nil {
+		s.evalKey = reply.EvalKey
 	}
-	if reply.rtk != nil {
-		s.rotationKey = reply.rtk
+	if reply.RotKeys != nil {
+		s.rotationKey = reply.RotKeys
 	}
 
 	// Send reply through channel
-	s.keyReplies[reply.KeyRequestID] <- reply
+	s.keyReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 }

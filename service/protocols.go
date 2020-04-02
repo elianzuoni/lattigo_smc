@@ -232,8 +232,8 @@ func (s *Service) newProtoE2S(tn *onet.TreeNodeInstance) (onet.ProtocolInstance,
 	// Then, create the protocol with the known parameters and the one just received
 	log.Lvl3(s.ServerIdentity(), "Creating protocol")
 	sigmaSmudging := s.Params.Sigma // TODO: how to set?
-	e2sp, err := protocols.NewEncryptionToSharesProtocol(tn, s.Params, sigmaSmudging, s.skShard, params.ct,
-		s.newShareFinaliser(params.cipherID))
+	e2sp, err := protocols.NewEncryptionToSharesProtocol(tn, s.Params, sigmaSmudging, s.skShard, params.Ciphertext,
+		s.newShareFinaliser(params.CipherID))
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
@@ -266,10 +266,10 @@ func (s *Service) newProtoS2E(tn *onet.TreeNodeInstance) (onet.ProtocolInstance,
 	sigmaSmudging := s.Params.Sigma  // TODO: how to set?
 	crp := s.cipherCRPgen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
 	// Check if share exists
-	share, ok := s.shares[params.cipherID]
+	share, ok := s.shares[params.CipherID]
 	if !ok {
 		err := errors.New(tn.ServerIdentity().Description + "AdditiveShare for ciphertext " +
-			params.cipherID.String() + " not available")
+			params.CipherID.String() + " not available")
 		log.Error(err)
 		return nil, err
 	}

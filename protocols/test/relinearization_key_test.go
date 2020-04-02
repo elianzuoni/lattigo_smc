@@ -97,7 +97,7 @@ func testLocalRKG(t *testing.T, params *bfv.Parameters, N int, local *onet.Local
 		log.Error("Could not start relinearization protocol : ", err)
 		t.Fail()
 	}
-	RelinProtocol.Wait()
+	RelinProtocol.WaitDone()
 	elapsed := time.Since(now)
 	log.Lvl1("**********RELINEARIZATION KEY PROTOCOL DONE ***************")
 	log.Lvl1("**********Time elapsed :", elapsed, "***************")

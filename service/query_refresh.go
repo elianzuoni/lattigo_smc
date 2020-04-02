@@ -32,7 +32,7 @@ func (s *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, erro
 	// Receive reply from channel
 	log.Lvl3(s.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
 	reply := <-s.refreshReplies[reqID] // TODO: timeout if root cannot send reply
-	if !reply.valid {
+	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform refresh")
 		log.Error(s.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
@@ -40,19 +40,19 @@ func (s *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, erro
 	log.Lvl4(s.ServerIdentity(), "Received valid reply from channel")
 	// TODO: close channel?
 
-	return &RefreshResponse{reply.valid}, nil
+	return &RefreshResponse{reply.Valid}, nil
 }
 
 func (s *Service) processRefreshRequest(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Root. Received RefreshRequest.")
 
 	req := (msg.Msg).(*RefreshRequest)
-	reply := RefreshReply{RefreshRequestID: req.RefreshRequestID}
+	reply := RefreshReply{ReqID: req.ReqID}
 
 	// Check existence of ciphertext
-	ct, ok := s.database[req.CipherID]
+	ct, ok := s.database[req.Query.CipherID]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Ciphertext", req.CipherID, "does not exist.")
+		log.Error(s.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
 		if err != nil {
 			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
@@ -62,11 +62,11 @@ func (s *Service) processRefreshRequest(msg *network.Envelope) {
 	}
 
 	// Build preparation message to broadcast
-	prep := RefreshBroadcast{req.RefreshRequestID, ct}
+	prep := RefreshBroadcast{req.ReqID, ct}
 
 	// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
 	log.Lvl2(s.ServerIdentity(), "Broadcasting preparation message to all nodes")
-	err := utils.Broadcast(s.ServiceProcessor, &s.Roster, prep)
+	err := utils.Broadcast(s.ServiceProcessor, s.Roster, prep)
 	if err != nil {
 		log.Error(s.ServerIdentity(), "Could not broadcast preparation message:", err)
 		err = s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -90,12 +90,12 @@ func (s *Service) processRefreshRequest(msg *network.Envelope) {
 	}
 
 	// Register (overwrite) in the local database
-	s.database[req.CipherID] = ctRefresh
+	s.database[req.Query.CipherID] = ctRefresh
 
 	log.Lvl3(s.ServerIdentity(), "Successfully refreshed ciphertext")
 
 	// Set fields in the reply
-	reply.valid = true
+	reply.Valid = true
 
 	// Send the positive reply to the server
 	log.Lvl2(s.ServerIdentity(), "Replying (positively) to server")
@@ -115,7 +115,7 @@ func (s *Service) processRefreshBroadcast(msg *network.Envelope) {
 
 	// Send the refresh parameters through the channel, on which the protocol factory waits
 	log.Lvl3(s.ServerIdentity(), "Sending refresh parameters through channel")
-	s.refreshParams <- prep.ct
+	s.refreshParams <- prep.Ciphertext
 
 	log.Lvl4(s.ServerIdentity(), "Sent refresh parameters through channel")
 
@@ -161,7 +161,7 @@ func (s *Service) refreshCiphertext() (*bfv.Ciphertext, error) {
 
 	// Wait for termination of protocol
 	log.Lvl2(refresh.ServerIdentity(), "Waiting for refresh protocol to terminate...")
-	refresh.Wait()
+	refresh.WaitDone()
 
 	log.Lvl2(s.ServerIdentity(), "Refreshed ciphertext!")
 
@@ -174,7 +174,7 @@ func (s *Service) processRefreshReply(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Received RefreshReply")
 
 	// Simply send reply through channel
-	s.refreshReplies[reply.RefreshRequestID] <- reply
+	s.refreshReplies[reply.ReqID] <- reply
 	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
 
 	return

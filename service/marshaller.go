@@ -2,6 +2,8 @@
 
 package service
 
+/*
+
 import (
 	"encoding/binary"
 	uuid "gopkg.in/satori/go.uuid.v1"
@@ -26,6 +28,9 @@ func unmarshUUID(data []byte) (u uuid.UUID, err error) {
 }
 
 // Setup
+
+
+
 
 func (query *SetupQuery) MarshalBinary() (data []byte, err error) {
 	// TODO: how to marshal roster?
@@ -69,6 +74,7 @@ func (req *SetupRequest) MarshalBinary() (data []byte, err error) {
 
 	return
 }
+
 
 func (req *SetupRequest) UnmarshalBinary(data []byte) (err error) {
 	ptr := 0 // Used to index data
@@ -183,6 +189,8 @@ func (resp *SetupResponse) UnmarshalBinary(data []byte) (err error) {
 
 	return
 }
+
+
 
 // Key
 
@@ -2734,3 +2742,4 @@ func (resp *SharesToEncResponse) UnmarshalBinary(data []byte) (err error) {
 
 	return
 }
+*/

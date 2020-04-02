@@ -14,7 +14,7 @@ import (
 // Service is the service of lattigoSMC - allows to compute the different HE operations
 type Service struct {
 	*onet.ServiceProcessor
-	onet.Roster
+	*onet.Roster
 
 	// General bfv parameters
 	MasterPublicKey *bfv.PublicKey
