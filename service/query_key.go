@@ -12,67 +12,90 @@ import (
 // from the root.
 // The request is forwarded to the root, and the method returns a response based on the reply sent by the server,
 // indicating which keys were retrieved.
-func (s *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
-	log.Lvl1(s.ServerIdentity(), "Received KeyQuery query. ReqPubKey:", query.PublicKey, "; ReqRotKey:", query.RotationKey,
+func (smc *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
+	log.Lvl1(smc.ServerIdentity(), "Received KeyQuery query. ReqPubKey:", query.PublicKey, "; ReqRotKey:", query.RotationKey,
 		"; ReqEvalKey:", query.EvaluationKey)
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[query.SessionID]
+	if !ok {
+		err := errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
 
 	// Create KeyRequest with its ID
 	reqID := newKeyRequestID()
-	req := KeyRequest{reqID, query}
+	req := KeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.keyReplies[reqID] = make(chan *KeyReply)
 
 	// Send request to root
-	log.Lvl2(s.ServerIdentity(), "Sending KeyRequest to root:", reqID)
+	log.Lvl2(smc.ServerIdentity(), "Sending KeyRequest to root:", reqID)
 	tree := s.Roster.GenerateBinaryTree()
-	err := s.SendRaw(tree.Root.ServerIdentity, req)
+	err := smc.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Could not forward query to the root: " + err.Error())
-		log.Error(s.ServerIdentity(), err)
+		log.Error(smc.ServerIdentity(), err)
 		return nil, err
 	}
 
-	log.Lvl2(s.ServerIdentity(), "Forwarded request to the root")
+	log.Lvl2(smc.ServerIdentity(), "Forwarded request to the root")
 
 	// Receive reply from channel
-	log.Lvl3(s.ServerIdentity(), "Sent KeyRequest to root. Waiting on channel to receive reply...")
+	log.Lvl3(smc.ServerIdentity(), "Sent KeyRequest to root. Waiting on channel to receive reply...")
 	reply := <-s.keyReplies[reqID] // TODO: timeout if root cannot send reply
 
-	log.Lvl4(s.ServerIdentity(), "Received reply from channel")
+	log.Lvl4(smc.ServerIdentity(), "Received reply from channel")
 	// TODO: close channel?
 
 	return &KeyResponse{
 		PubKeyObtained:  reply.PublicKey != nil,
 		EvalKeyObtained: reply.EvalKey != nil,
 		RotKeyObtained:  reply.RotKeys != nil,
+		Valid:           reply.Valid,
 	}, nil
 }
 
 // KeyQuery is received at root from server.
 // It comprises three flags, signalling which keys the server is asking for.
-func (s *Service) processKeyRequest(msg *network.Envelope) {
-	query := (msg.Msg).(*KeyQuery)
+func (smc *Service) processKeyRequest(msg *network.Envelope) {
+	req := (msg.Msg).(*KeyRequest)
 
-	log.Lvl1(s.ServerIdentity(), "Root. Received KeyQuery. ReqPubKey:", query.PublicKey, "; ReqRotKey:",
-		query.RotationKey, "; ReqEvalKey:", query.EvaluationKey)
+	log.Lvl1(smc.ServerIdentity(), "Root. Received KeyQuery. ReqPubKey:", req.Query.PublicKey, "; ReqRotKey:",
+		req.Query.RotationKey, "; ReqEvalKey:", req.Query.EvaluationKey)
 
-	// Build reply as desired by server.
-	reply := KeyReply{}
-	if query.PublicKey && s.pubKeyGenerated {
+	// Start by declaring reply with minimal fields.
+	reply := &KeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[req.SessionID]
+	if !ok {
+		log.Error(smc.ServerIdentity(), "Requested session does not exist")
+		// Send negative response
+		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		if err != nil {
+			log.Error("Could not send reply : ", err)
+		}
+		return
+	}
+
+	if req.Query.PublicKey && s.pubKeyGenerated {
 		reply.PublicKey = s.MasterPublicKey
 	}
-	if query.EvaluationKey && s.evalKeyGenerated {
+	if req.Query.EvaluationKey && s.evalKeyGenerated {
 		reply.EvalKey = s.evalKey
 	}
-	if query.RotationKey && s.rotKeyGenerated {
+	if req.Query.RotationKey && s.rotKeyGenerated {
 		reply.RotKeys = s.rotationKey
 	}
+	reply.Valid = true
 	// TODO what about rotationIdx?
 
 	// Send the result.
-	log.Lvl2(s.ServerIdentity(), "Sending KeyReply to server", msg.ServerIdentity)
-	err := s.SendRaw(msg.ServerIdentity, &reply)
+	log.Lvl2(smc.ServerIdentity(), "Sending KeyReply to server", msg.ServerIdentity)
+	err := smc.SendRaw(msg.ServerIdentity, &reply)
 	if err != nil {
 		log.Error("Could not send reply : ", err)
 	}
@@ -80,10 +103,17 @@ func (s *Service) processKeyRequest(msg *network.Envelope) {
 
 // This method is executed at the server when receiving the root's KeyReply.
 // It stores the received keys, then it sends the reply through the channel.
-func (s *Service) processKeyReply(msg *network.Envelope) {
+func (smc *Service) processKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*KeyReply)
-	log.Lvl1(s.ServerIdentity(), "Server. Received KeyReply. PubKeyRcvd:", reply.PublicKey != nil,
+	log.Lvl1(smc.ServerIdentity(), "Server. Received KeyReply. PubKeyRcvd:", reply.PublicKey != nil,
 		"; RotKeyRcvd:", reply.RotKeys != nil, "EvalKeyRcvd:", reply.EvalKey != nil)
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[reply.SessionID]
+	if !ok {
+		log.Error(smc.ServerIdentity(), "Requested session does not exist")
+		return
+	}
 
 	// Save (in the Service struct) the received keys.
 	if reply.PublicKey != nil {
@@ -98,5 +128,5 @@ func (s *Service) processKeyReply(msg *network.Envelope) {
 
 	// Send reply through channel
 	s.keyReplies[reply.ReqID] <- reply
-	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
+	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 }

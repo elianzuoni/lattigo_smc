@@ -13,34 +13,34 @@ import (
 // NewProtocol starts a new protocol given by the name in the TreeNodeInstance, and returns it correctly initialised.
 // It is able to do the initialisation because it has access to the service.
 // Only gets called at children: root has to manually call it, register the instance, and dispatch it.
-func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
-	err := tn.SetConfig(conf)
+func (s *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	err := tni.SetConfig(conf)
 	if err != nil {
 		return nil, err
 	}
 	var protocol onet.ProtocolInstance = nil
 
-	switch tn.ProtocolName() {
+	switch tni.ProtocolName() {
 	case protocols.CollectiveKeyGenerationProtocolName:
-		protocol, err = s.newProtoCKG(tn)
+		protocol, err = s.newProtoCKG(tni, conf)
 
 	case protocols.RelinearizationKeyProtocolName:
-		protocol, err = s.newProtoEKG(tn)
+		protocol, err = s.newProtoEKG(tni, conf)
 
 	case protocols.RotationProtocolName:
-		protocol, err = s.newProtoRKG(tn)
+		protocol, err = s.newProtoRKG(tni, conf)
 
 	case protocols.CollectivePublicKeySwitchingProtocolName:
-		protocol, err = s.newProtoPCKS(tn)
+		protocol, err = s.newProtoPCKS(tni, conf)
 
 	case protocols.CollectiveRefreshName:
-		protocol, err = s.newProtoRefresh(tn)
+		protocol, err = s.newProtoRefresh(tni, conf)
 
 	case EncToSharesProtocolName:
-		protocol, err = s.newProtoE2S(tn)
+		protocol, err = s.newProtoE2S(tni, conf)
 
 	case SharesToEncProtocolName:
-		protocol, err = s.newProtoS2E(tn)
+		protocol, err = s.newProtoS2E(tni, conf)
 	}
 
 	if err != nil {
@@ -51,29 +51,42 @@ func (s *Service) NewProtocol(tn *onet.TreeNodeInstance, conf *onet.GenericConfi
 
 // Collective key generation
 
-func (s *Service) newProtoCKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl2(s.ServerIdentity(), "CKG protocol factory")
+func (smc *Service) newProtoCKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "CKG protocol factory")
 
-	// First, instantiate protocol with incomplete constructor
-	log.Lvl2(s.ServerIdentity(), "Instantiating protocol with incomplete constructor")
+	// First, extract configuration
+	config := &PubKeyGenConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, extract session, if exists
+	s, ok := smc.sessions[config.SessionID]
+	if !ok {
+		err = errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
+
+	// Instantiate protocol with incomplete constructor
+	log.Lvl2(smc.ServerIdentity(), "Instantiating protocol with incomplete constructor")
 	protocol, err := protocols.NewCollectiveKeyGeneration(tn)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not instantiate protocol")
+		log.Error(smc.ServerIdentity(), "Could not instantiate protocol")
 		return nil, err
 	}
 	ckgp := protocol.(*protocols.CollectiveKeyGenerationProtocol)
 
-	// Before reading the fields in the Service to initialise the protocol,
-	// wait until they are ready (they are set in processSetupBroadcast).
-	log.Lvl2(s.ServerIdentity(), "Waiting for fields to be available...")
-	s.waitCKG.Lock()
+	// Generate the CRP
+	crp := s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
 
 	// Finally, initialise the rest of the fields
-	log.Lvl3(s.ServerIdentity(), "Initialising protocol")
-	crp := s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
+	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
 	err = ckgp.Init(s.Params, s.skShard, crp)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not initialise protocol")
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol")
 		return nil, err
 	}
 
@@ -82,33 +95,46 @@ func (s *Service) newProtoCKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstance,
 
 // Evaluation key generation
 
-func (s *Service) newProtoEKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl2(s.ServerIdentity(), "EKG protocol factory")
+func (smc *Service) newProtoEKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "EKG protocol factory")
 
-	// First, instantiate protocol with incomplete constructor
-	log.Lvl2(s.ServerIdentity(), "Instantiating protocol with incomplete constructor")
+	// First, extract configuration
+	config := &EvalKeyGenConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, extract session, if exists
+	s, ok := smc.sessions[config.SessionID]
+	if !ok {
+		err = errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
+
+	// Instantiate protocol with incomplete constructor
+	log.Lvl2(smc.ServerIdentity(), "Instantiating protocol with incomplete constructor")
 	protocol, err := protocols.NewRelinearizationKey(tn)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not instantiate protocol")
+		log.Error(smc.ServerIdentity(), "Could not instantiate protocol")
 		return nil, err
 	}
 	ekgp := protocol.(*protocols.RelinearizationKeyProtocol)
 
-	// Before reading the fields in the Service to initialise the protocol,
-	// wait until they are ready (they are set in processSetupBroadcast).
-	log.Lvl2(s.ServerIdentity(), "Waiting for fields to be available...")
-	s.waitEKG.Lock()
-
-	// Finally, initialise the rest of the fields
-	log.Lvl3(s.ServerIdentity(), "Initialising protocol")
+	// Generate the CRP
 	modulus := s.Params.Moduli.Qi
 	crp := make([]*ring.Poly, len(modulus))
 	for j := 0; j < len(modulus); j++ {
 		crp[j] = s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
 	}
+
+	// Finally, initialise the rest of the fields
+	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
 	err = ekgp.Init(*s.Params, *s.skShard, crp)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not initialise protocol", err)
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
 	}
 
@@ -117,38 +143,51 @@ func (s *Service) newProtoEKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstance,
 
 // Rotation key generation
 
-func (s *Service) newProtoRKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl2(s.ServerIdentity(), "RKG protocol factory")
+func (smc *Service) newProtoRKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "RKG protocol factory")
 
-	// First, instantiate protocol with incomplete constructor
-	log.Lvl2(s.ServerIdentity(), "Instantiating protocol with incomplete constructor")
+	// First, extract configuration
+	config := &RotKeyGenConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, extract session, if exists
+	s, ok := smc.sessions[config.SessionID]
+	if !ok {
+		err = errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
+
+	// Instantiate protocol with incomplete constructor
+	log.Lvl2(smc.ServerIdentity(), "Instantiating protocol with incomplete constructor")
 	protocol, err := protocols.NewRotationKey(tn)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not instantiate protocol")
+		log.Error(smc.ServerIdentity(), "Could not instantiate protocol")
 		return nil, err
 	}
 	rkgp := protocol.(*protocols.RotationKeyProtocol)
 
-	// Before reading the fields in the Service to initialise the protocol,
-	// wait until they are ready (they are set in processSetupBroadcast).
-	log.Lvl2(s.ServerIdentity(), "Waiting for fields to be available...")
-	s.waitRKG.Lock()
+	// Copy the config parameters to local structure
+	// TODO: ok? The rotation key is only collected at the root...
+	s.rotIdx = config.RotIdx
+	s.k = config.K
 
-	// Finally, initialise the rest of the fields
-	log.Lvl3(s.ServerIdentity(), "Initialising protocol")
+	// Generate the CRP
 	modulus := s.Params.Moduli.Qi
 	crp := make([]*ring.Poly, len(modulus))
 	for j := 0; j < len(modulus); j++ {
 		crp[j] = s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
 	}
-	// TODO: what? What if s.rotationKey == nil?
-	if s.rotationKey != nil {
-		err = rkgp.Init(s.Params, *s.skShard, bfv.Rotation(s.rotIdx), s.k, crp, false, s.rotationKey)
-	} else {
-		err = rkgp.Init(s.Params, *s.skShard, bfv.Rotation(s.rotIdx), s.k, crp, true, nil)
-	}
+
+	// Finally, initialise the rest of the fields
+	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
+	err = rkgp.Init(s.Params, *s.skShard, bfv.Rotation(s.rotIdx), s.k, crp)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not initialise protocol", err)
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
 	}
 
@@ -157,31 +196,39 @@ func (s *Service) newProtoRKG(tn *onet.TreeNodeInstance) (onet.ProtocolInstance,
 
 // Public collective key switching
 
-func (s *Service) newProtoPCKS(tn *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl2(s.ServerIdentity(), "PCKS protocol factory")
+func (smc *Service) newProtoPCKS(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "PCKS protocol factory")
 
-	// First, instantiate protocol with incomplete constructor
-	log.Lvl2(s.ServerIdentity(), "Instantiating protocol with incomplete constructor")
+	// First, extract configuration
+	config := &PublicSwitchConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, extract session, if exists
+	s, ok := smc.sessions[config.SessionID]
+	if !ok {
+		err = errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
+
+	// Instantiate protocol with incomplete constructor
+	log.Lvl2(smc.ServerIdentity(), "Instantiating protocol with incomplete constructor")
 	protocol, err := protocols.NewCollectivePublicKeySwitching(tn)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not instantiate protocol")
+		log.Error(smc.ServerIdentity(), "Could not instantiate protocol")
 		return nil, err
 	}
 	pcks := protocol.(*protocols.CollectivePublicKeySwitchingProtocol)
 
-	// We can directly read the fields, since they come from a channel
-	log.Lvl2(s.ServerIdentity(), "Reading switching parameters from channel")
-	var pk *bfv.PublicKey
-	var ct *bfv.Ciphertext
-	sp := <-s.switchingParams
-	pk = sp.PublicKey
-	ct = sp.Ciphertext
-
 	// Finally, initialise the rest of the fields
-	log.Lvl3(s.ServerIdentity(), "Initialising protocol")
-	err = pcks.Init(*s.Params, *pk, *s.skShard, ct)
+	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
+	err = pcks.Init(*s.Params, *config.PublicKey, *s.skShard, config.Ciphertext)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not initialise protocol", err)
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
 	}
 
@@ -190,28 +237,40 @@ func (s *Service) newProtoPCKS(tn *onet.TreeNodeInstance) (onet.ProtocolInstance
 
 // Refresh
 
-func (s *Service) newProtoRefresh(tn *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl2(s.ServerIdentity(), "Refresh protocol factory")
+func (smc *Service) newProtoRefresh(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "Refresh protocol factory")
 
-	// First, instantiate protocol with incomplete constructor
-	log.Lvl2(s.ServerIdentity(), "Instantiating protocol with incomplete constructor")
+	// First, extract configuration
+	config := &RefreshConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, extract session, if exists
+	s, ok := smc.sessions[config.SessionID]
+	if !ok {
+		err = errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
+
+	// Instantiate protocol with incomplete constructor
+	log.Lvl2(smc.ServerIdentity(), "Instantiating protocol with incomplete constructor")
 	protocol, err := protocols.NewCollectiveRefresh(tn)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not instantiate protocol")
+		log.Error(smc.ServerIdentity(), "Could not instantiate protocol")
 		return nil, err
 	}
 	refresh := protocol.(*protocols.RefreshProtocol)
 
-	// We can directly read the fields, since they come from a channel
-	log.Lvl2(s.ServerIdentity(), "Reading refresh parameters from channel")
-	ct := <-s.refreshParams
-
 	// Finally, initialise the rest of the fields
-	log.Lvl3(s.ServerIdentity(), "Initialising protocol")
+	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
 	crs := s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
-	err = refresh.Init(*s.Params, s.skShard, *ct, *crs)
+	err = refresh.Init(*s.Params, s.skShard, *config.Ciphertext, *crs)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not initialise protocol", err)
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
 	}
 
@@ -222,20 +281,32 @@ func (s *Service) newProtoRefresh(tn *onet.TreeNodeInstance) (onet.ProtocolInsta
 
 const EncToSharesProtocolName = "EncryptionToSharesProtocol"
 
-func (s *Service) newProtoE2S(tn *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl2(s.ServerIdentity(), "EncToShares protocol factory")
+func (smc *Service) newProtoE2S(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "EncToShares protocol factory")
 
-	// First, read the fields (only the ciphertext) directly, since they come from a channel.
-	log.Lvl2(s.ServerIdentity(), "Reading enc-to-shares parameters from channel")
-	params := <-s.encToSharesParams
-
-	// Then, create the protocol with the known parameters and the one just received
-	log.Lvl3(s.ServerIdentity(), "Creating protocol")
-	sigmaSmudging := s.Params.Sigma // TODO: how to set?
-	e2sp, err := protocols.NewEncryptionToSharesProtocol(tn, s.Params, sigmaSmudging, s.skShard, params.Ciphertext,
-		s.newShareFinaliser(params.CipherID))
+	// First, extract configuration
+	config := &E2SConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not initialise protocol", err)
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, extract session, if exists
+	s, ok := smc.sessions[config.SessionID]
+	if !ok {
+		err = errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
+
+	// Then, create the protocol with the known parameters and the ones received in config
+	log.Lvl3(smc.ServerIdentity(), "Creating protocol")
+	sigmaSmudging := s.Params.Sigma // TODO: how to set?
+	e2sp, err := protocols.NewEncryptionToSharesProtocol(tn, s.Params, sigmaSmudging, s.skShard, config.Ciphertext,
+		s.newShareFinaliser(config.CipherID))
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
 	}
 
@@ -244,7 +315,7 @@ func (s *Service) newProtoE2S(tn *onet.TreeNodeInstance) (onet.ProtocolInstance,
 
 // This method returns a finaliser (as required by the EncryptionToSharesProtocol constructor)
 // that saves the share under the provided CipherID in the Service's shares database.
-func (s *Service) newShareFinaliser(cipherID CipherID) func(share *dbfv.AdditiveShare) {
+func (s *Session) newShareFinaliser(cipherID CipherID) func(share *dbfv.AdditiveShare) {
 	return func(share *dbfv.AdditiveShare) {
 		s.shares[cipherID] = share
 	}
@@ -254,29 +325,41 @@ func (s *Service) newShareFinaliser(cipherID CipherID) func(share *dbfv.Additive
 
 const SharesToEncProtocolName = "SharesToEncryptionProtocol"
 
-func (s *Service) newProtoS2E(tn *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-	log.Lvl2(s.ServerIdentity(), "SharesToEnc protocol factory")
+func (smc *Service) newProtoS2E(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "SharesToEnc protocol factory")
 
-	// First, read the fields (only the CipherID) directly, since they come from a channel.
-	log.Lvl2(s.ServerIdentity(), "Reading shares-to-enc parameters from channel")
-	params := <-s.sharesToEncParams
+	// First, extract configuration
+	config := &S2EConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, extract session, if exists
+	s, ok := smc.sessions[config.SessionID]
+	if !ok {
+		err = errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
 
 	// Then, create the protocol with the known parameters and the one just received
-	log.Lvl3(s.ServerIdentity(), "Creating protocol")
+	log.Lvl3(smc.ServerIdentity(), "Creating protocol")
 	sigmaSmudging := s.Params.Sigma  // TODO: how to set?
 	crp := s.cipherCRPgen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
 	// Check if share exists
-	share, ok := s.shares[params.CipherID]
+	share, ok := s.shares[config.CipherID]
 	if !ok {
 		err := errors.New(tn.ServerIdentity().Description + "AdditiveShare for ciphertext " +
-			params.CipherID.String() + " not available")
+			config.CipherID.String() + " not available")
 		log.Error(err)
 		return nil, err
 	}
 	// Actually construct the protocol
 	s2ep, err := protocols.NewSharesToEncryptionProtocol(tn, s.Params, sigmaSmudging, share, s.skShard, crp)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not initialise protocol", err)
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
 	}
 

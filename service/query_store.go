@@ -12,31 +12,39 @@ import (
 // a client asks to store new data into the system.
 // The server forwards the request to the root, which stores the ciphertext and assigns it a CipherID which is returned
 // in the reply.
-func (s *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error) {
-	log.Lvl1(s.ServerIdentity(), "Received StoreRequest query")
+func (smc *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error) {
+	log.Lvl1(smc.ServerIdentity(), "Received StoreRequest query")
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[query.SessionID]
+	if !ok {
+		err := errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
 
 	// Create SumRequest with its ID
 	reqID := newStoreRequestID()
-	req := StoreRequest{reqID, query}
+	req := StoreRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.storeReplies[reqID] = make(chan *StoreReply)
 
 	// Send request to root
-	log.Lvl2(s.ServerIdentity(), "Sending StoreRequest to the root")
+	log.Lvl2(smc.ServerIdentity(), "Sending StoreRequest to the root")
 	tree := s.Roster.GenerateBinaryTree()
-	err := s.SendRaw(tree.Root.ServerIdentity, req)
+	err := smc.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Couldn't send StoreRequest to the root: " + err.Error())
-		log.Error(s.ServerIdentity(), err)
+		log.Error(smc.ServerIdentity(), err)
 		return nil, err
 	}
 
 	// Receive reply from channel
-	log.Lvl3(s.ServerIdentity(), "Sent StoreRequest to root. Waiting on channel to receive reply...")
+	log.Lvl3(smc.ServerIdentity(), "Sent StoreRequest to root. Waiting on channel to receive reply...")
 	reply := <-s.storeReplies[reqID] // TODO: timeout if root cannot send reply
 
-	log.Lvl4(s.ServerIdentity(), "Received reply from channel:", reply.CipherID)
+	log.Lvl4(smc.ServerIdentity(), "Received reply from channel:", reply.CipherID)
 	// TODO: close channel?
 
 	return &StoreResponse{reply.CipherID}, nil
@@ -44,33 +52,57 @@ func (s *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error) {
 
 // StoreRequest is received at root from server.
 // The ciphertext is stored under a fresh CipherID, which is returned in the reply.
-func (s *Service) processStoreRequest(msg *network.Envelope) {
+func (smc *Service) processStoreRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*StoreRequest)
-	log.Lvl1(s.ServerIdentity(), "Root. Received forwarded request to store new ciphertext")
+	log.Lvl1(smc.ServerIdentity(), "Root. Received forwarded request to store new ciphertext")
+
+	// Start by declaring reply with minimal fields.
+	reply := &StoreReply{SessionID: req.SessionID, ReqID: req.ReqID, CipherID: NilCipherID, Valid: false}
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[req.SessionID]
+	if !ok {
+		log.Error(smc.ServerIdentity(), "Requested session does not exist")
+		// Send negative response
+		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		if err != nil {
+			log.Error("Could not send reply : ", err)
+		}
+		return
+	}
 
 	// Register in local database
 	newCipherID := newCipherID()
 	s.database[newCipherID] = req.Query.Ciphertext
 
 	// Send reply to server
-	log.Lvl2(s.ServerIdentity(), "Sending positive reply to server")
-	err := s.SendRaw(msg.ServerIdentity, &StoreReply{req.ReqID, newCipherID})
+	reply.CipherID = newCipherID
+	reply.Valid = true
+	log.Lvl2(smc.ServerIdentity(), "Sending positive reply to server")
+	err := smc.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
 		log.Error("Could not reply (positively) to server:", err)
 	}
-	log.Lvl4(s.ServerIdentity(), "Sent positive reply to server")
+	log.Lvl4(smc.ServerIdentity(), "Sent positive reply to server")
 }
 
 // This method is executed at the server when receiving the root's StoreReply.
 // It simply sends the reply through the channel.
-func (s *Service) processStoreReply(msg *network.Envelope) {
+func (smc *Service) processStoreReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*StoreReply)
 
-	log.Lvl1(s.ServerIdentity(), "Received StoreReply:", reply.ReqID)
+	log.Lvl1(smc.ServerIdentity(), "Received StoreReply:", reply.ReqID)
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[reply.SessionID]
+	if !ok {
+		log.Error(smc.ServerIdentity(), "Requested session does not exist")
+		return
+	}
 
 	// Simply send reply through channel
 	s.storeReplies[reply.ReqID] <- reply
-	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
+	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return
 }
