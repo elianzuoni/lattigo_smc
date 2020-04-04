@@ -104,7 +104,7 @@ func (sim *EncToSharesSim) Node(config *onet.SimulationConfig) error {
 		return errors.New("Error when registering protocol " + err.Error())
 	}
 
-	log.Lvl3("Node setup OK")
+	log.Lvl3("Node Setup OK")
 	return sim.SimulationBFTree.Node(config)
 }
 

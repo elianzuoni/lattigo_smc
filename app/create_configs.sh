@@ -14,7 +14,7 @@ echo -e "Creating config of lattigo$i at localhost:$port"
 echo "localhost:$port
 lattigo:$i
 $(pwd)/config
-" | ./app server setup
+" | ./app server CreateSession
 
 cd config
 mv private.toml private$i.toml
@@ -25,4 +25,4 @@ done
 
 cat config/public*.toml > server.toml
 
-echo -e "Setup done"
+echo -e "CreateSession done"

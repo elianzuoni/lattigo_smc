@@ -84,7 +84,7 @@ func (smc *Service) processRelinRequest(msg *network.Envelope) {
 		}
 		return
 	}
-	if !s.evalKeyGenerated {
+	if s.evalKey == nil {
 		log.Error(smc.ServerIdentity(), "Evaluation key not generated")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {

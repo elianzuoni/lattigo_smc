@@ -17,7 +17,7 @@ Some notes I took of Onet while trying to understand it. They may be out of date
 ## Service 
 
 - We first have to create structures for message passing - these structures **NEED** to have their BinaryMarshaller overriden if they have complex structures. 
-- NewService - use to register the handlers TODO : can we do the setup in the constructor ? maybe not but if not where can it be done ? 
+- NewService - use to register the handlers TODO : can we do the CreateSession in the constructor ? maybe not but if not where can it be done ? 
 - Process(msg) - check the message type and forward to the corresponding handler this is called when you receive a message from an other server 
 - Handlers(Structure)(network.Message, error) - handle a message from a server or client - returns a message that can be sent further 
 - NewProtocol : called when there is a new protocol to be run by all nodes. In this case all nodes will start the protocol and based on the GenericConf and the TreeNodeInstance name run the appropriate protocol 

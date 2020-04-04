@@ -125,7 +125,7 @@ func (smc *Service) processSharesToEncRequest(msg *network.Envelope) {
 
 /*
 func (s *Service) processSharesToEncBroadcast(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "Received SetupBroadcast")
+	log.Lvl1(s.ServerIdentity(), "Received CreateSessionBroadcast")
 
 	prep := msg.Msg.(*SharesToEncBroadcast)
 

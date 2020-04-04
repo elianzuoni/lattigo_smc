@@ -46,7 +46,7 @@ func NewSimulationKeySwitching(config string) (onet.Simulation, error) {
 }
 
 func (s *KeySwitchingSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
-	//setup following the config file.
+	//Setup following the config file.
 	log.Lvl2("Setting up the simulation for key switching")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
@@ -97,7 +97,7 @@ func (s *KeySwitchingSim) Node(config *onet.SimulationConfig) error {
 	}
 	s.lt = lt
 
-	log.Lvl4("Node setup OK")
+	log.Lvl4("Node Setup OK")
 
 	return s.SimulationBFTree.Node(config)
 }
@@ -143,7 +143,7 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 		err = cksp.Start()
 		defer cksp.Done()
 
-		cksp.Wait()
+		cksp.WaitDone()
 		elapsed := time.Since(now)
 		timings[i] = elapsed
 

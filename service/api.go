@@ -53,14 +53,14 @@ func NewLattigoSMCClient(entryPoint *network.ServerIdentity, clientID string, pa
 	return client
 }
 
-// SendSetupQuery sends a query for the roster to set up to generate the keys needed.
+// SendCreateSessionQuery sends a query for the roster to set up to generate the keys needed.
 // TODO: why send roster and seed in query?
-func (c *API) SendSetupQuery(entities *onet.Roster, genPublicKey, genEvaluationKey, genRotationKey bool,
+func (c *API) SendCreateSessionQuery(entities *onet.Roster, genPublicKey, genEvaluationKey, genRotationKey bool,
 	K uint64, rotIdx int, seed []byte) error {
-	log.Lvl1(c, "Called to send a setup query")
+	log.Lvl1(c, "Called to send a CreateSession query")
 
 	// Build query
-	query := SetupQuery{
+	query := CreateSessionQuery{
 		Roster:                entities,
 		ParamsIdx:             c.paramsIdx,
 		Seed:                  seed,
@@ -71,17 +71,17 @@ func (c *API) SendSetupQuery(entities *onet.Roster, genPublicKey, genEvaluationK
 		RotIdx:                rotIdx,
 	}
 
-	resp := SetupResponse{}
+	resp := CreateSessionResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, &query, &resp)
 	if err != nil {
-		log.Error(c, "Setup query returned error:", err)
+		log.Error(c, "CreateSession query returned error:", err)
 		return err
 	}
 
-	log.Lvl2(c, "Setup query was successful")
+	log.Lvl2(c, "CreateSession query was successful")
 
 	// TODO: what policy to return error?
 	return nil
@@ -100,7 +100,7 @@ func (c *API) SendKeyQuery(getPK, getEvK, getRtK bool, RotIdx int) error {
 		RotIdx:        RotIdx,
 	}
 
-	resp := SetupResponse{}
+	resp := CreateSessionResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")

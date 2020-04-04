@@ -59,7 +59,7 @@ decides what specific factory (also defined in this file) to call, based on the 
 - [query_retrieve.go](query_retrieve.go) : Defines the behaviour for the `Retrieve` query. 
 - [query_rot.go](query_rot.go) : Defines the behaviour for the `Rotation` query. 
 - [query_s2e.go](query_s2e.go) : Defines the behaviour for the `SharesToEncryption` query. 
-- [query_setup.go](query_setup.go) : Defines the behaviour for the `Setup` query. 
+- [query_createsession.go](query_createsession.go) : Defines the behaviour for the `CreateSession` query. 
 - [query_store.go](query_store.go) : Defines the behaviour for the `Store` query. 
 - [query_sum.go](query_sum.go) : Defines the behaviour for the `Sum` query. 
 - [service.go](service.go) : Defines the `Service` structure. Registers the handlers for messages 

@@ -129,7 +129,7 @@ func (s *RotationKeySim) Run(config *onet.SimulationConfig) error {
 			return err
 		}
 
-		rotation.Wait()
+		rotation.WaitDone()
 		elapsed := time.Since(now)
 		timings[i] = elapsed
 		round.Record()

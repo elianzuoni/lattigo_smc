@@ -81,13 +81,13 @@ func (smc *Service) processKeyRequest(msg *network.Envelope) {
 		return
 	}
 
-	if req.Query.PublicKey && s.pubKeyGenerated {
+	if req.Query.PublicKey && s.MasterPublicKey != nil {
 		reply.PublicKey = s.MasterPublicKey
 	}
-	if req.Query.EvaluationKey && s.evalKeyGenerated {
+	if req.Query.EvaluationKey && s.evalKey != nil {
 		reply.EvalKey = s.evalKey
 	}
-	if req.Query.RotationKey && s.rotKeyGenerated {
+	if req.Query.RotationKey && s.rotationKey != nil {
 		reply.RotKeys = s.rotationKey
 	}
 	reply.Valid = true

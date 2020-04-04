@@ -31,7 +31,7 @@ func main() {
 		cli.StringFlag{Name: "retrievekey", Usage: "Retrieve key with boolean <collkey>,<evalkey>,<rottype>,<rotType>,<k>"},
 		cli.StringFlag{Name: "grouptoml, gt", Usage: "Give the gorup toml"},
 		cli.IntFlag{Name: "id", Usage: "id of the client"},
-		cli.StringFlag{Name: "setup", Usage: "Setup the server <paramsIdx>,<genColKey>,<genEvalKey>,<genRotKey>,<rottype>,<k>"},
+		cli.StringFlag{Name: "CreateSession", Usage: "CreateSession the server <paramsIdx>,<genColKey>,<genEvalKey>,<genRotKey>,<rottype>,<k>"},
 
 		cli.StringFlag{Name: "sum ,s", Usage: "Get sum of two ciphers comma separated : <id1>,<id2>"},
 
@@ -71,11 +71,11 @@ func main() {
 			Flags: serverFlags,
 			Subcommands: []cli.Command{
 				{
-					Name:    "setup",
+					Name:    "CreateSession",
 					Aliases: []string{"s"},
 					Action: func(ctx *cli.Context) error {
 						log.Lvl1("Setting up lattigo server")
-						//This is the setup of onet. We do not need to do anything here.
+						//This is the CreateSession of onet. We do not need to do anything here.
 						app.InteractiveConfig(utils.SUITE, Name)
 						return nil
 					},

@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-type SetupValues struct {
+type CreateSessionValues struct {
 	paramsIdx    int
 	genPublicKey bool
 	genEvalKey   bool
@@ -24,10 +24,10 @@ type SetupValues struct {
 }
 
 func runLattigo(c *cli.Context) {
-	//Setups
+	//CreateSessions
 	groupToml := c.String("grouptoml")
 	id := c.Int("id")
-	setup := c.String("setup")
+	CreateSession := c.String("CreateSession")
 	retrieveKey := c.String("retrievekey")
 
 	//Write-Read
@@ -42,8 +42,8 @@ func runLattigo(c *cli.Context) {
 	relin := c.String("relin")
 	rotate := c.String("rotate")
 
-	//Setups
-	//setup the group toml for servers...
+	//CreateSessions
+	//CreateSession the group toml for servers...
 	if groupToml == "" {
 		groupToml = "server.toml"
 		log.Lvl1("Using default grouptoml :", groupToml)
@@ -55,14 +55,14 @@ func runLattigo(c *cli.Context) {
 
 	client := service.NewLattigoSMCClient(roster.List[id], string(id))
 
-	if setup != "" {
-		log.Lvl1("Setup request")
+	if CreateSession != "" {
+		log.Lvl1("CreateSession request")
 
-		values := parseSetup(setup)
+		values := parseCreateSession(CreateSession)
 		seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
-		err := client.SendSetupQuery(roster, values.genPublicKey, values.genEvalKey, values.genRotKey, uint64(values.rotIdx), int(values.K), uint64(values.paramsIdx), seed)
+		err := client.SendCreateSessionQuery(roster, values.genPublicKey, values.genEvalKey, values.genRotKey, uint64(values.rotIdx), int(values.K), uint64(values.paramsIdx), seed)
 		if err != nil {
-			log.Error("Could not setup the client :", err)
+			log.Error("Could not CreateSession the client :", err)
 		}
 	}
 	if retrieveKey != "" {
@@ -246,10 +246,10 @@ func runLattigo(c *cli.Context) {
 
 }
 
-func parseSetup(s string) SetupValues {
+func parseCreateSession(s string) CreateSessionValues {
 	values := strings.Split(s, ",")
 	if len(values) != 6 {
-		return SetupValues{}
+		return CreateSessionValues{}
 	}
 	paramsIdx, _ := strconv.ParseInt(values[0], 10, 32)
 	genPublicKey, _ := strconv.ParseBool(values[1])
@@ -257,7 +257,7 @@ func parseSetup(s string) SetupValues {
 	genRotKey, _ := strconv.ParseBool(values[3])
 	rotIdx, _ := strconv.ParseInt(values[4], 10, 32)
 	K, _ := strconv.ParseUint(values[5], 10, 64)
-	sv := SetupValues{
+	sv := CreateSessionValues{
 		paramsIdx:    int(paramsIdx),
 		genPublicKey: genPublicKey,
 		genEvalKey:   genEvalKey,

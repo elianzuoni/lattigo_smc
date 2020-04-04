@@ -3,26 +3,34 @@ package service
 import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
+	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
-	"lattigo-smc/utils"
 )
 
-func (s *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, error) {
-	log.Lvl1(s.ServerIdentity(), "Received RefreshQuery for ciphertext:", query.CipherID)
+func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, error) {
+	log.Lvl1(smc.ServerIdentity(), "Received RefreshQuery for ciphertext:", query.CipherID)
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[query.SessionID]
+	if !ok {
+		err := errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
 
 	// Create RefreshRequest with its ID
 	reqID := newRefreshRequestID()
-	req := RefreshRequest{reqID, query}
+	req := RefreshRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.refreshReplies[reqID] = make(chan *RefreshReply)
 
 	// Send request to root
-	log.Lvl2(s.ServerIdentity(), "Sending RefreshRequest to root:", reqID)
+	log.Lvl2(smc.ServerIdentity(), "Sending RefreshRequest to root:", reqID)
 	tree := s.Roster.GenerateBinaryTree()
-	err := s.SendRaw(tree.Root.ServerIdentity, req)
+	err := smc.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Couldn't send RefreshRequest to root: " + err.Error())
 		log.Error(err)
@@ -30,61 +38,77 @@ func (s *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, erro
 	}
 
 	// Receive reply from channel
-	log.Lvl3(s.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
 	reply := <-s.refreshReplies[reqID] // TODO: timeout if root cannot send reply
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform refresh")
-		log.Error(s.ServerIdentity(), err)
+		log.Error(smc.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	}
-	log.Lvl4(s.ServerIdentity(), "Received valid reply from channel")
+	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 	// TODO: close channel?
 
 	return &RefreshResponse{reply.Valid}, nil
 }
 
-func (s *Service) processRefreshRequest(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "Root. Received RefreshRequest.")
-
+func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*RefreshRequest)
-	reply := RefreshReply{ReqID: req.ReqID}
+
+	log.Lvl1(smc.ServerIdentity(), "Root. Received RefreshRequest.")
+
+	// Start by declaring reply with minimal fields.
+	reply := &RefreshReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[req.SessionID]
+	if !ok {
+		log.Error(smc.ServerIdentity(), "Requested session does not exist")
+		// Send negative response
+		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		if err != nil {
+			log.Error("Could not send reply:", err)
+		}
+		return
+	}
 
 	// Check existence of ciphertext
 	ct, ok := s.database[req.Query.CipherID]
 	if !ok {
-		log.Error(s.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
-		err := s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
+		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
+		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
 		if err != nil {
-			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
 
 		return
 	}
 
-	// Build preparation message to broadcast
-	prep := RefreshBroadcast{req.ReqID, ct}
+	/*
+		// Build preparation message to broadcast
+		prep := RefreshBroadcast{req.ReqID, ct}
 
-	// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
-	log.Lvl2(s.ServerIdentity(), "Broadcasting preparation message to all nodes")
-	err := utils.Broadcast(s.ServiceProcessor, s.Roster, prep)
-	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not broadcast preparation message:", err)
-		err = s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
+		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
+		log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
+		err := utils.Broadcast(smc.ServiceProcessor, smc.Roster, prep)
 		if err != nil {
-			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
-		}
+			log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
+			err = smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
+			if err != nil {
+				log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			}
 
-		return
-	}
+			return
+		}
+	*/
 
 	// Then, launch the refresh protocol to get the refreshed ciphertext
-	log.Lvl2(s.ServerIdentity(), "Refreshing ciphertext")
-	ctRefresh, err := s.refreshCiphertext()
+	log.Lvl2(smc.ServerIdentity(), "Refreshing ciphertext")
+	ctRefresh, err := smc.refreshCiphertext(req.Query.SessionID, ct)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not perform refresh:", err)
-		err := s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
+		log.Error(smc.ServerIdentity(), "Could not perform refresh:", err)
+		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
 		if err != nil {
-			log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
 		return
 	}
@@ -92,70 +116,89 @@ func (s *Service) processRefreshRequest(msg *network.Envelope) {
 	// Register (overwrite) in the local database
 	s.database[req.Query.CipherID] = ctRefresh
 
-	log.Lvl3(s.ServerIdentity(), "Successfully refreshed ciphertext")
+	log.Lvl3(smc.ServerIdentity(), "Successfully refreshed ciphertext")
 
 	// Set fields in the reply
 	reply.Valid = true
 
 	// Send the positive reply to the server
-	log.Lvl2(s.ServerIdentity(), "Replying (positively) to server")
-	err = s.SendRaw(msg.ServerIdentity, reply)
+	log.Lvl2(smc.ServerIdentity(), "Replying (positively) to server")
+	err = smc.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not reply (positively) to server")
+		log.Error(smc.ServerIdentity(), "Could not reply (positively) to server")
 		return
 	}
 
 	return
 }
 
-func (s *Service) processRefreshBroadcast(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "Received SetupBroadcast")
+/*
+func (smc *Service) processRefreshBroadcast(msg *network.Envelope) {
+	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcast")
 
 	prep := msg.Msg.(*RefreshBroadcast)
 
 	// Send the refresh parameters through the channel, on which the protocol factory waits
-	log.Lvl3(s.ServerIdentity(), "Sending refresh parameters through channel")
-	s.refreshParams <- prep.Ciphertext
+	log.Lvl3(smc.ServerIdentity(), "Sending refresh parameters through channel")
+	smc.refreshParams <- prep.Ciphertext
 
-	log.Lvl4(s.ServerIdentity(), "Sent refresh parameters through channel")
+	log.Lvl4(smc.ServerIdentity(), "Sent refresh parameters through channel")
 
 	return
 }
+*/
 
-func (s *Service) refreshCiphertext() (*bfv.Ciphertext, error) {
-	log.Lvl2(s.ServerIdentity(), "Performing refresh")
+func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext) (*bfv.Ciphertext, error) {
+	log.Lvl2(smc.ServerIdentity(), "Performing refresh")
 
-	// TODO: is all this really needed? Is there an equivalent of CreateProtocol?
-	// Instantiate protocol
-	log.Lvl3(s.ServerIdentity(), "Instantiating refresh protocol")
+	// Extract session
+	s, ok := smc.sessions[SessionID]
+	if !ok {
+		err := errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
+
+	// Create TreeNodeInstance as root (this method runs on the root)
 	tree := s.Roster.GenerateBinaryTree()
-	tni := s.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveRefreshName)
-	protocol, err := s.NewProtocol(tni, nil)
+	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveRefreshName)
+
+	// Create configuration for the protocol instance
+	config := &RefreshConfig{SessionID, ct}
+	data, err := config.MarshalBinary()
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not instantiate refresh protocol", err)
+		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
+		return nil, err
+	}
+
+	// Instantiate protocol
+	log.Lvl3(smc.ServerIdentity(), "Instantiating refresh protocol")
+	protocol, err := smc.NewProtocol(tni, &onet.GenericConfig{data})
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not instantiate refresh protocol", err)
 		return nil, err
 	}
 	// Register protocol instance
-	log.Lvl3(s.ServerIdentity(), "Registering refresh protocol instance")
-	err = s.RegisterProtocolInstance(protocol)
+	log.Lvl3(smc.ServerIdentity(), "Registering refresh protocol instance")
+	err = smc.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not register refresh protocol instance:", err)
+		log.Error(smc.ServerIdentity(), "Could not register refresh protocol instance:", err)
 		return nil, err
 	}
 
 	refresh := protocol.(*protocols.RefreshProtocol)
 
 	// Start the protocol
-	log.Lvl2(s.ServerIdentity(), "Starting refresh protocol")
+	log.Lvl2(smc.ServerIdentity(), "Starting refresh protocol")
 	err = refresh.Start()
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not start refresh protocol:", err)
+		log.Error(smc.ServerIdentity(), "Could not start refresh protocol:", err)
 		return nil, err
 	}
 	// Call dispatch (the main logic)
 	err = refresh.Dispatch()
 	if err != nil {
-		log.Error(s.ServerIdentity(), "Could not dispatch refresh protocol:", err)
+		log.Error(smc.ServerIdentity(), "Could not dispatch refresh protocol:", err)
 		return nil, err
 	}
 
@@ -163,19 +206,26 @@ func (s *Service) refreshCiphertext() (*bfv.Ciphertext, error) {
 	log.Lvl2(refresh.ServerIdentity(), "Waiting for refresh protocol to terminate...")
 	refresh.WaitDone()
 
-	log.Lvl2(s.ServerIdentity(), "Refreshed ciphertext!")
+	log.Lvl2(smc.ServerIdentity(), "Refreshed ciphertext!")
 
 	return &refresh.Ciphertext, nil
 }
 
-func (s *Service) processRefreshReply(msg *network.Envelope) {
+func (smc *Service) processRefreshReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*RefreshReply)
 
-	log.Lvl1(s.ServerIdentity(), "Received RefreshReply")
+	log.Lvl1(smc.ServerIdentity(), "Received RefreshReply")
+
+	// Extract Session, if existent
+	s, ok := smc.sessions[reply.SessionID]
+	if !ok {
+		log.Error(smc.ServerIdentity(), "Requested session does not exist")
+		return
+	}
 
 	// Simply send reply through channel
 	s.refreshReplies[reply.ReqID] <- reply
-	log.Lvl4(s.ServerIdentity(), "Sent reply through channel")
+	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return
 }

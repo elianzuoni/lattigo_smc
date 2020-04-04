@@ -48,7 +48,7 @@ func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 }
 
 func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
-	//setup following the config file.
+	//Setup following the config file.
 	log.Lvl1("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
@@ -87,7 +87,7 @@ func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 	crsGen := dbfv.NewCRPGenerator(s.Params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
 	s.crp = crsGen.ClockNew()
 
-	log.Lvl3("Node setup OK")
+	log.Lvl3("Node Setup OK")
 	return s.SimulationBFTree.Node(config)
 }
 
@@ -137,7 +137,7 @@ func (s *KeyGenerationSim) Run(config *onet.SimulationConfig) error {
 		}()
 
 		log.Lvl1("waiting..")
-		ckgp.Wait()
+		ckgp.WaitDone()
 		elapsed := time.Since(now)
 		timings[i] = elapsed
 		log.Lvl1("Collective Key Generated for ", len(ckgp.Roster().List), " nodes.")

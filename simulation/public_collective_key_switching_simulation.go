@@ -46,7 +46,7 @@ func NewSimulationPublicKeySwitching(config string) (onet.Simulation, error) {
 }
 
 func (s *PublicKeySwitchingSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
-	//setup following the config file.
+	//Setup following the config file.
 	log.Lvl4("Setting up the simulation for key switching")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
@@ -88,7 +88,7 @@ func (s *PublicKeySwitchingSim) Node(config *onet.SimulationConfig) error {
 	}
 
 	//Inject parameters
-	log.Lvl4("Node setup")
+	log.Lvl4("Node Setup")
 	if _, err := config.Server.ProtocolRegister("CollectivePublicKeySwitchingSimul", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 		return NewPublicKeySwitchingSimul(tni, s)
 	}); err != nil {
@@ -97,7 +97,7 @@ func (s *PublicKeySwitchingSim) Node(config *onet.SimulationConfig) error {
 
 	s.lt = lt
 
-	log.Lvl4("Node setup ok")
+	log.Lvl4("Node Setup ok")
 
 	return s.SimulationBFTree.Node(config)
 }
@@ -153,7 +153,7 @@ func (s *PublicKeySwitchingSim) Run(config *onet.SimulationConfig) error {
 			log.Error(err)
 			return err
 		}
-		pcksp.Wait()
+		pcksp.WaitDone()
 		elapsed := time.Since(now)
 		timings[i] = elapsed
 		round.Record()

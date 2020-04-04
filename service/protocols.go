@@ -13,34 +13,35 @@ import (
 // NewProtocol starts a new protocol given by the name in the TreeNodeInstance, and returns it correctly initialised.
 // It is able to do the initialisation because it has access to the service.
 // Only gets called at children: root has to manually call it, register the instance, and dispatch it.
-func (s *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
-	err := tni.SetConfig(conf)
+func (smc *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	err := tni.SetConfig(conf) // Needed in order for conf to be sent by onet along the protocol name at the beginning
 	if err != nil {
 		return nil, err
 	}
+
 	var protocol onet.ProtocolInstance = nil
 
 	switch tni.ProtocolName() {
 	case protocols.CollectiveKeyGenerationProtocolName:
-		protocol, err = s.newProtoCKG(tni, conf)
+		protocol, err = smc.newProtoCKG(tni, conf)
 
 	case protocols.RelinearizationKeyProtocolName:
-		protocol, err = s.newProtoEKG(tni, conf)
+		protocol, err = smc.newProtoEKG(tni, conf)
 
 	case protocols.RotationProtocolName:
-		protocol, err = s.newProtoRKG(tni, conf)
+		protocol, err = smc.newProtoRKG(tni, conf)
 
 	case protocols.CollectivePublicKeySwitchingProtocolName:
-		protocol, err = s.newProtoPCKS(tni, conf)
+		protocol, err = smc.newProtoPCKS(tni, conf)
 
 	case protocols.CollectiveRefreshName:
-		protocol, err = s.newProtoRefresh(tni, conf)
+		protocol, err = smc.newProtoRefresh(tni, conf)
 
 	case EncToSharesProtocolName:
-		protocol, err = s.newProtoE2S(tni, conf)
+		protocol, err = smc.newProtoE2S(tni, conf)
 
 	case SharesToEncProtocolName:
-		protocol, err = s.newProtoS2E(tni, conf)
+		protocol, err = smc.newProtoS2E(tni, conf)
 	}
 
 	if err != nil {
@@ -55,7 +56,7 @@ func (smc *Service) newProtoCKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	log.Lvl2(smc.ServerIdentity(), "CKG protocol factory")
 
 	// First, extract configuration
-	config := &PubKeyGenConfig{}
+	config := &GenPubKeyConfig{}
 	err := config.UnmarshalBinary(cfg.Data)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
@@ -99,7 +100,7 @@ func (smc *Service) newProtoEKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	log.Lvl2(smc.ServerIdentity(), "EKG protocol factory")
 
 	// First, extract configuration
-	config := &EvalKeyGenConfig{}
+	config := &GenEvalKeyConfig{}
 	err := config.UnmarshalBinary(cfg.Data)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
@@ -147,7 +148,7 @@ func (smc *Service) newProtoRKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	log.Lvl2(smc.ServerIdentity(), "RKG protocol factory")
 
 	// First, extract configuration
-	config := &RotKeyGenConfig{}
+	config := &GenRotKeyConfig{}
 	err := config.UnmarshalBinary(cfg.Data)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)

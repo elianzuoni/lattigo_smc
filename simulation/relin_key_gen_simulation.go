@@ -46,7 +46,7 @@ func NewRelinearizationKeyGeneration(config string) (onet.Simulation, error) {
 }
 
 func (s *RelinearizationKeySimulation) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
-	//setup following the config file.
+	//Setup following the config file.
 	log.Lvl3("Setting up the simulations")
 	sc := &onet.SimulationConfig{}
 	s.CreateRoster(sc, hosts, 2000)
@@ -79,7 +79,7 @@ func (s *RelinearizationKeySimulation) Node(config *onet.SimulationConfig) error
 		log.Fatal("Error node not found")
 	}
 
-	log.Lvl4("Node setup")
+	log.Lvl4("Node Setup")
 	if _, err := config.Server.ProtocolRegister("RelinearizationKeyProtocolSimul", func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
 		return NewRelinearizationKeySimul(tni, s)
 	}); err != nil {
@@ -136,7 +136,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 			return err
 		}
 
-		RelinProtocol.Wait()
+		RelinProtocol.WaitDone()
 		elapsed := time.Since(now)
 		timings[i] = elapsed
 		round.Record()

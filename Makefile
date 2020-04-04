@@ -11,7 +11,7 @@ simulations :
 	cd simulation
 	bash run_simulations.sh
 
-setup_servers:
+CreateSession_servers:
 	cd app; bash create_configs.sh $(parties)
 
 run_servers:
@@ -20,4 +20,4 @@ run_servers:
 kill_servers:
 	pkill xterm
 
-test_servers: setup_servers run_servers
+test_servers: CreateSession_servers run_servers

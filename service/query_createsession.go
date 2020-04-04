@@ -1,0 +1,184 @@
+// The goal of the CreateSession query is to have create a new Session
+
+package service
+
+import (
+	"errors"
+	"github.com/ldsec/lattigo/bfv"
+	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/utils"
+)
+
+func (smc *Service) HandleCreateSessionQuery(query *CreateSessionQuery) (network.Message, error) {
+	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionQuery")
+
+	// Create SumRequest with its ID
+	reqID := newCreateSessionRequestID()
+	req := &CreateSessionRequest{reqID, query}
+
+	// Create channel before sending request to root.
+	smc.createSessionReplies[reqID] = make(chan *CreateSessionReply)
+
+	// Send request to root
+	log.Lvl2(smc.ServerIdentity(), "Sending CreateSessionRequest to root")
+	tree := query.Roster.GenerateBinaryTree() // This way, the root is implied in the Roster itself. TODO: ok?
+	err := smc.SendRaw(tree.Root.ServerIdentity, req)
+	if err != nil {
+		err = errors.New("Couldn't send CreateSessionRequest to root: " + err.Error())
+		log.Error(err)
+		return nil, err
+	}
+
+	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root")
+
+	// Receive reply from channel
+	log.Lvl3(smc.ServerIdentity(), "Sent CreateSessionRequest to root. Waiting on channel to receive reply...")
+	reply := <-smc.createSessionReplies[reqID] // TODO: timeout if root cannot send reply
+
+	log.Lvl4(smc.ServerIdentity(), "Received reply from channel")
+	// TODO: close channel?
+
+	return &CreateSessionResponse{reply.SessionID, reply.Valid}, nil
+}
+
+func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
+	req := (msg.Msg).(*CreateSessionRequest)
+
+	log.Lvl1(smc.ServerIdentity(), "Root. Received CreateSessionRequest.")
+
+	// Start by declaring reply with minimal fields.
+	reply := &CreateSessionReply{ReqID: req.ReqID, Valid: false}
+
+	// Decide the SessionID (it has to be uniquely identifying across the system, so we generate it here)
+	sessionID := newSessionID()
+	// Create the broadcast message
+	broad := &CreateSessionBroadcast{req.ReqID, sessionID, req.Query}
+
+	// Broadcast the message so that all nodes can create the session.
+	log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
+	err := utils.Broadcast(smc.ServiceProcessor, req.Query.Roster, broad)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
+		err = smc.SendRaw(msg.ServerIdentity, reply)
+		if err != nil {
+			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
+		}
+
+		return
+	}
+
+	// Wait for all their answers. For now, they can only be positive
+	log.Lvl2(smc.ServerIdentity(), "Waiting for nodes' answers")
+	answers := 0
+	for answers < len(req.Query.Roster.List) {
+		// TODO: timeout if servers do not answer
+		// We don't care about the content of the answer, it is surely positive
+		_ = <-smc.createSessionBroadcastAnswers[req.ReqID]
+		answers += 1
+		log.Lvl4(smc.ServerIdentity(), "Received", answers, "answers")
+	}
+	// TODO: close channel?
+
+	/*
+		// Then, generate the requested keys (if missing)
+		if req.Query.GeneratePublicKey && !smc.pubKeyGenerated {
+			log.Lvl3(smc.ServerIdentity(), "PublicKey requested and missing. Generating it.")
+
+			err = smc.genPublicKey()
+			if err != nil {
+				log.Error(smc.ServerIdentity(), "Could not generate public key:", err)
+			} else {
+				smc.pubKeyGenerated = true
+				reply.PubKeyGenerated = true
+			}
+		}
+		if req.Query.GenerateEvaluationKey && !smc.evalKeyGenerated {
+			log.Lvl3(smc.ServerIdentity(), "EvaluationKey requested and missing. Generating it.")
+
+			err = smc.genEvalKey()
+			if err != nil {
+				log.Error(smc.ServerIdentity(), "Could not generate evaluation key:", err)
+			} else {
+				smc.evalKeyGenerated = true
+				reply.EvalKeyGenerated = true
+			}
+		}
+		if req.Query.GenerateRotationKey && !smc.rotKeyGenerated {
+			log.Lvl3(smc.ServerIdentity(), "RotationKey requested and missing. Generating it.")
+
+			err = smc.genRotKey()
+			if err != nil {
+				log.Error(smc.ServerIdentity(), "Could not generate rotation key:", err)
+			} else {
+				smc.rotKeyGenerated = true
+				reply.RotKeyGenerated = true
+			}
+		}
+	*/
+
+	log.Lvl3(smc.ServerIdentity(), "Received all answers")
+
+	// Send reply to server
+	reply.SessionID = sessionID
+	reply.Valid = true
+	log.Lvl2(smc.ServerIdentity(), "Sending positive reply to server")
+	err = smc.SendRaw(msg.ServerIdentity, reply)
+	if err != nil {
+		log.Error("Could not reply (positively) to server:", err)
+	}
+	log.Lvl4(smc.ServerIdentity(), "Sent positive reply to server")
+
+	return
+}
+
+func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
+	broad := msg.Msg.(*CreateSessionBroadcast)
+
+	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcast")
+
+	// Create session as required
+	log.Lvl3(smc.ServerIdentity(), "Creating session")
+	params := bfv.DefaultParams[broad.Query.ParamsIdx]
+	session := smc.NewSession(broad.SessionID, broad.Query.Roster, params, broad.Query.Seed)
+
+	// Register session
+	smc.sessions[broad.SessionID] = session
+
+	// Answer to root
+	answer := &CreateSessionBroadcastAnswer{broad.ReqID, true}
+	log.Lvl2(smc.ServerIdentity(), "Sending answer to root")
+	err := smc.SendRaw(msg.ServerIdentity, answer)
+	if err != nil {
+		log.Error("Could not answer to server:", err)
+	}
+	log.Lvl4(smc.ServerIdentity(), "Sent answer to server")
+
+	return
+}
+
+func (smc *Service) processCreateSessionBroadcastAnswer(msg *network.Envelope) {
+	answer := (msg.Msg).(*CreateSessionBroadcastAnswer)
+
+	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcastAnswer:", answer.ReqID)
+
+	// Simply send answer through channel
+	smc.createSessionBroadcastAnswers[answer.ReqID] <- answer
+	log.Lvl4(smc.ServerIdentity(), "Sent answer through channel")
+
+	return
+}
+
+// This method is executed at the server when receiving the root's CreateSessionReply.
+// It simply sends the reply through the channel.
+func (smc *Service) processCreateSessionReply(msg *network.Envelope) {
+	reply := (msg.Msg).(*CreateSessionReply)
+
+	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionReply:", reply.ReqID)
+
+	// Simply send reply through channel
+	smc.createSessionReplies[reply.ReqID] <- reply
+	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
+
+	return
+}

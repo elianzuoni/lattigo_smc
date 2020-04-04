@@ -17,11 +17,27 @@ import (
 
 // MsgTypes contains the different message types.
 type MsgTypes struct {
-	msgSetupQuery   network.MessageTypeID // Unused
-	msgSetupRequest network.MessageTypeID
-	/*msgSetupBroadcast network.MessageTypeID*/
-	msgSetupReply    network.MessageTypeID
-	msgSetupResponse network.MessageTypeID // Unused
+	msgCreateSessionQuery           network.MessageTypeID // Unused
+	msgCreateSessionRequest         network.MessageTypeID
+	msgCreateSessionBroadcast       network.MessageTypeID
+	msgCreateSessionBroadcastAnswer network.MessageTypeID
+	msgCreateSessionReply           network.MessageTypeID
+	msgCreateSessionResponse        network.MessageTypeID // Unused
+
+	msgGenPubKeyQuery    network.MessageTypeID // Unused
+	msgGenPubKeyRequest  network.MessageTypeID
+	msgGenPubKeyReply    network.MessageTypeID
+	msgGenPubKeyResponse network.MessageTypeID // Unused
+
+	msgGenEvalKeyQuery    network.MessageTypeID // Unused
+	msgGenEvalKeyRequest  network.MessageTypeID
+	msgGenEvalKeyReply    network.MessageTypeID
+	msgGenEvalKeyResponse network.MessageTypeID // Unused
+
+	msgGenRotKeyQuery    network.MessageTypeID // Unused
+	msgGenRotKeyRequest  network.MessageTypeID
+	msgGenRotKeyReply    network.MessageTypeID
+	msgGenRotKeyResponse network.MessageTypeID // Unused
 
 	msgKeyQuery    network.MessageTypeID // Unused
 	msgKeyRequest  network.MessageTypeID
@@ -84,11 +100,22 @@ var msgTypes = MsgTypes{}
 func init() {
 	log.Lvl1("Registering messages")
 
-	msgTypes.msgSetupQuery = network.RegisterMessage(&SetupQuery{}) // Unused
-	msgTypes.msgSetupRequest = network.RegisterMessage(&SetupRequest{})
-	/*msgTypes.msgSetupBroadcast = network.RegisterMessage(&SetupBroadcast{})*/
-	msgTypes.msgSetupReply = network.RegisterMessage(&SetupReply{})
-	msgTypes.msgSetupResponse = network.RegisterMessage(&SetupResponse{}) // Unused
+	msgTypes.msgCreateSessionQuery = network.RegisterMessage(&CreateSessionQuery{}) // Unused
+	msgTypes.msgCreateSessionRequest = network.RegisterMessage(&CreateSessionRequest{})
+	msgTypes.msgCreateSessionBroadcast = network.RegisterMessage(&CreateSessionBroadcast{})
+	msgTypes.msgCreateSessionBroadcast = network.RegisterMessage(&CreateSessionBroadcastAnswer{})
+	msgTypes.msgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
+	msgTypes.msgCreateSessionResponse = network.RegisterMessage(&CreateSessionResponse{}) // Unused
+
+	msgTypes.msgGenPubKeyQuery = network.RegisterMessage(&GenPubKeyQuery{}) // Unused
+	msgTypes.msgGenPubKeyRequest = network.RegisterMessage(&GenPubKeyRequest{})
+	msgTypes.msgGenPubKeyReply = network.RegisterMessage(&GenPubKeyReply{})
+	msgTypes.msgGenPubKeyResponse = network.RegisterMessage(&GenPubKeyResponse{}) // Unused
+
+	msgTypes.msgGenEvalKeyQuery = network.RegisterMessage(&GenEvalKeyQuery{}) // Unused
+	msgTypes.msgGenEvalKeyRequest = network.RegisterMessage(&GenEvalKeyRequest{})
+	msgTypes.msgGenEvalKeyReply = network.RegisterMessage(&GenEvalKeyReply{})
+	msgTypes.msgGenEvalKeyResponse = network.RegisterMessage(&GenEvalKeyResponse{}) // Unused
 
 	msgTypes.msgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
 	msgTypes.msgKeyRequest = network.RegisterMessage(&KeyRequest{})
@@ -185,61 +212,343 @@ func (id CipherID) String() string {
 	return (uuid.UUID)(id).String()
 }
 
-// Setup
+// CreateSession
 
 // TODO: why a query? Why not load from cfg file?
-type SetupQuery struct {
-	SessionID SessionID
-
-	Roster *onet.Roster
-
-	ParamsIdx             uint64
-	Seed                  []byte
-	GeneratePublicKey     bool
-	GenerateEvaluationKey bool
-	GenerateRotationKey   bool
-	K                     uint64
-	RotIdx                int
+type CreateSessionQuery struct {
+	Roster    *onet.Roster
+	ParamsIdx uint64
+	Seed      []byte
+	/*
+		GeneratePublicKey     bool
+		GenerateEvaluationKey bool
+		GenerateRotationKey   bool
+		K                     uint64
+		RotIdx                int
+	*/
 }
 
-type SetupRequestID uuid.UUID
+type CreateSessionRequestID uuid.UUID
 
-func newSetupRequestID() SetupRequestID {
-	return SetupRequestID(uuid.NewV1())
+func newCreateSessionRequestID() CreateSessionRequestID {
+	return CreateSessionRequestID(uuid.NewV1())
 }
-func (id *SetupRequestID) MarshalBinary() ([]byte, error) {
+func (id *CreateSessionRequestID) MarshalBinary() ([]byte, error) {
 	return (*uuid.UUID)(id).MarshalBinary()
 }
-func (id *SetupRequestID) UnmarshalBinary(data []byte) error {
+func (id *CreateSessionRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
-func (id SetupRequestID) String() string {
+func (id CreateSessionRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
 
-type SetupRequest struct {
-	SessionID SessionID
-
-	ReqID SetupRequestID
-	Query *SetupQuery
+type CreateSessionRequest struct {
+	ReqID CreateSessionRequestID
+	Query *CreateSessionQuery
 }
 
-type SetupBroadcast SetupRequest
+type CreateSessionBroadcast struct {
+	ReqID CreateSessionRequestID
 
-type SetupReply struct {
 	SessionID SessionID
-
-	ReqID SetupRequestID
-
-	PubKeyGenerated  bool
-	EvalKeyGenerated bool
-	RotKeyGenerated  bool
+	Query     *CreateSessionQuery
 }
 
-type SetupResponse struct {
-	PubKeyGenerated  bool
-	EvalKeyGenerated bool
-	RotKeyGenerated  bool
+type CreateSessionBroadcastAnswer struct {
+	ReqID CreateSessionRequestID
+	Valid bool
+}
+
+type CreateSessionReply struct {
+	ReqID CreateSessionRequestID
+
+	SessionID SessionID
+	Valid     bool
+}
+
+type CreateSessionResponse struct {
+	SessionID SessionID
+	Valid     bool
+}
+
+// Generate Public Key
+
+type GenPubKeyQuery struct {
+	SessionID SessionID
+}
+
+type GenPubKeyRequestID uuid.UUID
+
+func newGenPubKeyRequestID() GenPubKeyRequestID {
+	return GenPubKeyRequestID(uuid.NewV1())
+}
+func (id *GenPubKeyRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *GenPubKeyRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+func (id GenPubKeyRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type GenPubKeyRequest struct {
+	SessionID SessionID
+	ReqID     GenPubKeyRequestID
+	Query     *GenPubKeyQuery
+}
+
+type GenPubKeyConfig struct {
+	SessionID SessionID
+}
+
+func (cfg *GenPubKeyConfig) MarshalBinary() (data []byte, err error) {
+	// Marshal SessionID
+	sidData, err := cfg.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Build data as [<sidLen>, <SessionID>]
+	data = make([]byte, 8+sidLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+
+	return
+}
+func (cfg *GenPubKeyConfig) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if sidLen > 0 {
+		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+/*
+type CreateSessionBroadcast struct {
+	ReqID CreateSessionRequestID
+
+	SessionID SessionID
+	Query *CreateSessionQuery
+}
+*/
+
+type GenPubKeyReply struct {
+	SessionID SessionID
+	ReqID     GenPubKeyRequestID
+
+	MasterPublicKey *bfv.PublicKey
+	Valid           bool
+}
+
+type GenPubKeyResponse struct {
+	MasterPublicKey *bfv.PublicKey
+	Valid           bool
+}
+
+// Generate Evaluation Key
+
+type GenEvalKeyQuery struct {
+	SessionID SessionID
+}
+
+type GenEvalKeyRequestID uuid.UUID
+
+func newGenEvalKeyRequestID() GenEvalKeyRequestID {
+	return GenEvalKeyRequestID(uuid.NewV1())
+}
+func (id *GenEvalKeyRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *GenEvalKeyRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+func (id GenEvalKeyRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type GenEvalKeyRequest struct {
+	SessionID SessionID
+	ReqID     GenEvalKeyRequestID
+	Query     *GenEvalKeyQuery
+}
+
+type GenEvalKeyConfig struct {
+	SessionID SessionID
+}
+
+func (cfg *GenEvalKeyConfig) MarshalBinary() (data []byte, err error) {
+	// Marshal SessionID
+	sidData, err := cfg.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Build data as [<sidLen>, <SessionID>]
+	data = make([]byte, 8+sidLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+
+	return
+}
+func (cfg *GenEvalKeyConfig) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if sidLen > 0 {
+		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+/*
+type CreateSessionBroadcast struct {
+	ReqID CreateSessionRequestID
+
+	SessionID SessionID
+	Query *CreateSessionQuery
+}
+*/
+
+type GenEvalKeyReply struct {
+	SessionID SessionID
+	ReqID     GenEvalKeyRequestID
+
+	Valid bool
+}
+
+type GenEvalKeyResponse struct {
+	Valid bool
+}
+
+// Generate Rotation Key
+
+type GenRotKeyQuery struct {
+	SessionID SessionID
+	RotIdx    int
+	K         uint64
+}
+
+type GenRotKeyRequestID uuid.UUID
+
+func newGenRotKeyRequestID() GenRotKeyRequestID {
+	return GenRotKeyRequestID(uuid.NewV1())
+}
+func (id *GenRotKeyRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *GenRotKeyRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+func (id GenRotKeyRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type GenRotKeyRequest struct {
+	SessionID SessionID
+	ReqID     GenRotKeyRequestID
+	Query     *GenRotKeyQuery
+}
+
+type GenRotKeyConfig struct {
+	SessionID SessionID
+
+	RotIdx int
+	K      uint64
+}
+
+func (cfg *GenRotKeyConfig) MarshalBinary() (data []byte, err error) {
+	// Marshal SessionID
+	sidData, err := cfg.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Build data as [<sidLen>, <SessionID>, <RotIdx>, <K>]
+	data = make([]byte, 8+sidLen+8+8)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cfg.RotIdx))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], cfg.K)
+	ptr += 8
+
+	return
+}
+func (cfg *GenRotKeyConfig) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read fields
+	if sidLen > 0 {
+		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+	cfg.RotIdx = int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cfg.K = binary.BigEndian.Uint64(data[ptr : ptr+8])
+	ptr += 8
+
+	return
+}
+
+/*
+type CreateSessionBroadcast struct {
+	ReqID CreateSessionRequestID
+
+	SessionID SessionID
+	Query *CreateSessionQuery
+}
+*/
+
+type GenRotKeyReply struct {
+	SessionID SessionID
+	ReqID     GenRotKeyRequestID
+
+	Valid bool
+}
+
+type GenRotKeyResponse struct {
+	Valid bool
 }
 
 // Key

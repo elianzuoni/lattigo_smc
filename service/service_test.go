@@ -17,9 +17,9 @@ func genTestLocalRoster(size int) *onet.Roster {
 	return roster
 }
 
-func TestSetupPublicKeyGen(t *testing.T) {
+func TestCreateSessionPublicKeyGen(t *testing.T) {
 	log.SetDebugVisible(3)
-	log.Lvl1("Testing Setup with PublicKeyGeneration")
+	log.Lvl1("Testing CreateSession with PublicKeyGeneration")
 
 	size := 3
 	paramsIdx := uint64(0)
@@ -28,17 +28,17 @@ func TestSetupPublicKeyGen(t *testing.T) {
 	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(roster, true, false, false,
+	err := client.SendCreateSessionQuery(roster, true, false, false,
 		0, 0, seed)
 
 	if err != nil {
-		t.Fatal("Setup Query returned error:", err)
+		t.Fatal("CreateSession Query returned error:", err)
 	}
 }
 
-func TestSetupEvalKeyGen(t *testing.T) {
+func TestCreateSessionEvalKeyGen(t *testing.T) {
 	log.SetDebugVisible(3)
-	log.Lvl1("Testing Setup with EvalKeyGeneration")
+	log.Lvl1("Testing CreateSession with EvalKeyGeneration")
 
 	size := 3
 	paramsIdx := uint64(0)
@@ -47,17 +47,17 @@ func TestSetupEvalKeyGen(t *testing.T) {
 	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(roster, false, true, false,
+	err := client.SendCreateSessionQuery(roster, false, true, false,
 		0, 0, seed)
 
 	if err != nil {
-		t.Fatal("Setup Query returned error:", err)
+		t.Fatal("CreateSession Query returned error:", err)
 	}
 }
 
-func TestSetupRotKeyGen(t *testing.T) {
+func TestCreateSessionRotKeyGen(t *testing.T) {
 	log.SetDebugVisible(3)
-	log.Lvl1("Testing Setup with RotationKeyGeneration")
+	log.Lvl1("Testing CreateSession with RotationKeyGeneration")
 
 	size := 3
 	paramsIdx := uint64(0)
@@ -65,11 +65,11 @@ func TestSetupRotKeyGen(t *testing.T) {
 	roster := genTestLocalRoster(size)
 	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
-	err := client.SendSetupQuery(roster, false, false, true,
+	err := client.SendCreateSessionQuery(roster, false, false, true,
 		1, 0, seed)
 
 	if err != nil {
-		t.Fatal("Setup Query returned error:", err)
+		t.Fatal("CreateSession Query returned error:", err)
 	}
 }
 
@@ -87,13 +87,13 @@ func TestStore(t *testing.T) {
 	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(roster, true, false, false,
+	err := client.SendCreateSessionQuery(roster, true, false, false,
 		0, 0, seed)
 	if err != nil {
-		t.Fatal("Setup Query returned error:", err)
+		t.Fatal("CreateSession Query returned error:", err)
 	}
 
-	log.Lvl2("Setup Query succeeded")
+	log.Lvl2("CreateSession Query succeeded")
 
 	data := []uint64{0, 1, 2, 3, 4}
 	CipherID, err := client.SendStoreQuery(data)
@@ -114,7 +114,7 @@ func TestSwitching(t *testing.T) {
 	client := NewLattigoSMCClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
+	err := client.SendCreateSessionQuery(el, true, false, false, 0, 0, 0, seed)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -153,7 +153,7 @@ func TestSumQuery(t *testing.T) {
 	client := NewLattigoSMCClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
+	err := client.SendCreateSessionQuery(el, true, false, false, 0, 0, 0, seed)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -225,7 +225,7 @@ func TestRelinearization(t *testing.T) {
 	client := NewLattigoSMCClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(el, true, true, false, 0, 0, 0, seed)
+	err := client.SendCreateSessionQuery(el, true, true, false, 0, 0, 0, seed)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -298,7 +298,7 @@ func TestRefresh(t *testing.T) {
 	client := NewLattigoSMCClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(el, true, false, false, 0, 0, 0, seed)
+	err := client.SendCreateSessionQuery(el, true, false, false, 0, 0, 0, seed)
 	if err != nil {
 		t.Fatal(err)
 		return
@@ -346,7 +346,7 @@ func TestRotation(t *testing.T) {
 	client := NewLattigoSMCClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
-	err := client.SendSetupQuery(el, true, false, true, uint64(K), rotIdx, 0, seed)
+	err := client.SendCreateSessionQuery(el, true, false, true, uint64(K), rotIdx, 0, seed)
 	if err != nil {
 		t.Fatal(err)
 		return

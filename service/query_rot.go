@@ -88,7 +88,7 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 		return
 	}
 	log.Lvl3(smc.ServerIdentity(), "Checking if rotation key was generated")
-	if !s.rotKeyGenerated {
+	if s.rotationKey == nil {
 		log.Error(smc.ServerIdentity(), "Rotation key not generated")
 		return
 	}

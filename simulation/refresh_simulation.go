@@ -120,7 +120,7 @@ func (s *RefreshSimulation) Run(config *onet.SimulationConfig) error {
 		now := time.Now()
 		err = rp.Start()
 		defer rp.Done()
-		rp.Wait()
+		rp.WaitDone()
 		elapsed := time.Since(now)
 		timings[i] = elapsed
 		round.Record()

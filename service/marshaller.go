@@ -27,40 +27,40 @@ func unmarshUUID(data []byte) (u uuid.UUID, err error) {
 	return
 }
 
-// Setup
+// CreateSession
 
 
 
 
-func (query *SetupQuery) MarshalBinary() (data []byte, err error) {
+func (query *CreateSessionQuery) MarshalBinary() (data []byte, err error) {
 	// TODO: how to marshal roster?
 	return
 }
 
-func (query *SetupQuery) UnmarshalBinary(data []byte) (err error) {
+func (query *CreateSessionQuery) UnmarshalBinary(data []byte) (err error) {
 	// TODO: how to unmarshal roster?
 	return
 }
 
-func (req *SetupRequest) MarshalBinary() (data []byte, err error) {
+func (req *CreateSessionRequest) MarshalBinary() (data []byte, err error) {
 	// Marshal RequestID
-	idData, err := marshUUID((uuid.UUID)(req.SetupRequestID))
+	idData, err := marshUUID((uuid.UUID)(req.CreateSessionRequestID))
 	if err != nil {
 		return
 	}
 	idLen := len(idData)
 
-	// Marshal SetupQuery
+	// Marshal CreateSessionQuery
 	queryData := make([]byte, 0)
-	if req.SetupQuery != nil {
-		queryData, err = req.SetupQuery.MarshalBinary()
+	if req.CreateSessionQuery != nil {
+		queryData, err = req.CreateSessionQuery.MarshalBinary()
 		if err != nil {
 			return
 		}
 	}
 	queryLen := len(queryData)
 
-	// Build data as [<idLen>, <queryLen>, <RequestID>, <SetupQuery>]
+	// Build data as [<idLen>, <queryLen>, <RequestID>, <CreateSessionQuery>]
 	data = make([]byte, 8+8+idLen+queryLen)
 	ptr := 0 // Used to index data
 	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
@@ -76,7 +76,7 @@ func (req *SetupRequest) MarshalBinary() (data []byte, err error) {
 }
 
 
-func (req *SetupRequest) UnmarshalBinary(data []byte) (err error) {
+func (req *CreateSessionRequest) UnmarshalBinary(data []byte) (err error) {
 	ptr := 0 // Used to index data
 
 	// Read lengths
@@ -89,14 +89,14 @@ func (req *SetupRequest) UnmarshalBinary(data []byte) (err error) {
 	if idLen > 0 {
 		var id uuid.UUID
 		id, err = unmarshUUID(data[ptr : ptr+idLen])
-		req.SetupRequestID = (SetupRequestID)(id)
+		req.CreateSessionRequestID = (CreateSessionRequestID)(id)
 		ptr += idLen
 		if err != nil {
 			return
 		}
 	} // TODO: else?
 	if queryLen > 0 {
-		err = req.SetupQuery.UnmarshalBinary(data[ptr : ptr+queryLen])
+		err = req.CreateSessionQuery.UnmarshalBinary(data[ptr : ptr+queryLen])
 		ptr += queryLen
 		if err != nil {
 			return
@@ -106,33 +106,33 @@ func (req *SetupRequest) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
-func (prep *SetupBroadcast) MarshalBinary() (data []byte, err error) {
-	data, err = (*SetupRequest)(prep).MarshalBinary()
+func (prep *CreateSessionBroadcast) MarshalBinary() (data []byte, err error) {
+	data, err = (*CreateSessionRequest)(prep).MarshalBinary()
 
 	return
 }
 
-func (prep *SetupBroadcast) UnmarshalBinary(data []byte) (err error) {
-	err = (*SetupRequest)(prep).UnmarshalBinary(data) // TODO: does this work?
+func (prep *CreateSessionBroadcast) UnmarshalBinary(data []byte) (err error) {
+	err = (*CreateSessionRequest)(prep).UnmarshalBinary(data) // TODO: does this work?
 
 	return
 }
 
-func (reply *SetupReply) MarshalBinary() (data []byte, err error) {
+func (reply *CreateSessionReply) MarshalBinary() (data []byte, err error) {
 	// Marshal RequestID
-	idData, err := marshUUID((uuid.UUID)(reply.SetupRequestID))
+	idData, err := marshUUID((uuid.UUID)(reply.CreateSessionRequestID))
 	if err != nil {
 		return
 	}
 	idLen := len(idData)
 
 	// Transform the rest to a Response, then marshal it
-	resp := &SetupResponse{reply.pubKeyGenerated, reply.evalKeyGenerated,
+	resp := &CreateSessionResponse{reply.pubKeyGenerated, reply.evalKeyGenerated,
 		reply.rotKeyGenerated}
 	respData, _ := resp.MarshalBinary() // We know it won't return error
 	// We know the length is 3
 
-	// Build data as [<idLen>, <RequestID>, <SetupResponse>]
+	// Build data as [<idLen>, <RequestID>, <CreateSessionResponse>]
 	data = make([]byte, 8+idLen+3)
 	ptr := 0 // Used to index data
 	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
@@ -145,7 +145,7 @@ func (reply *SetupReply) MarshalBinary() (data []byte, err error) {
 	return
 }
 
-func (reply *SetupReply) UnmarshalBinary(data []byte) (err error) {
+func (reply *CreateSessionReply) UnmarshalBinary(data []byte) (err error) {
 	ptr := 0 // Used to index data
 
 	// Read length
@@ -156,13 +156,13 @@ func (reply *SetupReply) UnmarshalBinary(data []byte) (err error) {
 	if idLen > 0 {
 		var id uuid.UUID
 		id, err = unmarshUUID(data[ptr : ptr+idLen])
-		reply.SetupRequestID = (SetupRequestID)(id)
+		reply.CreateSessionRequestID = (CreateSessionRequestID)(id)
 		ptr += idLen
 		if err != nil {
 			return
 		}
 	} // TODO: else?
-	resp := &SetupResponse{}
+	resp := &CreateSessionResponse{}
 	_ = resp.UnmarshalBinary(data[ptr : ptr+3]) // We know it won't return error
 	reply.pubKeyGenerated = resp.PubKeyGenerated
 	reply.evalKeyGenerated = resp.EvalKeyGenerated
@@ -171,7 +171,7 @@ func (reply *SetupReply) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
-func (resp *SetupResponse) MarshalBinary() (data []byte, err error) {
+func (resp *CreateSessionResponse) MarshalBinary() (data []byte, err error) {
 	// Directly build data as [<genPK>, <genEvK>, <genRtK>]
 	data = make([]byte, 1+1+1)
 	data[0] = marshBool(resp.PubKeyGenerated)
@@ -181,7 +181,7 @@ func (resp *SetupResponse) MarshalBinary() (data []byte, err error) {
 	return
 }
 
-func (resp *SetupResponse) UnmarshalBinary(data []byte) (err error) {
+func (resp *CreateSessionResponse) UnmarshalBinary(data []byte) (err error) {
 	// Directly read fields
 	resp.PubKeyGenerated = unmarshBool(data[0])
 	resp.EvalKeyGenerated = unmarshBool(data[1])
@@ -230,7 +230,7 @@ func (req *KeyRequest) MarshalBinary() (data []byte, err error) {
 	}
 	// We know the length is 4
 
-	// Build data as [<idLen>, <RequestID>, <SetupQuery>]
+	// Build data as [<idLen>, <RequestID>, <CreateSessionQuery>]
 	data = make([]byte, 8+idLen+4)
 	ptr := 0 // Used to index data
 	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
@@ -466,7 +466,7 @@ func (req *StoreRequest) MarshalBinary() (data []byte, err error) {
 	}
 	queryLen := len(queryData)
 
-	// Build data as [<idLen>, <queryLen>, <RequestID>, <SetupQuery>]
+	// Build data as [<idLen>, <queryLen>, <RequestID>, <CreateSessionQuery>]
 	data = make([]byte, 8+8+idLen+queryLen)
 	ptr := 0 // Used to index data
 	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
@@ -686,7 +686,7 @@ func (req *RetrieveRequest) MarshalBinary() (data []byte, err error) {
 	}
 	idLen := len(idData)
 
-	// Marshal SetupQuery
+	// Marshal CreateSessionQuery
 	queryData := make([]byte, 0)
 	if req.RetrieveQuery != nil {
 		queryData, err = req.RetrieveQuery.MarshalBinary()

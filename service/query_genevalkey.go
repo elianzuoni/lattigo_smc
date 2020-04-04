@@ -2,15 +2,14 @@ package service
 
 import (
 	"errors"
-	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
 )
 
-func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Message, error) {
-	log.Lvl1(smc.ServerIdentity(), "Received EncToSharesQuery for ciphertext:", query.CipherID)
+func (smc *Service) HandleGenEvalKeyQuery(query *GenEvalKeyQuery) (network.Message, error) {
+	log.Lvl1(smc.ServerIdentity(), "Received GenEvalKeyQuery")
 
 	// Extract Session, if existent
 	s, ok := smc.sessions[query.SessionID]
@@ -20,26 +19,26 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 		return nil, err
 	}
 
-	// Create EncToSharesRequest with its ID
-	reqID := newEncToSharesRequestID()
-	req := EncToSharesRequest{query.SessionID, reqID, query}
+	// Create GenEvalKeyRequest with its ID
+	reqID := newGenEvalKeyRequestID()
+	req := GenEvalKeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.encToSharesReplies[reqID] = make(chan *EncToSharesReply)
+	s.genEvalKeyReplies[reqID] = make(chan *GenEvalKeyReply)
 
 	// Send request to root
-	log.Lvl2(smc.ServerIdentity(), "Sending EncToSharesRequest to root:", reqID)
+	log.Lvl2(smc.ServerIdentity(), "Sending GenEvalKeyRequest to root:", reqID)
 	tree := s.Roster.GenerateBinaryTree()
 	err := smc.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
-		err = errors.New("Couldn't send EncToSharesRequest to root: " + err.Error())
+		err = errors.New("Couldn't send GenEvalKeyRequest to root: " + err.Error())
 		log.Error(err)
 		return nil, err
 	}
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	reply := <-s.encToSharesReplies[reqID] // TODO: timeout if root cannot send reply
+	reply := <-s.genEvalKeyReplies[reqID] // TODO: timeout if root cannot send reply
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform enc-to-shares")
 		log.Error(smc.ServerIdentity(), err)
@@ -48,44 +47,32 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 	// TODO: close channel?
 
-	return &EncToSharesResponse{reply.Valid}, nil
+	return &GenEvalKeyResponse{reply.Valid}, nil
 }
 
-func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*EncToSharesRequest)
+func (smc *Service) processGenEvalKeyRequest(msg *network.Envelope) {
+	req := (msg.Msg).(*GenEvalKeyRequest)
 
-	log.Lvl1(smc.ServerIdentity(), "Root. Received EncToSharesRequest.")
+	log.Lvl1(smc.ServerIdentity(), "Root. Received GenEvalKeyRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &EncToSharesReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+	reply := &GenEvalKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
-	// Extract Session, if existent
-	s, ok := smc.sessions[req.SessionID]
+	// Extract Session, if existent (actually, only check existence)
+	_, ok := smc.sessions[req.SessionID]
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
 		err := smc.SendRaw(msg.ServerIdentity, &reply)
 		if err != nil {
-			log.Error("Could not send reply:", err)
+			log.Error("Could not send reply : ", err)
 		}
-		return
-	}
-
-	// Check existence of ciphertext
-	ct, ok := s.database[req.Query.CipherID]
-	if !ok {
-		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
-		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
-		if err != nil {
-			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
-		}
-
 		return
 	}
 
 	/*
 		// Build preparation message to broadcast
-		prep := EncToSharesBroadcast{req.SessionID, req.ReqID,
+		prep := GenEvalKeyBroadcast{req.SessionID, req.ReqID,
 			&E2SParameters{req.Query.CipherID, ct}}
 
 		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
@@ -102,21 +89,19 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 		}
 	*/
 
-	// Then, launch the enc-to-shares protocol to get the shared ciphertext
-	log.Lvl2(smc.ServerIdentity(), "Sharing ciphertext")
-	err := smc.shareCiphertext(req.SessionID, req.Query.CipherID, ct)
+	// Then, launch the genPublicKey protocol to get the MasterPublicKey
+	log.Lvl2(smc.ServerIdentity(), "Generating Evaluation Key")
+	err := smc.genEvalKey(req.Query.SessionID)
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not perform enc-to-shares:", err)
-		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
+		log.Error(smc.ServerIdentity(), "Could not generate evaluation key:", err)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
 		return
 	}
 
-	// The protocol finaliser has already registered the share in the shares database.
-
-	log.Lvl3(smc.ServerIdentity(), "Successfully shared ciphertext")
+	log.Lvl3(smc.ServerIdentity(), "Successfully generated public key")
 
 	// Set fields in the reply
 	reply.Valid = true
@@ -133,23 +118,23 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 }
 
 /*
-func (s *Service) processEncToSharesBroadcast(msg *network.Envelope) {
+func (s *Service) processGenEvalKeyBroadcast(msg *network.Envelope) {
 	log.Lvl1(s.ServerIdentity(), "Received CreateSessionBroadcast")
 
-	prep := msg.Msg.(*EncToSharesBroadcast)
+	prep := msg.Msg.(*GenEvalKeyBroadcast)
 
 	// Send the enc-to-shares parameters through the channel, on which the protocol factory waits
-	log.Lvl3(s.ServerIdentity(), "Sending encToShares parameters through channel")
-	s.encToSharesParams <- prep.Params
+	log.Lvl3(s.ServerIdentity(), "Sending genEvalKey parameters through channel")
+	s.genEvalKeyParams <- prep.Params
 
-	log.Lvl4(s.ServerIdentity(), "Sent encToShares parameters through channel")
+	log.Lvl4(s.ServerIdentity(), "Sent genEvalKey parameters through channel")
 
 	return
 }
 */
 
-func (smc *Service) shareCiphertext(SessionID SessionID, CipherID CipherID, ct *bfv.Ciphertext) error {
-	log.Lvl2(smc.ServerIdentity(), "Sharing a ciphertext")
+func (smc *Service) genEvalKey(SessionID SessionID) error {
+	log.Lvl1(smc.ServerIdentity(), "Root. Generating EvaluationKey")
 
 	// Extract session
 	s, ok := smc.sessions[SessionID]
@@ -161,10 +146,10 @@ func (smc *Service) shareCiphertext(SessionID SessionID, CipherID CipherID, ct *
 
 	// Create TreeNodeInstance as root (this method runs on the root)
 	tree := s.Roster.GenerateBinaryTree()
-	tni := smc.NewTreeNodeInstance(tree, tree.Root, EncToSharesProtocolName)
+	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &E2SConfig{SessionID, CipherID, ct}
+	config := &GenEvalKeyConfig{SessionID}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -172,50 +157,51 @@ func (smc *Service) shareCiphertext(SessionID SessionID, CipherID CipherID, ct *
 	}
 
 	// Instantiate protocol
-	log.Lvl3(smc.ServerIdentity(), "Instantiating enc-to-shares protocol")
+	log.Lvl3(smc.ServerIdentity(), "Instantiating EKG protocol")
 	protocol, err := smc.NewProtocol(tni, &onet.GenericConfig{data})
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not instantiate enc-to-shares protocol", err)
+		log.Error(smc.ServerIdentity(), "Could not instantiate EKG protocol", err)
 		return err
 	}
 	// Register protocol instance
-	log.Lvl3(smc.ServerIdentity(), "Registering enc-to-shares protocol instance")
+	log.Lvl3(smc.ServerIdentity(), "Registering EKG protocol instance")
 	err = smc.RegisterProtocolInstance(protocol)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not register protocol instance:", err)
 		return err
 	}
 
-	e2s := protocol.(*protocols.EncryptionToSharesProtocol)
+	ekgp := protocol.(*protocols.RelinearizationKeyProtocol)
 
 	// Start the protocol
-	log.Lvl2(smc.ServerIdentity(), "Starting enc-to-shares protocol")
-	err = e2s.Start()
+	log.Lvl2(smc.ServerIdentity(), "Starting EKG protocol")
+	err = ekgp.Start()
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not start enc-to-shares protocol:", err)
+		log.Error(smc.ServerIdentity(), "Could not start EKG protocol:", err)
 		return err
 	}
 	// Call dispatch (the main logic)
-	err = e2s.Dispatch()
+	err = ekgp.Dispatch()
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not dispatch enc-to-shares protocol:", err)
+		log.Error(smc.ServerIdentity(), "Could not dispatch EKG protocol:", err)
 		return err
 	}
 
 	// Wait for termination of protocol
-	log.Lvl2(e2s.ServerIdentity(), "Waiting for enc-to-shares protocol to terminate...")
-	e2s.WaitDone()
-	// At this point, the protocol finaliser has already registered the share in the shares database
+	log.Lvl2(ekgp.ServerIdentity(), "Waiting for EKG protocol to terminate...")
+	ekgp.WaitDone()
 
-	log.Lvl2(smc.ServerIdentity(), "Shared ciphertext!")
+	// Retrieve PublicKey
+	s.evalKey = ekgp.EvaluationKey
+	log.Lvl1(smc.ServerIdentity(), "Generated EvaluationKey!")
 
 	return nil
 }
 
-func (smc *Service) processEncToSharesReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*EncToSharesReply)
+func (smc *Service) processGenEvalKeyReply(msg *network.Envelope) {
+	reply := (msg.Msg).(*GenEvalKeyReply)
 
-	log.Lvl1(smc.ServerIdentity(), "Received EncToSharesReply")
+	log.Lvl1(smc.ServerIdentity(), "Received GenEvalKeyReply")
 
 	// Extract Session, if existent
 	s, ok := smc.sessions[reply.SessionID]
@@ -225,7 +211,7 @@ func (smc *Service) processEncToSharesReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
-	s.encToSharesReplies[reply.ReqID] <- reply
+	s.genEvalKeyReplies[reply.ReqID] <- reply
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return
