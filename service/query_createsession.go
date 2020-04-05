@@ -12,7 +12,7 @@ import (
 func (smc *Service) HandleCreateSessionQuery(query *CreateSessionQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionQuery")
 
-	// Create SumRequest with its ID
+	// Create CreateSessionRequest with its ID
 	reqID := newCreateSessionRequestID()
 	req := &CreateSessionRequest{reqID, query}
 
@@ -55,10 +55,10 @@ func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
 	broad := &CreateSessionBroadcast{req.ReqID, sessionID, req.Query}
 
 	// Broadcast the message so that all nodes can create the session.
-	log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
+	log.Lvl2(smc.ServerIdentity(), "Broadcasting message to all nodes")
 	err := utils.Broadcast(smc.ServiceProcessor, req.Query.Roster, broad)
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
+		log.Error(smc.ServerIdentity(), "Could not broadcast message:", err)
 		err = smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
@@ -78,43 +78,6 @@ func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
 		log.Lvl4(smc.ServerIdentity(), "Received", answers, "answers")
 	}
 	// TODO: close channel?
-
-	/*
-		// Then, generate the requested keys (if missing)
-		if req.Query.GeneratePublicKey && !smc.pubKeyGenerated {
-			log.Lvl3(smc.ServerIdentity(), "PublicKey requested and missing. Generating it.")
-
-			err = smc.genPublicKey()
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not generate public key:", err)
-			} else {
-				smc.pubKeyGenerated = true
-				reply.PubKeyGenerated = true
-			}
-		}
-		if req.Query.GenerateEvaluationKey && !smc.evalKeyGenerated {
-			log.Lvl3(smc.ServerIdentity(), "EvaluationKey requested and missing. Generating it.")
-
-			err = smc.genEvalKey()
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not generate evaluation key:", err)
-			} else {
-				smc.evalKeyGenerated = true
-				reply.EvalKeyGenerated = true
-			}
-		}
-		if req.Query.GenerateRotationKey && !smc.rotKeyGenerated {
-			log.Lvl3(smc.ServerIdentity(), "RotationKey requested and missing. Generating it.")
-
-			err = smc.genRotKey()
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not generate rotation key:", err)
-			} else {
-				smc.rotKeyGenerated = true
-				reply.RotKeyGenerated = true
-			}
-		}
-	*/
 
 	log.Lvl3(smc.ServerIdentity(), "Received all answers")
 

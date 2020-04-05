@@ -13,14 +13,18 @@ import (
 type Service struct {
 	*onet.ServiceProcessor
 
+	// TODO: RWMutex to manage concurrent queries
 	sessions map[SessionID]*Session
 
-	// The CreateSession query entails a broadcast from the root. The root waits for answers here
+	// The CreateSession and CloseSession queries entail a broadcast from the root. The root waits for answers here
 	// TODO:  migrate to protocol
 	createSessionBroadcastAnswers map[CreateSessionRequestID]chan *CreateSessionBroadcastAnswer
+	closeSessionBroadcastAnswers  map[CloseSessionRequestID]chan *CloseSessionBroadcastAnswer
 
 	// Synchronisation point between HandleCreateSessionQuery and the corresponding processCreateSessionReply
 	createSessionReplies map[CreateSessionRequestID]chan *CreateSessionReply
+	// Synchronisation point between HandleCloseSessionQuery and the corresponding processCloseSessionReply
+	closeSessionReplies map[CloseSessionRequestID]chan *CloseSessionReply
 }
 
 // Service is the service of lattigoSMC - allows to compute the different HE operations
@@ -102,7 +106,10 @@ func NewService(c *onet.Context) (onet.Service, error) {
 		sessions:         make(map[SessionID]*Session),
 
 		createSessionBroadcastAnswers: make(map[CreateSessionRequestID]chan *CreateSessionBroadcastAnswer),
-		createSessionReplies:          make(map[CreateSessionRequestID]chan *CreateSessionReply),
+		closeSessionBroadcastAnswers:  make(map[CloseSessionRequestID]chan *CloseSessionBroadcastAnswer),
+
+		createSessionReplies: make(map[CreateSessionRequestID]chan *CreateSessionReply),
+		closeSessionReplies:  make(map[CloseSessionRequestID]chan *CloseSessionReply),
 	}
 
 	// Registers the handlers for client requests.
@@ -176,6 +183,9 @@ func registerClientQueryHandlers(smcService *Service) error {
 	if err := smcService.RegisterHandler(smcService.HandleCreateSessionQuery); err != nil {
 		return errors.New("Couldn't register HandleCreateSessionQuery: " + err.Error())
 	}
+	if err := smcService.RegisterHandler(smcService.HandleCloseSessionQuery); err != nil {
+		return errors.New("Couldn't register HandleCloseSessionQuery: " + err.Error())
+	}
 	if err := smcService.RegisterHandler(smcService.HandleGenPubKeyQuery); err != nil {
 		return errors.New("Couldn't register HandleGenPubKeyQuery: " + err.Error())
 	}
@@ -226,11 +236,17 @@ func registerClientQueryHandlers(smcService *Service) error {
 // received by another server (every client request is forwarded to the root, so every query entails some
 // server-root interaction). Upon reception of one of these messages, the method Process will be invoked.
 func registerServerMsgHandler(c *onet.Context, smcService *Service) {
-	// CreateSession
+	// Create Session
 	c.RegisterProcessor(smcService, msgTypes.msgCreateSessionRequest)
 	c.RegisterProcessor(smcService, msgTypes.msgCreateSessionBroadcast)
 	c.RegisterProcessor(smcService, msgTypes.msgCreateSessionBroadcastAnswer)
 	c.RegisterProcessor(smcService, msgTypes.msgCreateSessionReply)
+
+	// Close Session
+	c.RegisterProcessor(smcService, msgTypes.msgCloseSessionRequest)
+	c.RegisterProcessor(smcService, msgTypes.msgCloseSessionBroadcast)
+	c.RegisterProcessor(smcService, msgTypes.msgCloseSessionBroadcastAnswer)
+	c.RegisterProcessor(smcService, msgTypes.msgCloseSessionReply)
 
 	// Generate Public Key
 	c.RegisterProcessor(smcService, msgTypes.msgGenPubKeyRequest)
@@ -293,7 +309,7 @@ func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 // the messages registered in registerServerMsgHandler. For this reason, the Process method
 // is bound to be a giant if-else-if, which "manually" dispatches based on the message type.
 func (smc *Service) Process(msg *network.Envelope) {
-	// CreateSession
+	// Create Session
 	if msg.MsgType.Equal(msgTypes.msgCreateSessionRequest) {
 		smc.processCreateSessionRequest(msg)
 		return
@@ -308,6 +324,24 @@ func (smc *Service) Process(msg *network.Envelope) {
 	}
 	if msg.MsgType.Equal(msgTypes.msgCreateSessionReply) {
 		smc.processCreateSessionReply(msg)
+		return
+	}
+
+	// Close Session
+	if msg.MsgType.Equal(msgTypes.msgCloseSessionRequest) {
+		smc.processCloseSessionRequest(msg)
+		return
+	}
+	if msg.MsgType.Equal(msgTypes.msgCloseSessionBroadcast) {
+		smc.processCloseSessionBroadcast(msg)
+		return
+	}
+	if msg.MsgType.Equal(msgTypes.msgCloseSessionBroadcastAnswer) {
+		smc.processCloseSessionBroadcastAnswer(msg)
+		return
+	}
+	if msg.MsgType.Equal(msgTypes.msgCloseSessionReply) {
+		smc.processCloseSessionReply(msg)
 		return
 	}
 

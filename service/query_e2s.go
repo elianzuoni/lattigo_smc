@@ -64,7 +64,7 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error("Could not send reply:", err)
 		}

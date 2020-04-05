@@ -100,6 +100,7 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 	switch bfv.Rotation(req.Query.RotIdx) {
 	case bfv.RotationRow:
 		ctRot = eval.RotateRowsNew(ct, s.rotationKey)
+	// TODO: what? they are the same?
 	case bfv.RotationLeft:
 		ctRot = eval.RotateColumnsNew(ct, req.Query.K, s.rotationKey)
 	case bfv.RotationRight:

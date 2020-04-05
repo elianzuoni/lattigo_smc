@@ -24,6 +24,13 @@ type MsgTypes struct {
 	msgCreateSessionReply           network.MessageTypeID
 	msgCreateSessionResponse        network.MessageTypeID // Unused
 
+	msgCloseSessionQuery           network.MessageTypeID // Unused
+	msgCloseSessionRequest         network.MessageTypeID
+	msgCloseSessionBroadcast       network.MessageTypeID
+	msgCloseSessionBroadcastAnswer network.MessageTypeID
+	msgCloseSessionReply           network.MessageTypeID
+	msgCloseSessionResponse        network.MessageTypeID // Unused
+
 	msgGenPubKeyQuery    network.MessageTypeID // Unused
 	msgGenPubKeyRequest  network.MessageTypeID
 	msgGenPubKeyReply    network.MessageTypeID
@@ -106,6 +113,13 @@ func init() {
 	msgTypes.msgCreateSessionBroadcast = network.RegisterMessage(&CreateSessionBroadcastAnswer{})
 	msgTypes.msgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
 	msgTypes.msgCreateSessionResponse = network.RegisterMessage(&CreateSessionResponse{}) // Unused
+
+	msgTypes.msgCloseSessionQuery = network.RegisterMessage(&CloseSessionQuery{}) // Unused
+	msgTypes.msgCloseSessionRequest = network.RegisterMessage(&CloseSessionRequest{})
+	msgTypes.msgCloseSessionBroadcast = network.RegisterMessage(&CloseSessionBroadcast{})
+	msgTypes.msgCloseSessionBroadcast = network.RegisterMessage(&CloseSessionBroadcastAnswer{})
+	msgTypes.msgCloseSessionReply = network.RegisterMessage(&CloseSessionReply{})
+	msgTypes.msgCloseSessionResponse = network.RegisterMessage(&CloseSessionResponse{}) // Unused
 
 	msgTypes.msgGenPubKeyQuery = network.RegisterMessage(&GenPubKeyQuery{}) // Unused
 	msgTypes.msgGenPubKeyRequest = network.RegisterMessage(&GenPubKeyRequest{})
@@ -214,7 +228,7 @@ func (id CipherID) String() string {
 	return (uuid.UUID)(id).String()
 }
 
-// CreateSession
+// Create Session
 
 type CreateSessionQuery struct {
 	Roster *onet.Roster
@@ -264,6 +278,54 @@ type CreateSessionReply struct {
 type CreateSessionResponse struct {
 	SessionID SessionID
 	Valid     bool
+}
+
+// Close Session
+
+type CloseSessionQuery struct {
+	SessionID SessionID
+}
+
+type CloseSessionRequestID uuid.UUID
+
+func newCloseSessionRequestID() CloseSessionRequestID {
+	return CloseSessionRequestID(uuid.NewV1())
+}
+func (id *CloseSessionRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *CloseSessionRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+func (id CloseSessionRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type CloseSessionRequest struct {
+	ReqID     CloseSessionRequestID
+	SessionID SessionID
+	Query     *CloseSessionQuery
+}
+
+type CloseSessionBroadcast struct {
+	ReqID CloseSessionRequestID
+
+	Query *CloseSessionQuery
+}
+
+type CloseSessionBroadcastAnswer struct {
+	ReqID CloseSessionRequestID
+	Valid bool
+}
+
+type CloseSessionReply struct {
+	ReqID CloseSessionRequestID
+
+	Valid bool
+}
+
+type CloseSessionResponse struct {
+	Valid bool
 }
 
 // Generate Public Key

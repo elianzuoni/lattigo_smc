@@ -202,6 +202,7 @@ func (c *Client) UnbindFromSession() error {
 	// Unset session parameters
 	c.sessionID = NilSessionID
 	c.masterPK = nil
+	c.encryptor = nil
 
 	return nil
 }
