@@ -53,7 +53,7 @@ func runLattigo(c *cli.Context) {
 		log.ErrFatal(err, "Could not parse group toml file :", groupToml)
 	}
 
-	client := service.NewLattigoSMCClient(roster.List[id], string(id))
+	client := service.NewClient(roster.List[id], string(id))
 
 	if CreateSession != "" {
 		log.Lvl1("CreateSession request")

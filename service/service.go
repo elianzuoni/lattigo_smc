@@ -86,7 +86,7 @@ const ServiceName = "LattigoSMC"
 
 // Registers the LattigoSMC service to the onet library
 func init() {
-	_, err := onet.RegisterNewService(ServiceName, NewLattigoSMCService)
+	_, err := onet.RegisterNewService(ServiceName, NewService)
 	if err != nil {
 		log.Error("Could not register the service")
 		panic(err)
@@ -94,7 +94,7 @@ func init() {
 }
 
 // Constructor of a service
-func NewLattigoSMCService(c *onet.Context) (onet.Service, error) {
+func NewService(c *onet.Context) (onet.Service, error) {
 	log.Lvl1(c.ServerIdentity(), "LattigoSMCService constructor started")
 
 	smcService := &Service{

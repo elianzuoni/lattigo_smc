@@ -180,6 +180,8 @@ func init() {
 
 type SessionID uuid.UUID
 
+var NilSessionID = SessionID(uuid.Nil)
+
 func newSessionID() SessionID {
 	return SessionID(uuid.NewV1())
 }
@@ -214,18 +216,10 @@ func (id CipherID) String() string {
 
 // CreateSession
 
-// TODO: why a query? Why not load from cfg file?
 type CreateSessionQuery struct {
-	Roster    *onet.Roster
-	ParamsIdx uint64
-	Seed      []byte
-	/*
-		GeneratePublicKey     bool
-		GenerateEvaluationKey bool
-		GenerateRotationKey   bool
-		K                     uint64
-		RotIdx                int
-	*/
+	Roster *onet.Roster
+	Params *bfv.Parameters
+	Seed   []byte
 }
 
 type CreateSessionRequestID uuid.UUID
@@ -653,6 +647,7 @@ type StoreReply struct {
 
 type StoreResponse struct {
 	CipherID CipherID
+	Valid    bool
 }
 
 // Retrieve

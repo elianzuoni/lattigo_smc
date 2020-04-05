@@ -1,4 +1,4 @@
-// This file contains the behaviour of the client, defined by the struct API and its methods, each of which
+// This file contains the behaviour of the client, defined by the struct Client and its methods, each of which
 // sends a specific query to the Service (more precisely, always to the same server in the system, specified
 // at construct-time). The methods optionally return an error, if something goes wrong server-side, but they are
 // guaranteed to return within a certain timeout. // TODO: implement timeout in HandleQuery server-side
@@ -14,82 +14,268 @@ import (
 	"lattigo-smc/utils"
 )
 
-// API represents a client
-type API struct {
+// Client represents a client. It is largely immutable: the only thing that can change after it has been
+// constructed is the session it is bound to, and only with an explicit call to CloseSession or UnbindFromSession.
+type Client struct {
 	*onet.Client
 
 	clientID string
-
-	// The server in the system that will always be contacted for queries.
+	// The server in the system that will always be contacted for queries (most likely the server side of this node).
 	entryPoint *network.ServerIdentity
 
+	// The information on the session this Client is currently attached to
+	sessionID SessionID
+	masterPK  *bfv.PublicKey
+	encryptor bfv.Encryptor
+
 	// Parameters for local encryption and decryption. Useful for Store and Retrieve queries.
-	paramsIdx uint64
+	// They are set once and for all at construction time.
 	params    *bfv.Parameters
 	encoder   bfv.Encoder
-	encryptor bfv.Encryptor
 	decryptor bfv.Decryptor
 	sk        *bfv.SecretKey
 	pk        *bfv.PublicKey
 }
 
-//NewLattigoSMCClient creates a new client for lattigo-smc
-func NewLattigoSMCClient(entryPoint *network.ServerIdentity, clientID string, paramsIdx uint64) *API {
-	client := &API{
+// String returns the string representation of the client.
+func (c *Client) String() string {
+	return "[Client " + c.clientID + "]"
+}
+
+//NewClient creates a new unbound client given the definitive parameters.
+func NewClient(entryPoint *network.ServerIdentity, clientID string, params *bfv.Parameters) *Client {
+	log.Lvl1("Client constructor called for clientID:", clientID)
+
+	client := &Client{
 		Client: onet.NewClient(utils.SUITE, ServiceName),
 
 		clientID:   clientID,
 		entryPoint: entryPoint,
+
+		sessionID: NilSessionID,
+		masterPK:  nil,
 	}
 
-	client.paramsIdx = paramsIdx
-	client.params = bfv.DefaultParams[paramsIdx]
+	client.params = params // TODO: deep copy
 	client.encoder = bfv.NewEncoder(client.params)
 	keygen := bfv.NewKeyGenerator(client.params)
 	client.sk, client.pk = keygen.GenKeyPair()
-	client.encryptor = bfv.NewEncryptorFromSk(client.params, client.sk)
 	client.decryptor = bfv.NewDecryptor(client.params, client.sk)
 
 	return client
 }
 
-// SendCreateSessionQuery sends a query for the roster to set up to generate the keys needed.
-// TODO: why send roster and seed in query?
-func (c *API) SendCreateSessionQuery(entities *onet.Roster, genPublicKey, genEvaluationKey, genRotationKey bool,
-	K uint64, rotIdx int, seed []byte) error {
-	log.Lvl1(c, "Called to send a CreateSession query")
+// isBound returns whether or not the client is already bound to a session.
+func (c *Client) isBound() bool {
+	return c.sessionID == NilSessionID
+}
 
-	// Build query
-	query := CreateSessionQuery{
-		Roster:                entities,
-		ParamsIdx:             c.paramsIdx,
-		Seed:                  seed,
-		GeneratePublicKey:     genPublicKey,
-		GenerateEvaluationKey: genEvaluationKey,
-		GenerateRotationKey:   genRotationKey,
-		K:                     K,
-		RotIdx:                rotIdx,
+// Sends a CreateSessionQuery to the system (only if the client isn't already bound), and then
+// a GenPubKeyQuery, because a session without its masterPK makes no sense
+// The argument "seed" can be nil, in which case a default one is used.
+func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bfv.PublicKey, error) {
+	log.Lvl1(c, "Creating new session")
+
+	// Check that the client isn't already bound
+	if c.isBound() {
+		err := errors.New("Cannot CreateSession: is already bound")
+		log.Error(c, err)
+		return NilSessionID, nil, err
 	}
 
-	resp := CreateSessionResponse{}
+	// Create session
+
+	// Possibly substitute seed with default
+	if seed == nil {
+		seed = []byte("soreta")
+	}
+
+	// Craft CreateSessionQuery and prepare response
+	sessQuery := &CreateSessionQuery{roster, c.params, seed}
+	sessResp := &CreateSessionResponse{}
 
 	// Send query
-	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	log.Lvl2(c, "Sending CreateSession query to entry point")
+	err := c.SendProtobuf(c.entryPoint, sessQuery, sessResp)
 	if err != nil {
 		log.Error(c, "CreateSession query returned error:", err)
+		return NilSessionID, nil, err
+	}
+	if !sessResp.Valid {
+		err = errors.New("Received response is invalid. Service could not create session.")
+		log.Error(c, err)
+		return NilSessionID, nil, err
+	}
+
+	// Generate master public key
+
+	// Craft GenPubKeyQuery and prepare response
+	pubKeyQuery := &GenPubKeyQuery{sessResp.SessionID}
+	pubKeyResp := &GenPubKeyResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending GenPubKey query to entry point")
+	err = c.SendProtobuf(c.entryPoint, pubKeyQuery, pubKeyResp)
+	if err != nil {
+		log.Error(c, "GenPubKey query returned error:", err)
+		return NilSessionID, nil, err
+	}
+	if !pubKeyResp.Valid {
+		err = errors.New("Received response is invalid. Service could not generate public key.")
+		log.Error(c, err)
+		return NilSessionID, nil, err
+	}
+
+	// Bind to this new session
+	log.Lvl3(c, "Successfully created session and generated public key: binding to session")
+	// We can ignore the error, since we already checked that the client is not bound.
+	_ = c.BindToSession(sessResp.SessionID, pubKeyResp.MasterPublicKey)
+
+	return sessResp.SessionID, pubKeyResp.MasterPublicKey, nil
+}
+
+// BindToSession binds the client to an already existing session, without triggering any query to the system.
+func (c *Client) BindToSession(sessionID SessionID, masterPK *bfv.PublicKey) error {
+	// Check that the client is not bound
+	if c.isBound() {
+		err := errors.New("Cannot BindToSession: is already bound")
+		log.Error(c, err)
 		return err
 	}
 
-	log.Lvl2(c, "CreateSession query was successful")
+	// Set session parameters
+	c.sessionID = sessionID
+	c.masterPK = masterPK // TODO: deep copy
+	c.encryptor = bfv.NewEncryptorFromPk(c.params, c.masterPK)
 
-	// TODO: what policy to return error?
 	return nil
-
 }
 
+// Sends a CloseSessionQuery to the system (only if the client is actually bound).
+// Only one of the (possibly many) client bound to a Session can close it.
+func (c *Client) CloseSession() error {
+	log.Lvl1(c, "Closing session")
+
+	// Check that the client is actually bound
+	if !c.isBound() {
+		err := errors.New("Cannot CloseSession: is not bound")
+		log.Error(c, err)
+		return err
+	}
+
+	// Close session
+
+	// Craft CloseSessionQuery and prepare response
+	query := &CloseSessionQuery{c.sessionID}
+	resp := &CloseSessionResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending CloseSession query to entry point")
+	err := c.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "CloseSession query returned error:", err)
+		return err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid. Service could not close session.")
+		log.Error(c, err)
+		return err
+	}
+
+	// Unbind from current session
+	log.Lvl3(c, "Successfully closed current session: unbinding")
+	// We can ignore the error, since we already checked that the client is actually bound.
+	_ = c.UnbindFromSession()
+
+	return nil
+}
+
+// UnbindFromSession unbinds the client from its current session, without triggering any query to the system.
+func (c *Client) UnbindFromSession() error {
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot UnbindFromSession: is not bound")
+		log.Error(c, err)
+		return err
+	}
+
+	// Unset session parameters
+	c.sessionID = NilSessionID
+	c.masterPK = nil
+
+	return nil
+}
+
+// SendGenEvalKeyQuery send a query to generate the evaluation key.
+func (c *Client) SendGenEvalKeyQuery() error {
+	log.Lvl1(c, "Called to send a query to generate the evaluation key")
+
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return err
+	}
+
+	// Craft query and prepare response
+	query := &GenEvalKeyQuery{c.sessionID}
+	resp := &GenEvalKeyResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "GenEvalKey query returned error:", err)
+		return err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid: service could not generate evaluation key")
+		log.Error(c, err)
+		return err
+	}
+
+	log.Lvl2(c, "GenEvalKey query was successful")
+
+	return nil
+}
+
+// SendGenRotKeyQuery send a query to generate the rotation key.
+func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64) error {
+	log.Lvl1(c, "Called to send a query to generate the rotation key")
+
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return err
+	}
+
+	// Craft query and prepare response
+	query := &GenRotKeyQuery{c.sessionID, rotIdx, K}
+	resp := &GenRotKeyResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "GenRotKey query returned error:", err)
+		return err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid: service could not generate rotation key")
+		log.Error(c, err)
+		return err
+	}
+
+	log.Lvl2(c, "GenRotKey query was successful")
+
+	return nil
+}
+
+// TODO: why is this query needed?
+/*
 // SendKeyQuery sends a query to have the entry point retrieve the specified keys.
-func (c *API) SendKeyQuery(getPK, getEvK, getRtK bool, RotIdx int) error {
+func (c *Client) SendKeyQuery(getPK, getEvK, getRtK bool, RotIdx int) error {
 	log.Lvl1(c, "Called to send a key query")
 
 	// Build query
@@ -115,25 +301,38 @@ func (c *API) SendKeyQuery(getPK, getEvK, getRtK bool, RotIdx int) error {
 	// TODO: what policy to return error?
 	return nil
 }
+*/
 
 // SendStoreQuery sends a query to store in the system the provided vector. The vector is encrypted locally.
-// TODO: FIX!!!!!!! What was on your mind? You have to use the MasterPublicKey to encrypt, not your own one, you idiot!
-func (c *API) SendStoreQuery(data []uint64) (CipherID, error) {
+func (c *Client) SendStoreQuery(data []uint64) (CipherID, error) {
 	log.Lvl1(c, "Called to send a store query")
 
-	// Build query
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
+
+	// Encrypt data
 	plain := bfv.NewPlaintext(c.params)
 	c.encoder.EncodeUint(data, plain)
 	cipher := c.encryptor.EncryptNew(plain)
-	query := StoreQuery{cipher}
 
-	resp := StoreResponse{}
+	// Craft query and prepare response
+	query := &StoreQuery{c.sessionID, cipher}
+	resp := &StoreResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Store query returned error:", err)
+		return NilCipherID, err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid: service could not store")
+		log.Error(c, err)
 		return NilCipherID, err
 	}
 
@@ -142,22 +341,25 @@ func (c *API) SendStoreQuery(data []uint64) (CipherID, error) {
 	return resp.CipherID, nil
 }
 
-// SendRetrieveQuery sends a query to retrieve the clear-text vector corresponding to
-// the ciphertext indexed by cipherID.
-func (c *API) SendRetrieveQuery(cipherID CipherID) ([]uint64, error) {
+// SendRetrieveQuery sends a query to retrieve the ciphertext indexed by cipherID, switched under the
+// client's own public key. The switched ciphertext is decrypted locally and returned in clear.
+func (c *Client) SendRetrieveQuery(cipherID CipherID) ([]uint64, error) {
 	log.Lvl1(c, "Called to send a retrieve query")
 
-	// Build query
-	query := RetrieveQuery{
-		PublicKey: c.pk,
-		CipherID:  cipherID,
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return nil, err
 	}
 
-	resp := RetrieveResponse{}
+	// Craft query and prepare response
+	query := &RetrieveQuery{c.sessionID, c.pk, cipherID}
+	resp := &RetrieveResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Retrieve query returned error:", err)
 		return nil, err
@@ -179,20 +381,23 @@ func (c *API) SendRetrieveQuery(cipherID CipherID) ([]uint64, error) {
 }
 
 // SendSumQuery sends a query to sum two ciphertexts.
-func (c *API) SendSumQuery(cipherID1, cipherID2 CipherID) (CipherID, error) {
+func (c *Client) SendSumQuery(cipherID1, cipherID2 CipherID) (CipherID, error) {
 	log.Lvl1(c, "Called to send a sum query")
 
-	// Build query
-	query := SumQuery{
-		CipherID1: cipherID1,
-		CipherID2: cipherID2,
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return NilCipherID, err
 	}
 
-	resp := SumResponse{}
+	// Craft query and prepare response
+	query := &SumQuery{c.sessionID, cipherID1, cipherID2}
+	resp := &SumResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Sum query returned error:", err)
 		return NilCipherID, err
@@ -208,18 +413,57 @@ func (c *API) SendSumQuery(cipherID1, cipherID2 CipherID) (CipherID, error) {
 	return resp.NewCipherID, nil
 }
 
-// SendRelinQuery sends a query to relinearise the ciphertext indexed by cipherID.
-func (c *API) SendRelinQuery(cipherID CipherID) (CipherID, error) {
-	log.Lvl1(c, "Called to send a relinearisation query")
+// SendMultiplyQuery sends a query to sum two ciphertexts.
+func (c *Client) SendMultiplyQuery(cipherID1, cipherID2 CipherID) (CipherID, error) {
+	log.Lvl1(c, "Called to send a multiply query")
 
-	// Build query
-	query := RelinQuery{cipherID}
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
 
-	resp := RelinResponse{}
+	// Craft query and prepare response
+	query := &MultiplyQuery{c.sessionID, cipherID1, cipherID2}
+	resp := &MultiplyResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	err := c.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "Multiply query returned error:", err)
+		return NilCipherID, err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid. Service could not multiply.")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
+
+	log.Lvl2(c, "Multiply query was successful")
+
+	return resp.NewCipherID, nil
+}
+
+// SendRelinQuery sends a query to relinearise the ciphertext indexed by cipherID.
+func (c *Client) SendRelinQuery(cipherID CipherID) (CipherID, error) {
+	log.Lvl1(c, "Called to send a relinearisation query")
+
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
+
+	// Craft query and prepare response
+	query := &RelinQuery{c.sessionID, cipherID}
+	resp := &RelinResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Relinearisation query returned error:", err)
 		return NilCipherID, err
@@ -236,18 +480,57 @@ func (c *API) SendRelinQuery(cipherID CipherID) (CipherID, error) {
 	return cipherID, nil
 }
 
-// SendRefreshQuery sends a query to refresh the ciphertext indexed by cipherID.
-func (c *API) SendRefreshQuery(cipherID CipherID) (CipherID, error) {
-	log.Lvl1(c, "Called to send a refresh query")
+// SendRotationQuery sends a query to perform a rotation of type rotType-k on the ciphertext indexed by cipherID.
+func (c *Client) SendRotationQuery(cipherID CipherID, K uint64, rotType int) (CipherID, error) {
+	log.Lvl1(c, "Called to send a rotation query")
 
-	// Build query
-	query := RefreshQuery{cipherID}
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
 
-	resp := RefreshResponse{}
+	// Craft query and prepare response
+	query := &RotationQuery{c.sessionID, cipherID, K, rotType}
+	resp := &RotationResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	err := c.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "Refresh query returned error:", err)
+		return NilCipherID, err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid. Service could not rotate.")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
+
+	log.Lvl2(c, "Refresh query was successful")
+
+	return resp.NewCipherID, nil
+}
+
+// SendRefreshQuery sends a query to refresh the ciphertext indexed by cipherID.
+func (c *Client) SendRefreshQuery(cipherID CipherID) (CipherID, error) {
+	log.Lvl1(c, "Called to send a refresh query")
+
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
+
+	// Craft query and prepare response
+	query := &RefreshQuery{c.sessionID, cipherID}
+	resp := &RefreshResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Refresh query returned error:", err)
 		return NilCipherID, err
@@ -264,49 +547,24 @@ func (c *API) SendRefreshQuery(cipherID CipherID) (CipherID, error) {
 	return cipherID, nil
 }
 
-// SendRotationQuery sends a query to perform a rotation of type rotType-k on the ciphertext indexed by cipherID.
-func (c *API) SendRotationQuery(cipherID CipherID, K uint64, rotType int) (CipherID, error) {
-	log.Lvl1(c, "Called to send a rotation query")
+// SendEncToSharesQuery sends a query to share the ciphertext indexed by cipherID.
+func (c *Client) SendEncToSharesQuery(cipherID CipherID) (CipherID, error) {
+	log.Lvl1(c, "Called to send an enc-to-shares query")
 
-	// Build query
-	query := RotationQuery{
-		CipherID: cipherID,
-		K:        K,
-		RotIdx:   rotType,
-	}
-
-	resp := RotationResponse{}
-
-	// Send query
-	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
-	if err != nil {
-		log.Error(c, "Refresh query returned error:", err)
-		return NilCipherID, err
-	}
-	if !resp.Valid {
-		err = errors.New("Received response is invalid. Service could not rotate.")
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
 		return NilCipherID, err
 	}
 
-	log.Lvl2(c, "Refresh query was successful")
-
-	return resp.NewCipherID, nil
-}
-
-// SendEncToSharesQuery sends a query to share the ciphertext indexed by cipherID.
-func (c *API) SendEncToSharesQuery(cipherID CipherID) (CipherID, error) {
-	log.Lvl1(c, "Called to send an enc-to-shares query")
-
-	// Build query
-	query := EncToSharesQuery{cipherID}
-
-	resp := EncToSharesResponse{}
+	// Craft query and prepare response
+	query := &EncToSharesQuery{c.sessionID, cipherID}
+	resp := &EncToSharesResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Enc-to-shares query returned error:", err)
 		return NilCipherID, err
@@ -323,18 +581,24 @@ func (c *API) SendEncToSharesQuery(cipherID CipherID) (CipherID, error) {
 	return cipherID, nil
 }
 
-// SendSharesToEncQuery sends a query to share the ciphertext indexed by cipherID.
-func (c *API) SendSharesToEncQuery(cipherID CipherID) (CipherID, error) {
+// SendSharesToEncQuery sends a query to re-encrypt the ciphertext with the shares indexed by cipherID.
+func (c *Client) SendSharesToEncQuery(cipherID CipherID) (CipherID, error) {
 	log.Lvl1(c, "Called to send a shares-to-enc query")
 
-	// Build query
-	query := SharesToEncQuery{cipherID}
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return NilCipherID, err
+	}
 
-	resp := SharesToEncResponse{}
+	// Craft query and prepare response
+	query := &SharesToEncQuery{c.sessionID, cipherID}
+	resp := &SharesToEncResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Shares-to-enc query returned error:", err)
 		return NilCipherID, err
@@ -349,9 +613,4 @@ func (c *API) SendSharesToEncQuery(cipherID CipherID) (CipherID, error) {
 
 	// We know the Service will store the re-encrypted ciphertext under the same CipherID as before.
 	return cipherID, nil
-}
-
-// String returns the string representation of the client.
-func (c *API) String() string {
-	return "[Client " + c.clientID + "]"
 }

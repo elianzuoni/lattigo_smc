@@ -25,7 +25,7 @@ func TestCreateSessionPublicKeyGen(t *testing.T) {
 	paramsIdx := uint64(0)
 	clientID := "ClientTestGenPK"
 	roster := genTestLocalRoster(size)
-	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
+	client := NewClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
 	err := client.SendCreateSessionQuery(roster, true, false, false,
@@ -44,7 +44,7 @@ func TestCreateSessionEvalKeyGen(t *testing.T) {
 	paramsIdx := uint64(0)
 	clientID := "ClientTestGenEvK"
 	roster := genTestLocalRoster(size)
-	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
+	client := NewClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
 	err := client.SendCreateSessionQuery(roster, false, true, false,
@@ -63,7 +63,7 @@ func TestCreateSessionRotKeyGen(t *testing.T) {
 	paramsIdx := uint64(0)
 	clientID := "ClientTestGenRtK"
 	roster := genTestLocalRoster(size)
-	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
+	client := NewClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 	err := client.SendCreateSessionQuery(roster, false, false, true,
 		1, 0, seed)
@@ -84,7 +84,7 @@ func TestStore(t *testing.T) {
 	paramsIdx := uint64(0)
 	clientID := "ClientTestStore"
 	roster := genTestLocalRoster(size)
-	client := NewLattigoSMCClient(roster.List[1], clientID, paramsIdx)
+	client := NewClient(roster.List[1], clientID, paramsIdx)
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
 	err := client.SendCreateSessionQuery(roster, true, false, false,
@@ -111,7 +111,7 @@ func TestSwitching(t *testing.T) {
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
 
-	client := NewLattigoSMCClient(el.List[0], "0")
+	client := NewClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
 	err := client.SendCreateSessionQuery(el, true, false, false, 0, 0, 0, seed)
@@ -120,7 +120,7 @@ func TestSwitching(t *testing.T) {
 		return
 	}
 	<-time.After(2 * time.Second)
-	client1 := NewLattigoSMCClient(el.List[1], "1")
+	client1 := NewClient(el.List[1], "1")
 	q, _ := client1.SendKeyQuery(true, false, false, 0)
 	<-time.After(200 * time.Millisecond)
 	log.Lvl1("Reply of key request : ", q)
@@ -135,7 +135,7 @@ func TestSwitching(t *testing.T) {
 	<-time.After(500 * time.Millisecond)
 
 	//Client 2 now requests to switch the key for him...
-	client2 := NewLattigoSMCClient(el.List[2], "2")
+	client2 := NewClient(el.List[2], "2")
 	data, err := client2.SendRetrieveQuery(queryID)
 	log.Lvl1("Client retrieved data : ", data)
 
@@ -150,7 +150,7 @@ func TestSumQuery(t *testing.T) {
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
 
-	client := NewLattigoSMCClient(el.List[0], "0")
+	client := NewClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
 	err := client.SendCreateSessionQuery(el, true, false, false, 0, 0, 0, seed)
@@ -160,7 +160,7 @@ func TestSumQuery(t *testing.T) {
 	}
 	<-time.After(2 * time.Second)
 
-	client1 := NewLattigoSMCClient(el.List[1], "1")
+	client1 := NewClient(el.List[1], "1")
 
 	q, err := client1.SendKeyQuery(true, false, false, 0)
 	log.Lvl1("Response of query : ", q)
@@ -200,7 +200,7 @@ func TestSumQuery(t *testing.T) {
 
 	//Try to do a key switch on it!!!
 	<-time.After(1 * time.Second)
-	client2 := NewLattigoSMCClient(el.List[2], "2")
+	client2 := NewClient(el.List[2], "2")
 	dataSum, err := client2.SendRetrieveQuery(&resultSum)
 	log.Lvl1("Client retrieved data for sum : ", dataSum)
 
@@ -222,7 +222,7 @@ func TestRelinearization(t *testing.T) {
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
 
-	client := NewLattigoSMCClient(el.List[0], "0")
+	client := NewClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
 	err := client.SendCreateSessionQuery(el, true, true, false, 0, 0, 0, seed)
@@ -232,7 +232,7 @@ func TestRelinearization(t *testing.T) {
 	}
 	<-time.After(2 * time.Second)
 
-	client1 := NewLattigoSMCClient(el.List[1], "1")
+	client1 := NewClient(el.List[1], "1")
 
 	q, err := client1.SendKeyQuery(true, false, false, 0)
 	<-time.After(500 * time.Millisecond)
@@ -276,7 +276,7 @@ func TestRelinearization(t *testing.T) {
 
 	//Try to do a key switch on it!!!
 	<-time.After(2 * time.Second)
-	client2 := NewLattigoSMCClient(el.List[2], "2")
+	client2 := NewClient(el.List[2], "2")
 	data, err := client2.SendRetrieveQuery(&result)
 	log.Lvl1("Client retrieved data for multiply : ", data)
 
@@ -295,7 +295,7 @@ func TestRefresh(t *testing.T) {
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
 
-	client := NewLattigoSMCClient(el.List[0], "0")
+	client := NewClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
 	err := client.SendCreateSessionQuery(el, true, false, false, 0, 0, 0, seed)
@@ -304,7 +304,7 @@ func TestRefresh(t *testing.T) {
 		return
 	}
 	<-time.After(2 * time.Second)
-	client1 := NewLattigoSMCClient(el.List[1], "1")
+	client1 := NewClient(el.List[1], "1")
 	q, _ := client1.SendKeyQuery(true, false, false, 0)
 	<-time.After(200 * time.Millisecond)
 	log.Lvl1("Reply of key request : ", q)
@@ -327,7 +327,7 @@ func TestRefresh(t *testing.T) {
 
 	<-time.After(3 * time.Second)
 	//Client 2 now requests to switch the key for him...
-	client2 := NewLattigoSMCClient(el.List[2], "2")
+	client2 := NewClient(el.List[2], "2")
 	data, err := client2.SendRetrieveQuery(&result)
 	log.Lvl1("Client retrieved data : ", data)
 
@@ -343,7 +343,7 @@ func TestRotation(t *testing.T) {
 	local := onet.NewLocalTest(utils.SUITE)
 	_, el, _ := local.GenTree(size, true)
 
-	client := NewLattigoSMCClient(el.List[0], "0")
+	client := NewClient(el.List[0], "0")
 	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
 
 	err := client.SendCreateSessionQuery(el, true, false, true, uint64(K), rotIdx, 0, seed)
@@ -353,7 +353,7 @@ func TestRotation(t *testing.T) {
 	}
 	<-time.After(2 * time.Second)
 
-	client1 := NewLattigoSMCClient(el.List[1], "1")
+	client1 := NewClient(el.List[1], "1")
 
 	q, err := client1.SendKeyQuery(true, false, false, 0)
 	log.Lvl1("Response of query : ", q)
@@ -379,7 +379,7 @@ func TestRotation(t *testing.T) {
 
 	//Try to do a key switch on it!!!
 	<-time.After(1 * time.Second)
-	client2 := NewLattigoSMCClient(el.List[2], "2")
+	client2 := NewClient(el.List[2], "2")
 	got, err := client2.SendRetrieveQuery(&resultRot)
 
 	//We need to split it in two

@@ -44,10 +44,15 @@ func (smc *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error)
 	log.Lvl3(smc.ServerIdentity(), "Sent StoreRequest to root. Waiting on channel to receive reply...")
 	reply := <-s.storeReplies[reqID] // TODO: timeout if root cannot send reply
 
-	log.Lvl4(smc.ServerIdentity(), "Received reply from channel:", reply.CipherID)
+	if !reply.Valid {
+		err := errors.New("Received invalid reply: root couldn't store")
+		log.Error(smc.ServerIdentity(), err)
+		// Respond with the reply, not nil, err
+	}
+	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 	// TODO: close channel?
 
-	return &StoreResponse{reply.CipherID}, nil
+	return &StoreResponse{reply.CipherID, reply.Valid}, nil
 }
 
 // StoreRequest is received at root from server.

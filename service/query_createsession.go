@@ -1,10 +1,9 @@
-// The goal of the CreateSession query is to have create a new Session
+// The goal of the CreateSession query is to create a new Session
 
 package service
 
 import (
 	"errors"
-	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/utils"
@@ -139,8 +138,7 @@ func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
 
 	// Create session as required
 	log.Lvl3(smc.ServerIdentity(), "Creating session")
-	params := bfv.DefaultParams[broad.Query.ParamsIdx]
-	session := smc.NewSession(broad.SessionID, broad.Query.Roster, params, broad.Query.Seed)
+	session := smc.NewSession(broad.SessionID, broad.Query.Roster, broad.Query.Params, broad.Query.Seed)
 
 	// Register session
 	smc.sessions[broad.SessionID] = session
