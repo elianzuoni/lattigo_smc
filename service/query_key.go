@@ -26,7 +26,7 @@ func (smc *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 
 	// Create KeyRequest with its ID
 	reqID := newKeyRequestID()
-	req := KeyRequest{query.SessionID, reqID, query}
+	req := &KeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.keyReplies[reqID] = make(chan *KeyReply)

@@ -22,7 +22,7 @@ func (smc *Service) HandleSharesToEncQuery(query *SharesToEncQuery) (network.Mes
 
 	// Create SharesToEncRequest with its ID
 	reqID := newSharesToEncRequestID()
-	req := SharesToEncRequest{query.SessionID, reqID, query}
+	req := &SharesToEncRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.sharesToEncReplies[reqID] = make(chan *SharesToEncReply)
@@ -64,33 +64,12 @@ func (smc *Service) processSharesToEncRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}
 		return
 	}
-
-	// The check for existence of the share is done in the protocol factory, since it is a problem of every node
-
-	/*
-		// Build preparation message to broadcast
-		prep := SharesToEncBroadcast{req.ReqID,
-			&S2EParameters{req.Query.CipherID}}
-
-		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
-		log.Lvl2(s.ServerIdentity(), "Broadcasting preparation message to all nodes")
-		err := utils.Broadcast(s.ServiceProcessor, s.Roster, prep)
-		if err != nil {
-			log.Error(s.ServerIdentity(), "Could not broadcast preparation message:", err)
-			err = s.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
-			if err != nil {
-				log.Error(s.ServerIdentity(), "Could not reply (negatively) to server:", err)
-			}
-
-			return
-		}
-	*/
 
 	// Then, launch the shares-to-enc protocol to get the re-encrypted ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Re-encrypting ciphertext")
@@ -122,22 +101,6 @@ func (smc *Service) processSharesToEncRequest(msg *network.Envelope) {
 
 	return
 }
-
-/*
-func (s *Service) processSharesToEncBroadcast(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "Received CreateSessionBroadcast")
-
-	prep := msg.Msg.(*SharesToEncBroadcast)
-
-	// Send the shares-to-enc parameters through the channel, on which the protocol factory waits
-	log.Lvl3(s.ServerIdentity(), "Sending sharesToEnc parameters through channel")
-	s.sharesToEncParams <- prep.Params
-
-	log.Lvl4(s.ServerIdentity(), "Sent sharesToEnc parameters through channel")
-
-	return
-}
-*/
 
 func (smc *Service) reencryptCiphertext(SessionID SessionID, CipherID CipherID) (*bfv.Ciphertext, error) {
 	log.Lvl2(smc.ServerIdentity(), "Re-encrypting a ciphertext")

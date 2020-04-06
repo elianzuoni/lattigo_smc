@@ -22,7 +22,7 @@ func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, er
 
 	// Create RefreshRequest with its ID
 	reqID := newRefreshRequestID()
-	req := RefreshRequest{query.SessionID, reqID, query}
+	req := &RefreshRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.refreshReplies[reqID] = make(chan *RefreshReply)
@@ -64,7 +64,7 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error("Could not send reply:", err)
 		}
@@ -82,24 +82,6 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 
 		return
 	}
-
-	/*
-		// Build preparation message to broadcast
-		prep := RefreshBroadcast{req.ReqID, ct}
-
-		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
-		log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
-		err := utils.Broadcast(smc.ServiceProcessor, smc.Roster, prep)
-		if err != nil {
-			log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
-			err = smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
-			}
-
-			return
-		}
-	*/
 
 	// Then, launch the refresh protocol to get the refreshed ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Refreshing ciphertext")
@@ -131,22 +113,6 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 
 	return
 }
-
-/*
-func (smc *Service) processRefreshBroadcast(msg *network.Envelope) {
-	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcast")
-
-	prep := msg.Msg.(*RefreshBroadcast)
-
-	// Send the refresh parameters through the channel, on which the protocol factory waits
-	log.Lvl3(smc.ServerIdentity(), "Sending refresh parameters through channel")
-	smc.refreshParams <- prep.Ciphertext
-
-	log.Lvl4(smc.ServerIdentity(), "Sent refresh parameters through channel")
-
-	return
-}
-*/
 
 func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext) (*bfv.Ciphertext, error) {
 	log.Lvl2(smc.ServerIdentity(), "Performing refresh")

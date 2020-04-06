@@ -22,7 +22,7 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 
 	// Create EncToSharesRequest with its ID
 	reqID := newEncToSharesRequestID()
-	req := EncToSharesRequest{query.SessionID, reqID, query}
+	req := &EncToSharesRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.encToSharesReplies[reqID] = make(chan *EncToSharesReply)
@@ -83,25 +83,6 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 		return
 	}
 
-	/*
-		// Build preparation message to broadcast
-		prep := EncToSharesBroadcast{req.SessionID, req.ReqID,
-			&E2SParameters{req.Query.CipherID, ct}}
-
-		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
-		log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
-		err := utils.Broadcast(smc.ServiceProcessor, s.Roster, prep)
-		if err != nil {
-			log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
-			err = smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
-			}
-
-			return
-		}
-	*/
-
 	// Then, launch the enc-to-shares protocol to get the shared ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Sharing ciphertext")
 	err := smc.shareCiphertext(req.SessionID, req.Query.CipherID, ct)
@@ -131,22 +112,6 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 
 	return
 }
-
-/*
-func (s *Service) processEncToSharesBroadcast(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "Received CreateSessionBroadcast")
-
-	prep := msg.Msg.(*EncToSharesBroadcast)
-
-	// Send the enc-to-shares parameters through the channel, on which the protocol factory waits
-	log.Lvl3(s.ServerIdentity(), "Sending encToShares parameters through channel")
-	s.encToSharesParams <- prep.Params
-
-	log.Lvl4(s.ServerIdentity(), "Sent encToShares parameters through channel")
-
-	return
-}
-*/
 
 func (smc *Service) shareCiphertext(SessionID SessionID, CipherID CipherID, ct *bfv.Ciphertext) error {
 	log.Lvl2(smc.ServerIdentity(), "Sharing a ciphertext")

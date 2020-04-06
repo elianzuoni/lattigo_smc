@@ -6,13 +6,11 @@
 package service
 
 import (
-	"encoding/binary"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	uuid "gopkg.in/satori/go.uuid.v1"
-	"lattigo-smc/protocols"
 )
 
 // MsgTypes contains the different message types.
@@ -56,9 +54,8 @@ type MsgTypes struct {
 	msgStoreReply    network.MessageTypeID
 	msgStoreResponse network.MessageTypeID // Unused
 
-	msgRetrieveQuery   network.MessageTypeID // Unused
-	msgRetrieveRequest network.MessageTypeID
-	/*msgRetrieveBroadcast network.MessageTypeID*/
+	msgRetrieveQuery    network.MessageTypeID // Unused
+	msgRetrieveRequest  network.MessageTypeID
 	msgRetrieveReply    network.MessageTypeID
 	msgRetrieveResponse network.MessageTypeID // Unused
 
@@ -77,9 +74,8 @@ type MsgTypes struct {
 	msgRelinReply    network.MessageTypeID
 	msgRelinResponse network.MessageTypeID // Unused
 
-	msgRefreshQuery   network.MessageTypeID // Unused
-	msgRefreshRequest network.MessageTypeID
-	/*msgRefreshBroadcast network.MessageTypeID*/
+	msgRefreshQuery    network.MessageTypeID // Unused
+	msgRefreshRequest  network.MessageTypeID
 	msgRefreshReply    network.MessageTypeID
 	msgRefreshResponse network.MessageTypeID // Unused
 
@@ -88,15 +84,13 @@ type MsgTypes struct {
 	msgRotationReply    network.MessageTypeID
 	msgRotationResponse network.MessageTypeID // Unused
 
-	msgEncToSharesQuery   network.MessageTypeID // Unused
-	msgEncToSharesRequest network.MessageTypeID
-	/*msgEncToSharesBroadcast network.MessageTypeID*/
+	msgEncToSharesQuery    network.MessageTypeID // Unused
+	msgEncToSharesRequest  network.MessageTypeID
 	msgEncToSharesReply    network.MessageTypeID
 	msgEncToSharesResponse network.MessageTypeID // Unused
 
-	msgSharesToEncQuery   network.MessageTypeID // Unused
-	msgSharesToEncRequest network.MessageTypeID
-	/*msgSharesToEncBroadcast network.MessageTypeID*/
+	msgSharesToEncQuery    network.MessageTypeID // Unused
+	msgSharesToEncRequest  network.MessageTypeID
 	msgSharesToEncReply    network.MessageTypeID
 	msgSharesToEncResponse network.MessageTypeID // Unused
 }
@@ -110,14 +104,14 @@ func init() {
 	msgTypes.msgCreateSessionQuery = network.RegisterMessage(&CreateSessionQuery{}) // Unused
 	msgTypes.msgCreateSessionRequest = network.RegisterMessage(&CreateSessionRequest{})
 	msgTypes.msgCreateSessionBroadcast = network.RegisterMessage(&CreateSessionBroadcast{})
-	msgTypes.msgCreateSessionBroadcast = network.RegisterMessage(&CreateSessionBroadcastAnswer{})
+	msgTypes.msgCreateSessionBroadcastAnswer = network.RegisterMessage(&CreateSessionBroadcastAnswer{})
 	msgTypes.msgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
 	msgTypes.msgCreateSessionResponse = network.RegisterMessage(&CreateSessionResponse{}) // Unused
 
 	msgTypes.msgCloseSessionQuery = network.RegisterMessage(&CloseSessionQuery{}) // Unused
 	msgTypes.msgCloseSessionRequest = network.RegisterMessage(&CloseSessionRequest{})
 	msgTypes.msgCloseSessionBroadcast = network.RegisterMessage(&CloseSessionBroadcast{})
-	msgTypes.msgCloseSessionBroadcast = network.RegisterMessage(&CloseSessionBroadcastAnswer{})
+	msgTypes.msgCloseSessionBroadcastAnswer = network.RegisterMessage(&CloseSessionBroadcastAnswer{})
 	msgTypes.msgCloseSessionReply = network.RegisterMessage(&CloseSessionReply{})
 	msgTypes.msgCloseSessionResponse = network.RegisterMessage(&CloseSessionResponse{}) // Unused
 
@@ -131,6 +125,11 @@ func init() {
 	msgTypes.msgGenEvalKeyReply = network.RegisterMessage(&GenEvalKeyReply{})
 	msgTypes.msgGenEvalKeyResponse = network.RegisterMessage(&GenEvalKeyResponse{}) // Unused
 
+	msgTypes.msgGenRotKeyQuery = network.RegisterMessage(&GenRotKeyQuery{}) // Unused
+	msgTypes.msgGenRotKeyRequest = network.RegisterMessage(&GenRotKeyRequest{})
+	msgTypes.msgGenRotKeyReply = network.RegisterMessage(&GenRotKeyReply{})
+	msgTypes.msgGenRotKeyResponse = network.RegisterMessage(&GenRotKeyResponse{}) // Unused
+
 	msgTypes.msgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
 	msgTypes.msgKeyRequest = network.RegisterMessage(&KeyRequest{})
 	msgTypes.msgKeyReply = network.RegisterMessage(&KeyReply{})
@@ -143,7 +142,6 @@ func init() {
 
 	msgTypes.msgRetrieveQuery = network.RegisterMessage(&RetrieveQuery{}) // Unused
 	msgTypes.msgRetrieveRequest = network.RegisterMessage(&RetrieveRequest{})
-	/*msgTypes.msgRetrieveBroadcast = network.RegisterMessage(&RetrieveBroadcast{})*/
 	msgTypes.msgRetrieveReply = network.RegisterMessage(&RetrieveReply{})
 	msgTypes.msgRetrieveResponse = network.RegisterMessage(&RetrieveResponse{}) // Unused
 
@@ -164,7 +162,6 @@ func init() {
 
 	msgTypes.msgRefreshQuery = network.RegisterMessage(&RefreshQuery{}) // Unused
 	msgTypes.msgRefreshRequest = network.RegisterMessage(&RefreshRequest{})
-	/*msgTypes.msgRefreshBroadcast = network.RegisterMessage(&RefreshBroadcast{})*/
 	msgTypes.msgRefreshReply = network.RegisterMessage(&RefreshReply{})
 	msgTypes.msgRefreshResponse = network.RegisterMessage(&RefreshResponse{}) // Unused
 
@@ -175,17 +172,15 @@ func init() {
 
 	msgTypes.msgEncToSharesQuery = network.RegisterMessage(&EncToSharesQuery{}) // Unused
 	msgTypes.msgEncToSharesRequest = network.RegisterMessage(&EncToSharesRequest{})
-	/*msgTypes.msgEncToSharesBroadcast = network.RegisterMessage(&EncToSharesBroadcast{})*/
 	msgTypes.msgEncToSharesReply = network.RegisterMessage(&EncToSharesReply{})
 	msgTypes.msgEncToSharesResponse = network.RegisterMessage(&EncToSharesResponse{}) // Unused
 
 	msgTypes.msgSharesToEncQuery = network.RegisterMessage(&SharesToEncQuery{}) // Unused
 	msgTypes.msgSharesToEncRequest = network.RegisterMessage(&SharesToEncRequest{})
-	/*msgTypes.msgSharesToEncBroadcast = network.RegisterMessage(&SharesToEncBroadcast{})*/
 	msgTypes.msgSharesToEncReply = network.RegisterMessage(&SharesToEncReply{})
 	msgTypes.msgSharesToEncResponse = network.RegisterMessage(&SharesToEncResponse{}) // Unused
 
-	_ = network.RegisterMessage(&protocols.Start{}) // TODO: necessary?
+	//_ = network.RegisterMessage(&protocols.Start{}) // TODO: necessary?
 }
 
 /*********************** Message structs *********************/
@@ -198,12 +193,6 @@ var NilSessionID = SessionID(uuid.Nil)
 
 func newSessionID() SessionID {
 	return SessionID(uuid.NewV1())
-}
-func (id *SessionID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *SessionID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 func (id SessionID) String() string {
 	return (uuid.UUID)(id).String()
@@ -218,12 +207,6 @@ var NilCipherID = CipherID(uuid.Nil)
 func newCipherID() CipherID {
 	return CipherID(uuid.NewV1())
 }
-func (id *CipherID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *CipherID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id CipherID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -231,21 +214,15 @@ func (id CipherID) String() string {
 // Create Session
 
 type CreateSessionQuery struct {
-	Roster *onet.Roster
-	Params *bfv.Parameters
-	Seed   []byte
+	Roster    *onet.Roster
+	ParamsIdx int
+	Seed      []byte
 }
 
 type CreateSessionRequestID uuid.UUID
 
 func newCreateSessionRequestID() CreateSessionRequestID {
 	return CreateSessionRequestID(uuid.NewV1())
-}
-func (id *CreateSessionRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *CreateSessionRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 func (id CreateSessionRequestID) String() string {
 	return (uuid.UUID)(id).String()
@@ -291,12 +268,6 @@ type CloseSessionRequestID uuid.UUID
 func newCloseSessionRequestID() CloseSessionRequestID {
 	return CloseSessionRequestID(uuid.NewV1())
 }
-func (id *CloseSessionRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *CloseSessionRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id CloseSessionRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -339,12 +310,6 @@ type GenPubKeyRequestID uuid.UUID
 func newGenPubKeyRequestID() GenPubKeyRequestID {
 	return GenPubKeyRequestID(uuid.NewV1())
 }
-func (id *GenPubKeyRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *GenPubKeyRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id GenPubKeyRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -358,52 +323,6 @@ type GenPubKeyRequest struct {
 type GenPubKeyConfig struct {
 	SessionID SessionID
 }
-
-func (cfg *GenPubKeyConfig) MarshalBinary() (data []byte, err error) {
-	// Marshal SessionID
-	sidData, err := cfg.SessionID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	sidLen := len(sidData)
-
-	// Build data as [<sidLen>, <SessionID>]
-	data = make([]byte, 8+sidLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
-	ptr += 8
-	copy(data[ptr:ptr+sidLen], sidData)
-	ptr += sidLen
-
-	return
-}
-func (cfg *GenPubKeyConfig) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read fields
-	if sidLen > 0 {
-		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
-		ptr += sidLen
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-/*
-type CreateSessionBroadcast struct {
-	ReqID CreateSessionRequestID
-
-	SessionID SessionID
-	Query *CreateSessionQuery
-}
-*/
 
 type GenPubKeyReply struct {
 	SessionID SessionID
@@ -429,12 +348,6 @@ type GenEvalKeyRequestID uuid.UUID
 func newGenEvalKeyRequestID() GenEvalKeyRequestID {
 	return GenEvalKeyRequestID(uuid.NewV1())
 }
-func (id *GenEvalKeyRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *GenEvalKeyRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id GenEvalKeyRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -448,52 +361,6 @@ type GenEvalKeyRequest struct {
 type GenEvalKeyConfig struct {
 	SessionID SessionID
 }
-
-func (cfg *GenEvalKeyConfig) MarshalBinary() (data []byte, err error) {
-	// Marshal SessionID
-	sidData, err := cfg.SessionID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	sidLen := len(sidData)
-
-	// Build data as [<sidLen>, <SessionID>]
-	data = make([]byte, 8+sidLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
-	ptr += 8
-	copy(data[ptr:ptr+sidLen], sidData)
-	ptr += sidLen
-
-	return
-}
-func (cfg *GenEvalKeyConfig) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read fields
-	if sidLen > 0 {
-		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
-		ptr += sidLen
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-/*
-type CreateSessionBroadcast struct {
-	ReqID CreateSessionRequestID
-
-	SessionID SessionID
-	Query *CreateSessionQuery
-}
-*/
 
 type GenEvalKeyReply struct {
 	SessionID SessionID
@@ -519,12 +386,6 @@ type GenRotKeyRequestID uuid.UUID
 func newGenRotKeyRequestID() GenRotKeyRequestID {
 	return GenRotKeyRequestID(uuid.NewV1())
 }
-func (id *GenRotKeyRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *GenRotKeyRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id GenRotKeyRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -541,60 +402,6 @@ type GenRotKeyConfig struct {
 	RotIdx int
 	K      uint64
 }
-
-func (cfg *GenRotKeyConfig) MarshalBinary() (data []byte, err error) {
-	// Marshal SessionID
-	sidData, err := cfg.SessionID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	sidLen := len(sidData)
-
-	// Build data as [<sidLen>, <SessionID>, <RotIdx>, <K>]
-	data = make([]byte, 8+sidLen+8+8)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
-	ptr += 8
-	copy(data[ptr:ptr+sidLen], sidData)
-	ptr += sidLen
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cfg.RotIdx))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], cfg.K)
-	ptr += 8
-
-	return
-}
-func (cfg *GenRotKeyConfig) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read fields
-	if sidLen > 0 {
-		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
-		ptr += sidLen
-		if err != nil {
-			return
-		}
-	}
-	cfg.RotIdx = int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	cfg.K = binary.BigEndian.Uint64(data[ptr : ptr+8])
-	ptr += 8
-
-	return
-}
-
-/*
-type CreateSessionBroadcast struct {
-	ReqID CreateSessionRequestID
-
-	SessionID SessionID
-	Query *CreateSessionQuery
-}
-*/
 
 type GenRotKeyReply struct {
 	SessionID SessionID
@@ -622,12 +429,6 @@ type KeyRequestID uuid.UUID
 
 func newKeyRequestID() KeyRequestID {
 	return KeyRequestID(uuid.NewV1())
-}
-func (id *KeyRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *KeyRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 func (id KeyRequestID) String() string {
 	return (uuid.UUID)(id).String()
@@ -679,12 +480,6 @@ type StoreRequestID uuid.UUID
 func newStoreRequestID() StoreRequestID {
 	return StoreRequestID(uuid.NewV1())
 }
-func (id *StoreRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *StoreRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id StoreRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -727,12 +522,6 @@ type RetrieveRequestID uuid.UUID
 func newRetrieveRequestID() RetrieveRequestID {
 	return RetrieveRequestID(uuid.NewV1())
 }
-func (id *RetrieveRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *RetrieveRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id RetrieveRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -749,92 +538,6 @@ type PublicSwitchConfig struct {
 	PublicKey  *bfv.PublicKey
 	Ciphertext *bfv.Ciphertext
 }
-
-func (cfg *PublicSwitchConfig) MarshalBinary() (data []byte, err error) {
-	// Marshal SessionID
-	sidData, err := cfg.SessionID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	sidLen := len(sidData)
-
-	// Marshal CipherID
-	pkData, err := cfg.PublicKey.MarshalBinary()
-	if err != nil {
-		return
-	}
-	pkLen := len(pkData)
-
-	// Marshal Ciphertext
-	ctData, err := cfg.Ciphertext.MarshalBinary()
-	if err != nil {
-		return
-	}
-	ctLen := len(ctData)
-
-	// Build data as [<sidLen>, <cidLen>, <ctLen>, <SessionID>, <CipherID>, <Ciphertext>]
-	data = make([]byte, 8+8+8+sidLen+pkLen+ctLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(pkLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctLen))
-	ptr += 8
-	copy(data[ptr:ptr+sidLen], sidData)
-	ptr += sidLen
-	copy(data[ptr:ptr+pkLen], pkData)
-	ptr += pkLen
-	copy(data[ptr:ptr+ctLen], ctData)
-	ptr += ctLen
-
-	return
-}
-func (cfg *PublicSwitchConfig) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	pkLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	ctLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read fields
-	if sidLen > 0 {
-		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
-		ptr += sidLen
-		if err != nil {
-			return
-		}
-	}
-	if pkLen > 0 {
-		err := cfg.PublicKey.UnmarshalBinary(data[ptr : ptr+pkLen])
-		ptr += pkLen
-		if err != nil {
-			return
-		}
-	}
-	if ctLen > 0 {
-		err := cfg.Ciphertext.UnmarshalBinary(data[ptr : ptr+ctLen])
-		ptr += ctLen
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-/*
-type RetrieveBroadcast struct {
-	SessionID SessionID
-
-	ReqID  RetrieveRequestID
-	Params *SwitchingParameters
-}
-*/
 
 //RetrieveReply contains the ciphertext switched under the key requested.
 type RetrieveReply struct {
@@ -866,12 +569,6 @@ type SumRequestID uuid.UUID
 
 func newSumRequestID() SumRequestID {
 	return SumRequestID(uuid.NewV1())
-}
-func (id *SumRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *SumRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 func (id SumRequestID) String() string {
 	return (uuid.UUID)(id).String()
@@ -916,12 +613,6 @@ type MultiplyRequestID uuid.UUID
 func newMultiplyRequestID() MultiplyRequestID {
 	return MultiplyRequestID(uuid.NewV1())
 }
-func (id *MultiplyRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *MultiplyRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id MultiplyRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -963,12 +654,6 @@ type RelinRequestID uuid.UUID
 func newRelinRequestID() RelinRequestID {
 	return RelinRequestID(uuid.NewV1())
 }
-func (id *RelinRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *RelinRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id RelinRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -1005,12 +690,6 @@ type RefreshRequestID uuid.UUID
 func newRefreshRequestID() RefreshRequestID {
 	return RefreshRequestID(uuid.NewV1())
 }
-func (id *RefreshRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *RefreshRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id RefreshRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -1026,70 +705,6 @@ type RefreshConfig struct {
 	SessionID  SessionID
 	Ciphertext *bfv.Ciphertext
 }
-
-func (cfg *RefreshConfig) MarshalBinary() (data []byte, err error) {
-	// Marshal SessionID
-	sidData, err := cfg.SessionID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	sidLen := len(sidData)
-
-	// Marshal Ciphertext
-	ctData, err := cfg.Ciphertext.MarshalBinary()
-	if err != nil {
-		return
-	}
-	ctLen := len(ctData)
-
-	// Build data as [<sidLen>, <cidLen>, <ctLen>, <SessionID>, <CipherID>, <Ciphertext>]
-	data = make([]byte, 8+8+sidLen+ctLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctLen))
-	ptr += 8
-	copy(data[ptr:ptr+sidLen], sidData)
-	ptr += sidLen
-	copy(data[ptr:ptr+ctLen], ctData)
-	ptr += ctLen
-
-	return
-}
-func (cfg *RefreshConfig) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	ctLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read fields
-	if sidLen > 0 {
-		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
-		ptr += sidLen
-		if err != nil {
-			return
-		}
-	}
-	if ctLen > 0 {
-		err := cfg.Ciphertext.UnmarshalBinary(data[ptr : ptr+ctLen])
-		ptr += ctLen
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-/*
-type RefreshBroadcast struct {
-	ReqID      RefreshRequestID
-	Ciphertext *bfv.Ciphertext
-}
-*/
 
 type RefreshReply struct {
 	SessionID SessionID
@@ -1117,12 +732,6 @@ type RotationRequestID uuid.UUID
 
 func newRotationRequestID() RotationRequestID {
 	return RotationRequestID(uuid.NewV1())
-}
-func (id *RotationRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *RotationRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 func (id RotationRequestID) String() string {
 	return (uuid.UUID)(id).String()
@@ -1162,12 +771,6 @@ type EncToSharesRequestID uuid.UUID
 func newEncToSharesRequestID() EncToSharesRequestID {
 	return EncToSharesRequestID(uuid.NewV1())
 }
-func (id *EncToSharesRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *EncToSharesRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id EncToSharesRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -1184,93 +787,6 @@ type E2SConfig struct {
 	CipherID   CipherID
 	Ciphertext *bfv.Ciphertext
 }
-
-func (cfg *E2SConfig) MarshalBinary() (data []byte, err error) {
-	// Marshal SessionID
-	sidData, err := cfg.SessionID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	sidLen := len(sidData)
-
-	// Marshal CipherID
-	cidData, err := cfg.CipherID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	cidLen := len(cidData)
-
-	// Marshal Ciphertext
-	ctData, err := cfg.Ciphertext.MarshalBinary()
-	if err != nil {
-		return
-	}
-	ctLen := len(ctData)
-
-	// Build data as [<sidLen>, <cidLen>, <ctLen>, <SessionID>, <CipherID>, <Ciphertext>]
-	data = make([]byte, 8+8+8+sidLen+cidLen+ctLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctLen))
-	ptr += 8
-	copy(data[ptr:ptr+sidLen], sidData)
-	ptr += sidLen
-	copy(data[ptr:ptr+cidLen], cidData)
-	ptr += cidLen
-	copy(data[ptr:ptr+ctLen], ctData)
-	ptr += ctLen
-
-	return
-}
-func (cfg *E2SConfig) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	ctLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read fields
-	if sidLen > 0 {
-		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
-		ptr += sidLen
-		if err != nil {
-			return
-		}
-	}
-	if cidLen > 0 {
-		err := cfg.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
-		ptr += cidLen
-		if err != nil {
-			return
-		}
-	}
-	if ctLen > 0 {
-		err := cfg.Ciphertext.UnmarshalBinary(data[ptr : ptr+ctLen])
-		ptr += ctLen
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-/*
-type EncToSharesBroadcast struct {
-	SessionID SessionID
-
-	ReqID EncToSharesRequestID
-
-	Params *E2SParameters
-}
-*/
 
 type EncToSharesReply struct {
 	SessionID SessionID
@@ -1297,12 +813,6 @@ type SharesToEncRequestID uuid.UUID
 func newSharesToEncRequestID() SharesToEncRequestID {
 	return SharesToEncRequestID(uuid.NewV1())
 }
-func (id *SharesToEncRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *SharesToEncRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
 func (id SharesToEncRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
@@ -1318,73 +828,6 @@ type S2EConfig struct {
 	SessionID SessionID
 	CipherID  CipherID
 }
-
-func (cfg *S2EConfig) MarshalBinary() (data []byte, err error) {
-	// Marshal SessionID
-	sidData, err := cfg.SessionID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	sidLen := len(sidData)
-
-	// Marshal CipherID
-	cidData, err := cfg.CipherID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	cidLen := len(cidData)
-
-	// Build data as [<sidLen>, <cidLen>, <SessionID>, <CipherID>]
-	data = make([]byte, 8+8+sidLen+cidLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
-	ptr += 8
-	copy(data[ptr:ptr+sidLen], sidData)
-	ptr += sidLen
-	copy(data[ptr:ptr+cidLen], cidData)
-	ptr += cidLen
-
-	return
-}
-func (cfg *S2EConfig) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read fields
-	if sidLen > 0 {
-		err := cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
-		ptr += sidLen
-		if err != nil {
-			return
-		}
-	}
-	if cidLen > 0 {
-		err := cfg.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
-		ptr += cidLen
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-/*
-type SharesToEncBroadcast struct {
-	SessionID SessionID
-
-	ReqID SharesToEncRequestID
-	// No params: it assumes it is already set. sigmaSmudging is extracted form params.Sigma in a static way.
-	Params *S2EParameters
-}
-*/
 
 type SharesToEncReply struct {
 	SessionID SessionID

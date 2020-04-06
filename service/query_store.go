@@ -25,7 +25,7 @@ func (smc *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error)
 
 	// Create SumRequest with its ID
 	reqID := newStoreRequestID()
-	req := StoreRequest{query.SessionID, reqID, query}
+	req := &StoreRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.storeReplies[reqID] = make(chan *StoreReply)

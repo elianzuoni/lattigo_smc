@@ -22,7 +22,7 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 
 	// Create MultiplyRequest with its ID
 	reqID := newMultiplyRequestID()
-	req := MultiplyRequest{query.SessionID, reqID, query}
+	req := &MultiplyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.multiplyReplies[reqID] = make(chan *MultiplyReply)
@@ -70,7 +70,7 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}

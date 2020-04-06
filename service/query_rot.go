@@ -22,7 +22,7 @@ func (smc *Service) HandleRotationQuery(query *RotationQuery) (network.Message, 
 
 	// Create request with its ID
 	reqID := newRotationRequestID()
-	req := RotationRequest{query.SessionID, reqID, query}
+	req := &RotationRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.rotationReplies[reqID] = make(chan *RotationReply)
@@ -69,7 +69,7 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}

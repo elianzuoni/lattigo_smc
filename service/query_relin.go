@@ -22,7 +22,10 @@ func (smc *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Messa
 
 	// Create RelinRequest with its ID
 	reqID := newRelinRequestID()
-	req := RelinRequest{query.SessionID, reqID, query}
+	req := &RelinRequest{query.SessionID, reqID, query}
+
+	// Create channel before sending request to root.
+	s.relinReplies[reqID] = make(chan *RelinReply)
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending RelinRequest to root.")
@@ -37,7 +40,7 @@ func (smc *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Messa
 	log.Lvl3(smc.ServerIdentity(), "Sent RelinRequest to root. Waiting on channel to receive new CipherID...")
 	reply := <-s.relinReplies[reqID] // TODO: timeout if root cannot send reply
 	if !reply.Valid {
-		err := errors.New("Received invalid reply: root couldn't perform sum")
+		err := errors.New("Received invalid reply: root couldn't perform relinearisation")
 		log.Error(smc.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	} else {
@@ -66,7 +69,7 @@ func (smc *Service) processRelinRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}

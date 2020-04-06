@@ -30,6 +30,7 @@ type Client struct {
 
 	// Parameters for local encryption and decryption. Useful for Store and Retrieve queries.
 	// They are set once and for all at construction time.
+	paramsIdx int
 	params    *bfv.Parameters
 	encoder   bfv.Encoder
 	decryptor bfv.Decryptor
@@ -43,7 +44,7 @@ func (c *Client) String() string {
 }
 
 //NewClient creates a new unbound client given the definitive parameters.
-func NewClient(entryPoint *network.ServerIdentity, clientID string, params *bfv.Parameters) *Client {
+func NewClient(entryPoint *network.ServerIdentity, clientID string, paramsIdx int) *Client {
 	log.Lvl1("Client constructor called for clientID:", clientID)
 
 	client := &Client{
@@ -56,7 +57,8 @@ func NewClient(entryPoint *network.ServerIdentity, clientID string, params *bfv.
 		masterPK:  nil,
 	}
 
-	client.params = params // TODO: deep copy
+	client.paramsIdx = paramsIdx
+	client.params = bfv.DefaultParams[paramsIdx] // TODO: deep copy
 	client.encoder = bfv.NewEncoder(client.params)
 	keygen := bfv.NewKeyGenerator(client.params)
 	client.sk, client.pk = keygen.GenKeyPair()
@@ -67,7 +69,7 @@ func NewClient(entryPoint *network.ServerIdentity, clientID string, params *bfv.
 
 // isBound returns whether or not the client is already bound to a session.
 func (c *Client) isBound() bool {
-	return c.sessionID == NilSessionID
+	return c.sessionID != NilSessionID
 }
 
 // Sends a CreateSessionQuery to the system (only if the client isn't already bound), and then
@@ -91,7 +93,7 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bf
 	}
 
 	// Craft CreateSessionQuery and prepare response
-	sessQuery := &CreateSessionQuery{roster, c.params, seed}
+	sessQuery := &CreateSessionQuery{roster, c.paramsIdx, seed}
 	sessResp := &CreateSessionResponse{}
 
 	// Send query
@@ -106,6 +108,7 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bf
 		log.Error(c, err)
 		return NilSessionID, nil, err
 	}
+	log.Lvl3(c, "CreateSession query was successful!")
 
 	// Generate master public key
 
@@ -125,6 +128,7 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bf
 		log.Error(c, err)
 		return NilSessionID, nil, err
 	}
+	log.Lvl3(c, "GenPubKey query was successful!")
 
 	// Bind to this new session
 	log.Lvl3(c, "Successfully created session and generated public key: binding to session")

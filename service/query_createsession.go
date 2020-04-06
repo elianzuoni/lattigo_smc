@@ -4,6 +4,7 @@ package service
 
 import (
 	"errors"
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/utils"
@@ -54,6 +55,9 @@ func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
 	// Create the broadcast message
 	broad := &CreateSessionBroadcast{req.ReqID, sessionID, req.Query}
 
+	// Create channel before sending broadcast.
+	smc.createSessionBroadcastAnswers[req.ReqID] = make(chan *CreateSessionBroadcastAnswer)
+
 	// Broadcast the message so that all nodes can create the session.
 	log.Lvl2(smc.ServerIdentity(), "Broadcasting message to all nodes")
 	err := utils.Broadcast(smc.ServiceProcessor, req.Query.Roster, broad)
@@ -101,7 +105,8 @@ func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
 
 	// Create session as required
 	log.Lvl3(smc.ServerIdentity(), "Creating session")
-	session := smc.NewSession(broad.SessionID, broad.Query.Roster, broad.Query.Params, broad.Query.Seed)
+	params := bfv.DefaultParams[broad.Query.ParamsIdx]
+	session := smc.NewSession(broad.SessionID, broad.Query.Roster, params, broad.Query.Seed)
 
 	// Register session
 	smc.sessions[broad.SessionID] = session
@@ -111,9 +116,9 @@ func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
 	log.Lvl2(smc.ServerIdentity(), "Sending answer to root")
 	err := smc.SendRaw(msg.ServerIdentity, answer)
 	if err != nil {
-		log.Error("Could not answer to server:", err)
+		log.Error("Could not answer to root:", err)
 	}
-	log.Lvl4(smc.ServerIdentity(), "Sent answer to server")
+	log.Lvl4(smc.ServerIdentity(), "Sent answer to root")
 
 	return
 }

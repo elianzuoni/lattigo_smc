@@ -21,7 +21,7 @@ func (smc *Service) HandleGenRotKeyQuery(query *GenRotKeyQuery) (network.Message
 
 	// Create GenRotKeyRequest with its ID
 	reqID := newGenRotKeyRequestID()
-	req := GenRotKeyRequest{query.SessionID, reqID, query}
+	req := &GenRotKeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.genRotKeyReplies[reqID] = make(chan *GenRotKeyReply)
@@ -70,25 +70,6 @@ func (smc *Service) processGenRotKeyRequest(msg *network.Envelope) {
 		return
 	}
 
-	/*
-		// Build preparation message to broadcast
-		prep := GenRotKeyBroadcast{req.SessionID, req.ReqID,
-			&E2SParameters{req.Query.CipherID, ct}}
-
-		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
-		log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
-		err := utils.Broadcast(smc.ServiceProcessor, s.Roster, prep)
-		if err != nil {
-			log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
-			err = smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
-			}
-
-			return
-		}
-	*/
-
 	// Then, launch the genPublicKey protocol to get the MasterPublicKey
 	log.Lvl2(smc.ServerIdentity(), "Generating Rotation Key")
 	err := smc.genRotKey(req.Query.SessionID, req.Query.RotIdx, req.Query.K)
@@ -116,22 +97,6 @@ func (smc *Service) processGenRotKeyRequest(msg *network.Envelope) {
 
 	return
 }
-
-/*
-func (s *Service) processGenRotKeyBroadcast(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "Received CreateSessionBroadcast")
-
-	prep := msg.Msg.(*GenRotKeyBroadcast)
-
-	// Send the enc-to-shares parameters through the channel, on which the protocol factory waits
-	log.Lvl3(s.ServerIdentity(), "Sending genRotKey parameters through channel")
-	s.genRotKeyParams <- prep.Params
-
-	log.Lvl4(s.ServerIdentity(), "Sent genRotKey parameters through channel")
-
-	return
-}
-*/
 
 func (smc *Service) genRotKey(SessionID SessionID, rotIdx int, K uint64) error {
 	log.Lvl1(smc.ServerIdentity(), "Root. Generating EvaluationKey")

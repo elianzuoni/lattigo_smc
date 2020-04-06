@@ -21,7 +21,7 @@ func (smc *Service) HandleGenPubKeyQuery(query *GenPubKeyQuery) (network.Message
 
 	// Create GenPubKeyRequest with its ID
 	reqID := newGenPubKeyRequestID()
-	req := GenPubKeyRequest{query.SessionID, reqID, query}
+	req := &GenPubKeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.genPubKeyReplies[reqID] = make(chan *GenPubKeyReply)
@@ -63,31 +63,12 @@ func (smc *Service) processGenPubKeyRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}
 		return
 	}
-
-	/*
-		// Build preparation message to broadcast
-		prep := GenPubKeyBroadcast{req.SessionID, req.ReqID,
-			&E2SParameters{req.Query.CipherID, ct}}
-
-		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
-		log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
-		err := utils.Broadcast(smc.ServiceProcessor, s.Roster, prep)
-		if err != nil {
-			log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
-			err = smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
-			}
-
-			return
-		}
-	*/
 
 	// Then, launch the genPublicKey protocol to get the MasterPublicKey
 	log.Lvl2(smc.ServerIdentity(), "Generating Public Key")
@@ -117,22 +98,6 @@ func (smc *Service) processGenPubKeyRequest(msg *network.Envelope) {
 
 	return
 }
-
-/*
-func (s *Service) processGenPubKeyBroadcast(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "Received CreateSessionBroadcast")
-
-	prep := msg.Msg.(*GenPubKeyBroadcast)
-
-	// Send the enc-to-shares parameters through the channel, on which the protocol factory waits
-	log.Lvl3(s.ServerIdentity(), "Sending genPubKey parameters through channel")
-	s.genPubKeyParams <- prep.Params
-
-	log.Lvl4(s.ServerIdentity(), "Sent genPubKey parameters through channel")
-
-	return
-}
-*/
 
 func (smc *Service) genPublicKey(SessionID SessionID) error {
 	log.Lvl1(smc.ServerIdentity(), "Root. Generating PublicKey")

@@ -21,7 +21,7 @@ func (smc *Service) HandleGenEvalKeyQuery(query *GenEvalKeyQuery) (network.Messa
 
 	// Create GenEvalKeyRequest with its ID
 	reqID := newGenEvalKeyRequestID()
-	req := GenEvalKeyRequest{query.SessionID, reqID, query}
+	req := &GenEvalKeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.genEvalKeyReplies[reqID] = make(chan *GenEvalKeyReply)
@@ -70,25 +70,6 @@ func (smc *Service) processGenEvalKeyRequest(msg *network.Envelope) {
 		return
 	}
 
-	/*
-		// Build preparation message to broadcast
-		prep := GenEvalKeyBroadcast{req.SessionID, req.ReqID,
-			&E2SParameters{req.Query.CipherID, ct}}
-
-		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
-		log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
-		err := utils.Broadcast(smc.ServiceProcessor, s.Roster, prep)
-		if err != nil {
-			log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
-			err = smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
-			}
-
-			return
-		}
-	*/
-
 	// Then, launch the genPublicKey protocol to get the MasterPublicKey
 	log.Lvl2(smc.ServerIdentity(), "Generating Evaluation Key")
 	err := smc.genEvalKey(req.Query.SessionID)
@@ -116,22 +97,6 @@ func (smc *Service) processGenEvalKeyRequest(msg *network.Envelope) {
 
 	return
 }
-
-/*
-func (s *Service) processGenEvalKeyBroadcast(msg *network.Envelope) {
-	log.Lvl1(s.ServerIdentity(), "Received CreateSessionBroadcast")
-
-	prep := msg.Msg.(*GenEvalKeyBroadcast)
-
-	// Send the enc-to-shares parameters through the channel, on which the protocol factory waits
-	log.Lvl3(s.ServerIdentity(), "Sending genEvalKey parameters through channel")
-	s.genEvalKeyParams <- prep.Params
-
-	log.Lvl4(s.ServerIdentity(), "Sent genEvalKey parameters through channel")
-
-	return
-}
-*/
 
 func (smc *Service) genEvalKey(SessionID SessionID) error {
 	log.Lvl1(smc.ServerIdentity(), "Root. Generating EvaluationKey")

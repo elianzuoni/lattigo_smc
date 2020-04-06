@@ -22,7 +22,7 @@ func (smc *Service) HandleRetrieveQuery(query *RetrieveQuery) (network.Message, 
 
 	// Create RetrieveRequest with its ID
 	reqID := newRetrieveRequestID()
-	req := RetrieveRequest{query.SessionID, reqID, query}
+	req := &RetrieveRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.retrieveReplies[reqID] = make(chan *RetrieveReply)
@@ -83,25 +83,6 @@ func (smc *Service) processRetrieveRequest(msg *network.Envelope) {
 		return
 	}
 
-	/*
-		// Build preparation message to broadcast
-		prep := RetrieveBroadcast{req.ReqID,
-			&SwitchingParameters{req.Query.PublicKey, ct}}
-
-		// First, broadcast the request so that all nodes can be ready for the subsequent protocol.
-		log.Lvl2(smc.ServerIdentity(), "Broadcasting preparation message to all nodes")
-		err := utils.Broadcast(smc.ServiceProcessor, smc.Roster, prep)
-		if err != nil {
-			log.Error(smc.ServerIdentity(), "Could not broadcast preparation message:", err)
-			err = smc.SendRaw(msg.ServerIdentity, reply) // Field ciphertext stays nil and field valid stay false
-			if err != nil {
-				log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
-			}
-
-			return
-		}
-	*/
-
 	// Then, launch the public key-switching protocol to get the switched ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Switching ciphertext")
 	ctSwitch, err := smc.switchCiphertext(req.SessionID, req.Query.PublicKey, ct)
@@ -130,22 +111,6 @@ func (smc *Service) processRetrieveRequest(msg *network.Envelope) {
 
 	return
 }
-
-/*
-func (smc *Service) processRetrieveBroadcast(msg *network.Envelope) {
-	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcast")
-
-	prep := msg.Msg.(*RetrieveBroadcast)
-
-	// Send the SwitchingParameters through the channel, on which the protocol factory waits
-	log.Lvl3(smc.ServerIdentity(), "Sending switching parameters through channel")
-	smc.switchingParams <- prep.Params
-
-	log.Lvl4(smc.ServerIdentity(), "Sent switching parameters through channel")
-
-	return
-}
-*/
 
 func (smc *Service) switchCiphertext(SessionID SessionID, pk *bfv.PublicKey, ct *bfv.Ciphertext) (*bfv.Ciphertext, error) {
 	log.Lvl2(smc.ServerIdentity(), "Performing public key-switching")

@@ -22,7 +22,7 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 
 	// Create SumRequest with its ID
 	reqID := newSumRequestID()
-	req := SumRequest{query.SessionID, reqID, query}
+	req := &SumRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
 	s.sumReplies[reqID] = make(chan *SumReply)
@@ -70,7 +70,7 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}

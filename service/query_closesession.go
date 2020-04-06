@@ -72,6 +72,9 @@ func (smc *Service) processCloseSessionRequest(msg *network.Envelope) {
 	// Create the broadcast message
 	broad := &CloseSessionBroadcast{req.ReqID, req.Query}
 
+	// Create channel before sending broadcast.
+	smc.closeSessionBroadcastAnswers[req.ReqID] = make(chan *CloseSessionBroadcastAnswer)
+
 	// Broadcast the message so that all nodes can delete the session.
 	log.Lvl2(smc.ServerIdentity(), "Broadcasting message to all nodes")
 	err := utils.Broadcast(smc.ServiceProcessor, s.Roster, broad)

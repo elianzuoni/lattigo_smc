@@ -367,11 +367,11 @@ func (smc *Service) Process(msg *network.Envelope) {
 
 	// Generate Rotation Key
 	if msg.MsgType.Equal(msgTypes.msgGenRotKeyRequest) {
-		smc.processGenPubKeyRequest(msg)
+		smc.processGenRotKeyRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(msgTypes.msgGenRotKeyReply) {
-		smc.processGenPubKeyReply(msg)
+		smc.processGenRotKeyReply(msg)
 		return
 	}
 
