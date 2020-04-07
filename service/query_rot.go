@@ -56,6 +56,7 @@ func (smc *Service) HandleRotationQuery(query *RotationQuery) (network.Message, 
 // It checks for feasibility (whether or not it possesses the requested ciphertext) and, based on the result,
 // it either returns an invalid reply, or performs the rotation and stores the new ciphertext under a new
 // CipherID which is returned in a valid reply.
+// TODO: it only check whether rotKeys is nil. If not, but the right rotation key was not generated, it panics.
 func (smc *Service) processRotationRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*RotationRequest)
 
@@ -90,6 +91,10 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 	log.Lvl3(smc.ServerIdentity(), "Checking if rotation key was generated")
 	if s.rotationKey == nil {
 		log.Error(smc.ServerIdentity(), "Rotation key not generated")
+		err := smc.SendRaw(msg.ServerIdentity, reply)
+		if err != nil {
+			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
+		}
 		return
 	}
 

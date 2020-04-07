@@ -485,8 +485,8 @@ func (c *Client) SendRelinQuery(cipherID CipherID) (CipherID, error) {
 	return cipherID, nil
 }
 
-// SendRotationQuery sends a query to perform a rotation of type rotType-k on the ciphertext indexed by cipherID.
-func (c *Client) SendRotationQuery(cipherID CipherID, K uint64, rotType int) (CipherID, error) {
+// SendRotationQuery sends a query to perform arotIdx-rotation of k positions on the ciphertext indexed by cipherID.
+func (c *Client) SendRotationQuery(cipherID CipherID, rotIdx int, K uint64) (CipherID, error) {
 	log.Lvl1(c, "Called to send a rotation query")
 
 	// Check that the client is bound
@@ -497,7 +497,7 @@ func (c *Client) SendRotationQuery(cipherID CipherID, K uint64, rotType int) (Ci
 	}
 
 	// Craft query and prepare response
-	query := &RotationQuery{c.sessionID, cipherID, K, rotType}
+	query := &RotationQuery{c.sessionID, cipherID, K, rotIdx}
 	resp := &RotationResponse{}
 
 	// Send query

@@ -156,7 +156,7 @@ func (smc *Service) genRotKey(SessionID SessionID, rotIdx int, K uint64) error {
 	log.Lvl2(rkgp.ServerIdentity(), "Waiting for RKG protocol to terminate...")
 	rkgp.WaitDone()
 
-	// Retrieve PublicKey
+	// Retrieve RotationKey
 	s.rotationKey = &rkgp.RotKey
 	log.Lvl1(smc.ServerIdentity(), "Generated RotationKey!")
 

@@ -186,7 +186,7 @@ func (smc *Service) newProtoRKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 
 	// Finally, initialise the rest of the fields
 	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
-	err = rkgp.Init(s.Params, *s.skShard, bfv.Rotation(s.rotIdx), s.k, crp)
+	err = rkgp.Init(s.Params, *s.skShard, s.rotationKey, bfv.Rotation(s.rotIdx), s.k, crp)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err

@@ -270,7 +270,6 @@ func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 
 	// Retrieve
 	c.RegisterProcessor(smcService, msgTypes.msgRetrieveRequest)
-	/*c.RegisterProcessor(smcService, msgTypes.msgRetrieveBroadcast)*/
 	c.RegisterProcessor(smcService, msgTypes.msgRetrieveReply)
 
 	// Sum
@@ -287,21 +286,18 @@ func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 
 	// Refresh
 	c.RegisterProcessor(smcService, msgTypes.msgRefreshRequest)
-	/*c.RegisterProcessor(smcService, msgTypes.msgRefreshBroadcast)*/
 	c.RegisterProcessor(smcService, msgTypes.msgRefreshReply)
 
 	// Rotation
-	c.RegisterProcessor(smcService, msgTypes.msgRotationReply)
+	c.RegisterProcessor(smcService, msgTypes.msgRotationRequest)
 	c.RegisterProcessor(smcService, msgTypes.msgRotationReply)
 
 	// Encryption to shares
 	c.RegisterProcessor(smcService, msgTypes.msgEncToSharesRequest)
-	/*c.RegisterProcessor(smcService, msgTypes.msgEncToSharesBroadcast)*/
 	c.RegisterProcessor(smcService, msgTypes.msgEncToSharesReply)
 
 	// Shares to encryption
 	c.RegisterProcessor(smcService, msgTypes.msgSharesToEncRequest)
-	/*c.RegisterProcessor(smcService, msgTypes.msgSharesToEncBroadcast)*/
 	c.RegisterProcessor(smcService, msgTypes.msgSharesToEncReply)
 }
 

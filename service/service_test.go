@@ -657,6 +657,7 @@ func TestMultiplyRelinQuery(t *testing.T) {
 }
 
 // To make the refresh test meaningful, a moderately complex circuit is evaluated, then the final value is refreshed.
+// Interestingly, it only works with paramsIdx >= 1 (in which case, it doesn't even need refreshing).
 // Specifically, what's done is the following:
 // a, b <-$ random
 // ab <- Mul(a, b)
@@ -666,7 +667,6 @@ func TestMultiplyRelinQuery(t *testing.T) {
 // cd <- Relin(cd)
 // abcd <- Mul(ab, cd)
 // abcd <- Relin(abcd)
-// TODO: interesting. With paramsIdx = 0 it never works. With paramsIdx >= 1 it works even without refresh
 func TestRefreshQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing Refresh query")
@@ -676,7 +676,7 @@ func TestRefreshQuery(t *testing.T) {
 
 	// Create session
 
-	paramsIdx := 1
+	paramsIdx := 0
 	clientID := "TestRefreshQuery"
 	log.Lvl2("Going to create new session. Should not return error")
 	client, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
@@ -739,27 +739,19 @@ func TestRefreshQuery(t *testing.T) {
 	}
 	log.Lvl2("Method SendRelinQuery for \"ab\" correctly returned no error")
 
+	// Refresh the remote ab
+
+	log.Lvl2("Going to refresh \"ab\" (remotely). Should not return error")
+	_, err = client.SendRefreshQuery(cidAB) // The CipherID doesn't change
+	if err != nil {
+		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
+	}
+	log.Lvl2("Method SendRefreshQuery for \"ab\" correctly returned no error")
+
 	// Multiply a and b locally
 
 	ab := ctx.NewPoly()
 	ctx.MulCoeffs(a, b, ab)
-
-	// Retrieve the remote ab
-
-	log.Lvl2("Going to retrieve the remote \"ab\". Should not return error")
-	retr, err := client.SendRetrieveQuery(cidAB)
-	if err != nil {
-		t.Fatal("Method SendRetrieveQuery for \"ab\" returned error:", err)
-	}
-	log.Lvl2("Method SendRetrieveQuery for \"ab\" correctly returned no error")
-
-	// Test for equality
-
-	log.Lvl2("Going to test for equality. Should be the same")
-	if !utils.Equalslice(ab.Coeffs[0], retr) {
-		t.Fatal("Original \"ab\" and retrieved \"ab\" are not the same")
-	}
-	log.Lvl2("Original \"ab\" and retrieved \"ab\" are the same")
 
 	// Generate c and d
 
@@ -806,6 +798,15 @@ func TestRefreshQuery(t *testing.T) {
 	}
 	log.Lvl2("Method SendRelinQuery for \"cd\" correctly returned no error")
 
+	// Refresh the remote abcd
+
+	log.Lvl2("Going to refresh \"cd\" (remotely). Should not return error")
+	_, err = client.SendRefreshQuery(cidCD) // The CipherID doesn't change
+	if err != nil {
+		t.Fatal("Method SendRefreshQuery for \"cd\" returned error:", err)
+	}
+	log.Lvl2("Method SendRefreshQuery for \"cd\" correctly returned no error")
+
 	// Multiply c and d locally
 
 	cd := ctx.NewPoly()
@@ -814,7 +815,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Retrieve the remote cd
 
 	log.Lvl2("Going to retrieve the remote \"cd\". Should not return error")
-	retr, err = client.SendRetrieveQuery(cidCD)
+	retr, err := client.SendRetrieveQuery(cidCD)
 	if err != nil {
 		t.Fatal("Method SendRetrieveQuery for \"cd\" returned error:", err)
 	}
@@ -846,11 +847,6 @@ func TestRefreshQuery(t *testing.T) {
 	}
 	log.Lvl2("Method SendRelinQuery for \"abcd\" correctly returned no error")
 
-	// Multiply ab and cd locally
-
-	abcd := ctx.NewPoly()
-	ctx.MulCoeffs(ab, cd, abcd)
-
 	// Refresh the remote abcd
 
 	log.Lvl2("Going to refresh \"abcd\" (remotely). Should not return error")
@@ -859,6 +855,11 @@ func TestRefreshQuery(t *testing.T) {
 		t.Fatal("Method SendRefreshQuery for \"abcd\" returned error:", err)
 	}
 	log.Lvl2("Method SendRefreshQuery for \"abcd\" correctly returned no error")
+
+	// Multiply ab and cd locally
+
+	abcd := ctx.NewPoly()
+	ctx.MulCoeffs(ab, cd, abcd)
 
 	// Retrieve the remote abcd
 
@@ -880,80 +881,119 @@ func TestRefreshQuery(t *testing.T) {
 	return
 }
 
-// TODO: what does rotation do? How to test that it works?
+func TestRotationQuery(t *testing.T) {
+	log.SetDebugVisible(3)
+	log.Lvl1("Testing Rotation query")
 
-/*
+	size := 3
+	roster := genLocalTestRoster(size)
 
-func TestRotation(t *testing.T) {
-	log.SetDebugVisible(4)
-	size := 5
-	K := 2
+	// Create session
+
+	paramsIdx := 0
+	clientID := "TestRotationQuery"
+	log.Lvl2("Going to create new session. Should not return error")
+	c, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
+	if err != nil {
+		t.Fatal("Method CreateSession returned error:", err)
+	}
+	log.Lvl2("Method CreateSession correctly returned no error")
+
+	// Generate first rotation key
+
+	log.Lvl2("Going to generate first rotation key. Should not return error")
 	rotIdx := bfv.RotationLeft
-	local := onet.NewLocalTest(utils.SUITE)
-	_, el, _ := local.GenTree(size, true)
-
-	client := NewClient(el.List[0], "0")
-	seed := []byte{'l', 'a', 't', 't', 'i', 'g', 'o'}
-
-	err := client.SendCreateSessionQuery(el, true, false, true, uint64(K), rotIdx, 0, seed)
+	k1 := uint64(770)
+	err = c.SendGenRotKeyQuery(rotIdx, k1)
 	if err != nil {
-		t.Fatal(err)
-		return
+		t.Fatal("First call to method SendGenRotKeyQuery returned error:", err)
 	}
-	<-time.After(2 * time.Second)
+	log.Lvl2("First call to method SendGenRotKeyQuery correctly returned no error")
 
-	client1 := NewClient(el.List[1], "1")
+	// Generate second rotation key
 
-	q, err := client1.SendKeyQuery(true, false, false, 0)
-	log.Lvl1("Response of query : ", q)
-	<-time.After(time.Second)
-	data := make([]byte, testCoeffSize)
-	n, err := rand.Read(data)
-	if err != nil || n != testCoeffSize {
-		t.Fatal(err, "could not initialize data ")
-	}
-	queryID1, err := client1.SendStoreQuery(el, data)
+	log.Lvl2("Going to second first rotation key. Should not return error")
+	k2 := uint64(9)
+	err = c.SendGenRotKeyQuery(rotIdx, k2)
 	if err != nil {
-		t.Fatal("Could not start client :", err)
+		t.Fatal("Second call to method SendGenRotKeyQuery returned error:", err)
+	}
+	log.Lvl2("Second call to method SendGenRotKeyQuery correctly returned no error")
 
+	// Generate data
+
+	log.Lvl2("Going to generate random data. Should not return error")
+	_, p, _, err := testGenRandomPolys(paramsIdx) // We only use one vector
+	if err != nil {
+		t.Fatal("Could not generate random data:", err)
+	}
+	log.Lvl2("Successfully generated random data")
+
+	// Store the vector
+
+	log.Lvl2("Going to store vector. Should not return error")
+	data := p.Coeffs[0] // Only one modulus exists
+	cid, err := c.SendStoreQuery(data)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery correctly returned no error")
+
+	// Rotate the vector remotely with the first key
+
+	log.Lvl2("Going to rotate the vector remotely with the first key. Should not return error")
+	cidRot, err := c.SendRotationQuery(cid, rotIdx, k1)
+	if err != nil {
+		t.Fatal("First call to method SendRotationQuery returned error:", err)
+	}
+	log.Lvl2("First call to method SendRotationQuery correctly returned no error")
+
+	// Rotate the (already rotated) vector remotely with the second key
+
+	log.Lvl2("Going to rotate the (already rotated) vector remotely with the second key. Should not return error")
+	cidRot, err = c.SendRotationQuery(cidRot, rotIdx, k2)
+	if err != nil {
+		t.Fatal("Second call to method SendRotationQuery returned error:", err)
+	}
+	log.Lvl2("Second call to method SendRotationQuery correctly returned no error")
+
+	// Rotate the vector locally
+
+	dataRot := make([]uint64, len(data))
+	// Rotate first row
+	row := data[:len(data)/2]
+	rowRot := dataRot[:len(dataRot)/2]
+	for i := range row {
+		// Rotation to the left (combines the two rotations)
+		j := (i + int(k1+k2)) % len(row)
+		rowRot[i] = row[j]
+	}
+	// Rotate second row
+	row = data[len(data)/2:]
+	rowRot = dataRot[len(dataRot)/2:]
+	for i := range row {
+		// Rotation to the left (combines the two rotations)
+		j := (i + int(k1+k2)) % len(row)
+		rowRot[i] = row[j]
 	}
 
-	log.Lvl2("Query Id 1: ", queryID1)
-	<-time.After(1 * time.Second)
+	// Retrieve the remote product
 
-	log.Lvl1("Rotation of cipher to the right of ", K, "k step")
+	log.Lvl2("Going to retrieve the remote rotated vector. Should not return error")
+	var retrRot []uint64
+	retrRot, err = c.SendRetrieveQuery(cidRot)
+	if err != nil {
+		t.Fatal("Method SendRetrieveQuery returned error:", err)
+	}
+	log.Lvl2("Method SendRetrieveQuery correctly returned no error")
 
-	resultRot, err := client1.SendRotationQuery(*queryID1, uint64(K), rotIdx)
-	log.Lvl1("Rotation is stored in : ", resultRot)
+	// Test for equality
 
-	//Try to do a key switch on it!!!
-	<-time.After(1 * time.Second)
-	client2 := NewClient(el.List[2], "2")
-	got, err := client2.SendRetrieveQuery(&resultRot)
-
-	//We need to split it in two
-	got1, got2 := got[:testCoeffSize/2], got[testCoeffSize/2:]
-	data1, data2 := data[:testCoeffSize/2], data[testCoeffSize/2:]
-
-	expected1 := make([]byte, testCoeffSize/2)
-	expected2 := make([]byte, testCoeffSize/2)
-
-	copy(expected1[:len(expected1)-K], data1[K:])
-	copy(expected1[len(expected1)-K:], data1[:K])
-
-	copy(expected2[:len(expected2)-K], data2[K:])
-	copy(expected2[len(expected2)-K:], data2[:K])
-
-	log.Lvl1("Expected data 1 is : ", expected1)
-	log.Lvl1("Retrieve data 1 is : ", got1)
-
-	log.Lvl1("Expected data 2 is : ", expected2)
-	log.Lvl1("Retrieve data 2 is : ", got2)
-
-	assert.Equal(t, "rotation part 1 ", got1, expected1)
-	assert.Equal(t, "rotation part 2 ", got2, expected2)
+	log.Lvl2("Going to test for equality. Should be the same")
+	if !utils.Equalslice(dataRot, retrRot) {
+		t.Fatal("Original rotated vector and retrieved rotated vector are not the same")
+	}
+	log.Lvl2("Original rotated vector and retrieved rotated vector are the same")
 
 	return
 }
-
-*/

@@ -179,8 +179,6 @@ func init() {
 	msgTypes.msgSharesToEncRequest = network.RegisterMessage(&SharesToEncRequest{})
 	msgTypes.msgSharesToEncReply = network.RegisterMessage(&SharesToEncReply{})
 	msgTypes.msgSharesToEncResponse = network.RegisterMessage(&SharesToEncResponse{}) // Unused
-
-	//_ = network.RegisterMessage(&protocols.Start{}) // TODO: necessary?
 }
 
 /*********************** Message structs *********************/

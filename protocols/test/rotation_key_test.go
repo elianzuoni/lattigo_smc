@@ -49,7 +49,7 @@ func TestRotationKeyLocal(t *testing.T) {
 					return nil, err
 				}
 
-				err = instance.(*protocols.RotationKeyProtocol).Init(params, *lt.SecretKeyShares0[tni.ServerIdentity().ID], bfv.Rotation(rottype), k, crp)
+				err = instance.(*protocols.RotationKeyProtocol).Init(params, *lt.SecretKeyShares0[tni.ServerIdentity().ID], nil, bfv.Rotation(rottype), k, crp)
 				return instance, err
 			}); err != nil {
 			t.Fatal(err)
@@ -70,7 +70,7 @@ func TestRotationKeyLocal(t *testing.T) {
 					return nil, err
 				}
 
-				err = instance.(*protocols.RotationKeyProtocol).Init(params, *lt.SecretKeyShares0[tni.ServerIdentity().ID], bfv.Rotation(rottype), k, crp)
+				err = instance.(*protocols.RotationKeyProtocol).Init(params, *lt.SecretKeyShares0[tni.ServerIdentity().ID], nil, bfv.Rotation(rottype), k, crp)
 				return instance, err
 			}); err != nil {
 			t.Fatal(err)
@@ -89,7 +89,7 @@ func TestRotationKeyLocal(t *testing.T) {
 					return nil, err
 				}
 
-				err = instance.(*protocols.RotationKeyProtocol).Init(params, *lt.SecretKeyShares0[tni.ServerIdentity().ID], bfv.Rotation(rottype), k, crp)
+				err = instance.(*protocols.RotationKeyProtocol).Init(params, *lt.SecretKeyShares0[tni.ServerIdentity().ID], nil, bfv.Rotation(rottype), k, crp)
 				return instance, err
 			}); err != nil {
 			t.Fatal(err)

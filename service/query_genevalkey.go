@@ -156,7 +156,7 @@ func (smc *Service) genEvalKey(SessionID SessionID) error {
 	log.Lvl2(ekgp.ServerIdentity(), "Waiting for EKG protocol to terminate...")
 	ekgp.WaitDone()
 
-	// Retrieve PublicKey
+	// Retrieve EvaluationKey
 	s.evalKey = ekgp.EvaluationKey
 	log.Lvl1(smc.ServerIdentity(), "Generated EvaluationKey!")
 
