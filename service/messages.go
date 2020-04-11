@@ -10,6 +10,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"go.dedis.ch/protobuf"
 	uuid "gopkg.in/satori/go.uuid.v1"
 )
 
@@ -198,23 +199,47 @@ func (id SessionID) String() string {
 
 // CipherID
 
-type CipherID uuid.UUID
+type CipherID struct {
+	Owner string // TODO: this is an ugly workaround
+	ID    uuid.UUID
+}
 
-var NilCipherID = CipherID(uuid.Nil)
+var NilCipherID = CipherID{"", uuid.Nil}
 
-func newCipherID() CipherID {
-	return CipherID(uuid.NewV1())
+func newCipherID(owner *network.ServerIdentity) CipherID {
+	data, _ := protobuf.Encode(owner)
+	return CipherID{string(data), uuid.NewV1()}
+}
+func (id CipherID) GetServerIdentityOwner() *network.ServerIdentity {
+	owner := network.ServerIdentity{}
+	_ = protobuf.Decode([]byte(id.Owner), &owner)
+	return &owner
 }
 func (id CipherID) String() string {
-	return (uuid.UUID)(id).String()
+	return id.GetServerIdentityOwner().String() + ":" + id.ID.String()
+}
+
+// SharesID
+
+type SharesID struct {
+	Owner *network.ServerIdentity
+	ID    uuid.UUID
+}
+
+var NilSharesID = SharesID{nil, uuid.Nil}
+
+func newSharesID(owner *network.ServerIdentity) SharesID {
+	return SharesID{owner, uuid.NewV1()}
+}
+func (id SharesID) String() string {
+	return id.Owner.String() + ":" + id.ID.String()
 }
 
 // Create Session
 
 type CreateSessionQuery struct {
-	Roster    *onet.Roster
-	ParamsIdx int
-	Seed      []byte
+	Roster *onet.Roster
+	Params *bfv.Parameters
 }
 
 type CreateSessionRequestID uuid.UUID
@@ -301,6 +326,7 @@ type CloseSessionResponse struct {
 
 type GenPubKeyQuery struct {
 	SessionID SessionID
+	Seed      []byte
 }
 
 type GenPubKeyRequestID uuid.UUID
@@ -320,6 +346,7 @@ type GenPubKeyRequest struct {
 
 type GenPubKeyConfig struct {
 	SessionID SessionID
+	Seed      []byte
 }
 
 type GenPubKeyReply struct {
@@ -339,6 +366,7 @@ type GenPubKeyResponse struct {
 
 type GenEvalKeyQuery struct {
 	SessionID SessionID
+	Seed      []byte
 }
 
 type GenEvalKeyRequestID uuid.UUID
@@ -358,6 +386,7 @@ type GenEvalKeyRequest struct {
 
 type GenEvalKeyConfig struct {
 	SessionID SessionID
+	Seed      []byte
 }
 
 type GenEvalKeyReply struct {
@@ -377,6 +406,7 @@ type GenRotKeyQuery struct {
 	SessionID SessionID
 	RotIdx    int
 	K         uint64
+	Seed      []byte
 }
 
 type GenRotKeyRequestID uuid.UUID
@@ -399,6 +429,7 @@ type GenRotKeyConfig struct {
 
 	RotIdx int
 	K      uint64
+	Seed   []byte
 }
 
 type GenRotKeyReply struct {
@@ -417,10 +448,8 @@ type GenRotKeyResponse struct {
 type KeyQuery struct {
 	SessionID SessionID
 
-	PublicKey     bool
 	EvaluationKey bool
 	RotationKey   bool
-	RotIdx        int
 }
 
 type KeyRequestID uuid.UUID
@@ -446,18 +475,14 @@ type KeyReply struct {
 
 	ReqID KeyRequestID
 
-	PublicKey *bfv.PublicKey
-	EvalKey   *bfv.EvaluationKey
-	RotKeys   *bfv.RotationKeys
-	RotIdx    int
+	EvalKey *bfv.EvaluationKey
+	RotKeys *bfv.RotationKeys
+	RotIdx  int
 
 	Valid bool
 }
 
 type KeyResponse struct {
-	SessionID SessionID
-
-	PubKeyObtained  bool
 	EvalKeyObtained bool
 	RotKeyObtained  bool
 
@@ -666,12 +691,15 @@ type RelinRequest struct {
 type RelinReply struct {
 	SessionID SessionID
 
-	ReqID RelinRequestID
+	ReqID       RelinRequestID
+	NewCipherID CipherID
+
 	Valid bool
 }
 
 type RelinResponse struct {
-	Valid bool
+	NewCipherID CipherID
+	Valid       bool
 }
 
 // Refresh
@@ -681,6 +709,7 @@ type RefreshQuery struct {
 	SessionID SessionID
 
 	CipherID CipherID
+	Seed     []byte
 }
 
 type RefreshRequestID uuid.UUID
@@ -702,18 +731,21 @@ type RefreshRequest struct {
 type RefreshConfig struct {
 	SessionID  SessionID
 	Ciphertext *bfv.Ciphertext
+	Seed       []byte
 }
 
 type RefreshReply struct {
 	SessionID SessionID
 
-	ReqID RefreshRequestID
+	ReqID       RefreshRequestID
+	NewCipherID CipherID
 
 	Valid bool
 }
 
 type RefreshResponse struct {
-	Valid bool
+	NewCipherID CipherID
+	Valid       bool
 }
 
 // Rotation
@@ -782,20 +814,22 @@ type EncToSharesRequest struct {
 
 type E2SConfig struct {
 	SessionID  SessionID
-	CipherID   CipherID
+	SharesID   SharesID
 	Ciphertext *bfv.Ciphertext
 }
 
 type EncToSharesReply struct {
 	SessionID SessionID
 
-	ReqID EncToSharesRequestID
-	// The CipherID will be the same
+	ReqID    EncToSharesRequestID
+	SharesID SharesID
+
 	Valid bool
 }
 
 type EncToSharesResponse struct {
-	Valid bool
+	SharesID SharesID
+	Valid    bool
 }
 
 // Shares to encryption
@@ -803,7 +837,8 @@ type EncToSharesResponse struct {
 type SharesToEncQuery struct {
 	SessionID SessionID
 
-	CipherID CipherID
+	SharesID SharesID
+	Seed     []byte
 }
 
 type SharesToEncRequestID uuid.UUID
@@ -824,17 +859,20 @@ type SharesToEncRequest struct {
 
 type S2EConfig struct {
 	SessionID SessionID
-	CipherID  CipherID
+	SharesID  SharesID
+	Seed      []byte
 }
 
 type SharesToEncReply struct {
 	SessionID SessionID
 
-	ReqID SharesToEncRequestID
-	// The CipherID will be the same
+	ReqID       SharesToEncRequestID
+	NewCipherID CipherID
+
 	Valid bool
 }
 
 type SharesToEncResponse struct {
-	Valid bool
+	NewCipherID CipherID
+	Valid       bool
 }

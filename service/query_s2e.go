@@ -10,7 +10,7 @@ import (
 )
 
 func (smc *Service) HandleSharesToEncQuery(query *SharesToEncQuery) (network.Message, error) {
-	log.Lvl1(smc.ServerIdentity(), "Received SharesToEncQuery for ciphertext:", query.CipherID)
+	log.Lvl1(smc.ServerIdentity(), "Received SharesToEncQuery for shares:", query.SharesID)
 
 	// Extract Session, if existent
 	s, ok := smc.sessions[query.SessionID]
@@ -25,7 +25,9 @@ func (smc *Service) HandleSharesToEncQuery(query *SharesToEncQuery) (network.Mes
 	req := &SharesToEncRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.sharesToEncRepLock.Lock()
 	s.sharesToEncReplies[reqID] = make(chan *SharesToEncReply)
+	s.sharesToEncRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending SharesToEncRequest to root:", reqID)
@@ -39,16 +41,28 @@ func (smc *Service) HandleSharesToEncQuery(query *SharesToEncQuery) (network.Mes
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	reply := <-s.sharesToEncReplies[reqID] // TODO: timeout if root cannot send reply
+	s.sharesToEncRepLock.RLock()
+	replyChan := s.sharesToEncReplies[reqID]
+	s.sharesToEncRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.sharesToEncRepLock.Lock()
+	close(replyChan)
+	delete(s.sharesToEncReplies, reqID)
+	s.sharesToEncRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform shares-to-enc")
 		log.Error(smc.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	}
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
-	// TODO: close channel?
 
-	return &SharesToEncResponse{reply.Valid}, nil
+	return &SharesToEncResponse{reply.NewCipherID, reply.Valid}, nil
 }
 
 func (smc *Service) processSharesToEncRequest(msg *network.Envelope) {
@@ -73,7 +87,7 @@ func (smc *Service) processSharesToEncRequest(msg *network.Envelope) {
 
 	// Then, launch the shares-to-enc protocol to get the re-encrypted ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Re-encrypting ciphertext")
-	ctReenc, err := smc.reencryptCiphertext(req.SessionID, req.Query.CipherID)
+	ctReenc, err := smc.reencryptCiphertext(req.SessionID, req.Query.SharesID, req.Query.Seed)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not perform shares-to-enc:", err)
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -83,13 +97,17 @@ func (smc *Service) processSharesToEncRequest(msg *network.Envelope) {
 		return
 	}
 
-	// Register (overwrite) in the local database
-	s.database[req.Query.CipherID] = ctReenc
+	// Register in the local database
+	newCipherID := newCipherID(smc.ServerIdentity())
+	s.databaseLock.Lock()
+	s.database[newCipherID] = ctReenc
+	s.databaseLock.Unlock()
 
 	log.Lvl3(smc.ServerIdentity(), "Successfully re-encrypted ciphertext")
 
 	// Set fields in the reply
 	reply.Valid = true
+	reply.NewCipherID = newCipherID
 
 	// Send the positive reply to the server
 	log.Lvl2(smc.ServerIdentity(), "Replying (positively) to server")
@@ -102,7 +120,7 @@ func (smc *Service) processSharesToEncRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) reencryptCiphertext(SessionID SessionID, CipherID CipherID) (*bfv.Ciphertext, error) {
+func (smc *Service) reencryptCiphertext(SessionID SessionID, SharesID SharesID, Seed []byte) (*bfv.Ciphertext, error) {
 	log.Lvl2(smc.ServerIdentity(), "Re-encrypting a ciphertext")
 
 	// Extract session
@@ -113,7 +131,7 @@ func (smc *Service) reencryptCiphertext(SessionID SessionID, CipherID CipherID) 
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, SharesToEncProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &S2EConfig{SessionID, CipherID}
+	config := &S2EConfig{SessionID, SharesID, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -174,7 +192,9 @@ func (smc *Service) processSharesToEncReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.sharesToEncRepLock.RLock()
 	s.sharesToEncReplies[reply.ReqID] <- reply
+	s.sharesToEncRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

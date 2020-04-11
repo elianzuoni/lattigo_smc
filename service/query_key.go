@@ -13,7 +13,7 @@ import (
 // The request is forwarded to the root, and the method returns a response based on the reply sent by the server,
 // indicating which keys were retrieved.
 func (smc *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
-	log.Lvl1(smc.ServerIdentity(), "Received KeyQuery query. ReqPubKey:", query.PublicKey, "; ReqRotKey:", query.RotationKey,
+	log.Lvl1(smc.ServerIdentity(), "Received KeyQuery query. ReqRotKey:", query.RotationKey,
 		"; ReqEvalKey:", query.EvaluationKey)
 
 	// Extract Session, if existent
@@ -29,7 +29,9 @@ func (smc *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 	req := &KeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.keyRepLock.Lock()
 	s.keyReplies[reqID] = make(chan *KeyReply)
+	s.keyRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending KeyRequest to root:", reqID)
@@ -44,27 +46,45 @@ func (smc *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 	log.Lvl2(smc.ServerIdentity(), "Forwarded request to the root")
 
 	// Receive reply from channel
-	log.Lvl3(smc.ServerIdentity(), "Sent KeyRequest to root. Waiting on channel to receive reply...")
-	reply := <-s.keyReplies[reqID] // TODO: timeout if root cannot send reply
+	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	s.keyRepLock.RLock()
+	replyChan := s.keyReplies[reqID]
+	s.keyRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
 
-	log.Lvl4(smc.ServerIdentity(), "Received reply from channel")
-	// TODO: close channel?
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.keyRepLock.Lock()
+	close(replyChan)
+	delete(s.keyReplies, reqID)
+	s.keyRepLock.Unlock()
 
-	return &KeyResponse{
-		PubKeyObtained:  reply.PublicKey != nil,
-		EvalKeyObtained: reply.EvalKey != nil,
-		RotKeyObtained:  reply.RotKeys != nil,
-		Valid:           reply.Valid,
-	}, nil
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
+	// Save (in the Service struct) the received keys.
+	if reply.EvalKey != nil {
+		// We don't need to hold the lock
+		s.evalKeyLock.Lock()
+		s.evalKey = reply.EvalKey
+		s.evalKeyLock.Unlock()
+	}
+	if reply.RotKeys != nil {
+		// We don't need to hold the lock
+		s.rotKeyLock.Lock()
+		s.rotationKey = reply.RotKeys // TODO: overwrite no matter what?
+		s.rotKeyLock.Unlock()
+	}
+
+	return &KeyResponse{reply.EvalKey != nil, reply.RotKeys != nil, reply.Valid}, nil
 }
 
 // KeyQuery is received at root from server.
-// It comprises three flags, signalling which keys the server is asking for.
+// It comprises two flags, signalling which keys the server is asking for.
 func (smc *Service) processKeyRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*KeyRequest)
 
-	log.Lvl1(smc.ServerIdentity(), "Root. Received KeyQuery. ReqPubKey:", req.Query.PublicKey, "; ReqRotKey:",
-		req.Query.RotationKey, "; ReqEvalKey:", req.Query.EvaluationKey)
+	log.Lvl1(smc.ServerIdentity(), "Root. Received KeyQuery. ReqRotKey:", req.Query.RotationKey,
+		"; ReqEvalKey:", req.Query.EvaluationKey)
 
 	// Start by declaring reply with minimal fields.
 	reply := &KeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
@@ -81,17 +101,19 @@ func (smc *Service) processKeyRequest(msg *network.Envelope) {
 		return
 	}
 
-	if req.Query.PublicKey && s.MasterPublicKey != nil {
-		reply.PublicKey = s.MasterPublicKey
-	}
-	if req.Query.EvaluationKey && s.evalKey != nil {
+	if req.Query.EvaluationKey {
+		// We don't need to hold the lock
+		s.evalKeyLock.RLock()
 		reply.EvalKey = s.evalKey
+		s.evalKeyLock.RUnlock()
 	}
-	if req.Query.RotationKey && s.rotationKey != nil {
+	if req.Query.RotationKey {
+		// We don't need to hold the lock
+		s.rotKeyLock.RLock()
 		reply.RotKeys = s.rotationKey
+		s.rotKeyLock.RUnlock()
 	}
 	reply.Valid = true
-	// TODO what about rotationIdx?
 
 	// Send the result.
 	log.Lvl2(smc.ServerIdentity(), "Sending KeyReply to server", msg.ServerIdentity)
@@ -102,11 +124,11 @@ func (smc *Service) processKeyRequest(msg *network.Envelope) {
 }
 
 // This method is executed at the server when receiving the root's KeyReply.
-// It stores the received keys, then it sends the reply through the channel.
+// It just sends the reply through the channel.
 func (smc *Service) processKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*KeyReply)
-	log.Lvl1(smc.ServerIdentity(), "Server. Received KeyReply. PubKeyRcvd:", reply.PublicKey != nil,
-		"; RotKeyRcvd:", reply.RotKeys != nil, "EvalKeyRcvd:", reply.EvalKey != nil)
+	log.Lvl1(smc.ServerIdentity(), "Server. Received KeyReply. RotKeyRcvd:", reply.RotKeys != nil,
+		"EvalKeyRcvd:", reply.EvalKey != nil)
 
 	// Extract Session, if existent
 	s, ok := smc.sessions[reply.SessionID]
@@ -115,18 +137,9 @@ func (smc *Service) processKeyReply(msg *network.Envelope) {
 		return
 	}
 
-	// Save (in the Service struct) the received keys.
-	if reply.PublicKey != nil {
-		s.MasterPublicKey = reply.PublicKey
-	}
-	if reply.EvalKey != nil {
-		s.evalKey = reply.EvalKey
-	}
-	if reply.RotKeys != nil {
-		s.rotationKey = reply.RotKeys
-	}
-
-	// Send reply through channel
+	// Simply send reply through channel
+	s.keyRepLock.RLock()
 	s.keyReplies[reply.ReqID] <- reply
+	s.keyRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 }

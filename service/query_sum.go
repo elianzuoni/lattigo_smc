@@ -25,7 +25,9 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 	req := &SumRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.sumRepLock.Lock()
 	s.sumReplies[reqID] = make(chan *SumReply)
+	s.sumRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending SumRequest to root:", reqID)
@@ -38,8 +40,21 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 	}
 
 	// Receive reply from channel
-	log.Lvl3(smc.ServerIdentity(), "Sent SumRequest to root. Waiting on channel to receive reply...")
-	reply := <-s.sumReplies[reqID] // TODO: timeout if root cannot send reply
+	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	s.sumRepLock.RLock()
+	replyChan := s.sumReplies[reqID]
+	s.sumRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.sumRepLock.Lock()
+	close(replyChan)
+	delete(s.sumReplies, reqID)
+	s.sumRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform sum")
 		log.Error(smc.ServerIdentity(), err)
@@ -47,7 +62,6 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 	} else {
 		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel:", reply.NewCipherID)
 	}
-	// TODO: close channel?
 
 	return &SumResponse{reply.NewCipherID, reply.Valid}, nil
 }
@@ -79,7 +93,9 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 
 	// Check feasibility
 	log.Lvl3(smc.ServerIdentity(), "Checking existence of ciphertexts")
+	s.databaseLock.RLock()
 	ct1, ok := s.database[req.Query.CipherID1]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID1, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -88,7 +104,9 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 		}
 		return
 	}
+	s.databaseLock.RLock()
 	ct2, ok := s.database[req.Query.CipherID2]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID2, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -104,12 +122,16 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 	ct := eval.AddNew(ct1, ct2)
 
 	// Register in local database
-	newCipherID := newCipherID()
+	newCipherID := newCipherID(smc.ServerIdentity())
+	s.databaseLock.Lock()
 	s.database[newCipherID] = ct
+	s.databaseLock.Unlock()
 
-	// Send reply to server
+	// Set fields in reply
 	reply.NewCipherID = newCipherID
 	reply.Valid = true
+
+	// Send reply to server
 	log.Lvl2(smc.ServerIdentity(), "Sending positive reply to server")
 	err := smc.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
@@ -135,7 +157,9 @@ func (smc *Service) processSumReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.sumRepLock.RLock()
 	s.sumReplies[reply.ReqID] <- reply
+	s.sumRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

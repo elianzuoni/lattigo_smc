@@ -24,7 +24,9 @@ func (smc *Service) HandleGenPubKeyQuery(query *GenPubKeyQuery) (network.Message
 	req := &GenPubKeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.genPubKeyRepLock.Lock()
 	s.genPubKeyReplies[reqID] = make(chan *GenPubKeyReply)
+	s.genPubKeyRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending GenPubKeyRequest to root:", reqID)
@@ -38,14 +40,27 @@ func (smc *Service) HandleGenPubKeyQuery(query *GenPubKeyQuery) (network.Message
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	reply := <-s.genPubKeyReplies[reqID] // TODO: timeout if root cannot send reply
+	s.genPubKeyRepLock.RLock()
+	replyChan := s.genPubKeyReplies[reqID]
+	s.genPubKeyRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.genPubKeyRepLock.Lock()
+	close(replyChan)
+	delete(s.genPubKeyReplies, reqID)
+	s.genPubKeyRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	if !reply.Valid {
-		err := errors.New("Received invalid reply: root couldn't perform enc-to-shares")
+		err := errors.New("Received invalid reply: root couldn't generate public key")
 		log.Error(smc.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
+	} else {
+		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 	}
-	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
-	// TODO: close channel?
 
 	return &GenPubKeyResponse{reply.MasterPublicKey, reply.Valid}, nil
 }
@@ -72,7 +87,7 @@ func (smc *Service) processGenPubKeyRequest(msg *network.Envelope) {
 
 	// Then, launch the genPublicKey protocol to get the MasterPublicKey
 	log.Lvl2(smc.ServerIdentity(), "Generating Public Key")
-	err := smc.genPublicKey(req.Query.SessionID)
+	err := smc.genPublicKey(req.Query.SessionID, req.Query.Seed)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not generate public key:", err)
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -85,7 +100,7 @@ func (smc *Service) processGenPubKeyRequest(msg *network.Envelope) {
 	log.Lvl3(smc.ServerIdentity(), "Successfully generated public key")
 
 	// Set fields in the reply
-	reply.MasterPublicKey = s.MasterPublicKey
+	reply.MasterPublicKey = s.MasterPublicKey // No need to lock pubKeyLock
 	reply.Valid = true
 
 	// Send the positive reply to the server
@@ -99,7 +114,7 @@ func (smc *Service) processGenPubKeyRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) genPublicKey(SessionID SessionID) error {
+func (smc *Service) genPublicKey(SessionID SessionID, Seed []byte) error {
 	log.Lvl1(smc.ServerIdentity(), "Root. Generating PublicKey")
 
 	// Extract session
@@ -110,12 +125,24 @@ func (smc *Service) genPublicKey(SessionID SessionID) error {
 		return err
 	}
 
+	// Check that PubKey is not generated
+	// We must hold the lock until the end, because only at the end the PubKey is generated
+	// We can do so, because no other lock is held by this goroutine, or any other which waits for this
+	// or for which this waits.
+	s.pubKeyLock.Lock()
+	defer s.pubKeyLock.Unlock()
+	if s.MasterPublicKey != nil {
+		err := errors.New("MasterPublicKey is already set")
+		log.Error(smc.ServerIdentity(), err)
+		return err
+	}
+
 	// Create TreeNodeInstance as root (this method runs on the root)
 	tree := s.Roster.GenerateBinaryTree()
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveKeyGenerationProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &GenPubKeyConfig{SessionID}
+	config := &GenPubKeyConfig{SessionID, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -177,7 +204,9 @@ func (smc *Service) processGenPubKeyReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.genPubKeyRepLock.RLock()
 	s.genPubKeyReplies[reply.ReqID] <- reply
+	s.genPubKeyRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

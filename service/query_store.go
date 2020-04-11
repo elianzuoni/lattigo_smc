@@ -28,7 +28,9 @@ func (smc *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error)
 	req := &StoreRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.storeRepLock.Lock()
 	s.storeReplies[reqID] = make(chan *StoreReply)
+	s.storeRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending StoreRequest to the root")
@@ -41,8 +43,20 @@ func (smc *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error)
 	}
 
 	// Receive reply from channel
-	log.Lvl3(smc.ServerIdentity(), "Sent StoreRequest to root. Waiting on channel to receive reply...")
-	reply := <-s.storeReplies[reqID] // TODO: timeout if root cannot send reply
+	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	s.storeRepLock.RLock()
+	replyChan := s.storeReplies[reqID]
+	s.storeRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.storeRepLock.Lock()
+	close(replyChan)
+	delete(s.storeReplies, reqID)
+	s.storeRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't store")
@@ -50,7 +64,6 @@ func (smc *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error)
 		// Respond with the reply, not nil, err
 	}
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
-	// TODO: close channel?
 
 	return &StoreResponse{reply.CipherID, reply.Valid}, nil
 }
@@ -77,12 +90,16 @@ func (smc *Service) processStoreRequest(msg *network.Envelope) {
 	}
 
 	// Register in local database
-	newCipherID := newCipherID()
+	newCipherID := newCipherID(smc.ServerIdentity())
+	s.databaseLock.Lock()
 	s.database[newCipherID] = req.Query.Ciphertext
+	s.databaseLock.Unlock()
 
-	// Send reply to server
+	// Set fields in reply
 	reply.CipherID = newCipherID
 	reply.Valid = true
+
+	// Send reply to server
 	log.Lvl2(smc.ServerIdentity(), "Sending positive reply to server")
 	err := smc.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
@@ -106,7 +123,9 @@ func (smc *Service) processStoreReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.storeRepLock.RLock()
 	s.storeReplies[reply.ReqID] <- reply
+	s.storeRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

@@ -25,7 +25,9 @@ func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, er
 	req := &RefreshRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.refreshRepLock.Lock()
 	s.refreshReplies[reqID] = make(chan *RefreshReply)
+	s.refreshRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending RefreshRequest to root:", reqID)
@@ -39,16 +41,28 @@ func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, er
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	reply := <-s.refreshReplies[reqID] // TODO: timeout if root cannot send reply
+	s.refreshRepLock.RLock()
+	replyChan := s.refreshReplies[reqID]
+	s.refreshRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.refreshRepLock.Lock()
+	close(replyChan)
+	delete(s.refreshReplies, reqID)
+	s.refreshRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform refresh")
 		log.Error(smc.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	}
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
-	// TODO: close channel?
 
-	return &RefreshResponse{reply.Valid}, nil
+	return &RefreshResponse{reply.NewCipherID, reply.Valid}, nil
 }
 
 func (smc *Service) processRefreshRequest(msg *network.Envelope) {
@@ -72,7 +86,9 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 	}
 
 	// Check existence of ciphertext
+	s.databaseLock.RLock()
 	ct, ok := s.database[req.Query.CipherID]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -85,7 +101,7 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 
 	// Then, launch the refresh protocol to get the refreshed ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Refreshing ciphertext")
-	ctRefresh, err := smc.refreshCiphertext(req.Query.SessionID, ct)
+	ctRefresh, err := smc.refreshCiphertext(req.Query.SessionID, ct, req.Query.Seed)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not perform refresh:", err)
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -95,13 +111,17 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 		return
 	}
 
-	// Register (overwrite) in the local database
-	s.database[req.Query.CipherID] = ctRefresh
+	// Register in the local database
+	newCipherID := newCipherID(smc.ServerIdentity())
+	s.databaseLock.Lock()
+	s.database[newCipherID] = ctRefresh
+	s.databaseLock.Unlock()
 
 	log.Lvl3(smc.ServerIdentity(), "Successfully refreshed ciphertext")
 
 	// Set fields in the reply
 	reply.Valid = true
+	reply.NewCipherID = newCipherID
 
 	// Send the positive reply to the server
 	log.Lvl2(smc.ServerIdentity(), "Replying (positively) to server")
@@ -114,7 +134,7 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext) (*bfv.Ciphertext, error) {
+func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext, Seed []byte) (*bfv.Ciphertext, error) {
 	log.Lvl2(smc.ServerIdentity(), "Performing refresh")
 
 	// Extract session
@@ -130,7 +150,7 @@ func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext) (
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveRefreshName)
 
 	// Create configuration for the protocol instance
-	config := &RefreshConfig{SessionID, ct}
+	config := &RefreshConfig{SessionID, ct, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -190,7 +210,9 @@ func (smc *Service) processRefreshReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.refreshRepLock.RLock()
 	s.refreshReplies[reply.ReqID] <- reply
+	s.refreshRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

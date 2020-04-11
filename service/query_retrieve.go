@@ -25,7 +25,9 @@ func (smc *Service) HandleRetrieveQuery(query *RetrieveQuery) (network.Message, 
 	req := &RetrieveRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.retrieveRepLock.Lock()
 	s.retrieveReplies[reqID] = make(chan *RetrieveReply)
+	s.retrieveRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending RetrieveRequest to root:", reqID)
@@ -39,14 +41,26 @@ func (smc *Service) HandleRetrieveQuery(query *RetrieveQuery) (network.Message, 
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	reply := <-s.retrieveReplies[reqID] // TODO: timeout if root cannot send reply
+	s.retrieveRepLock.RLock()
+	replyChan := s.retrieveReplies[reqID]
+	s.retrieveRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.retrieveRepLock.Lock()
+	close(replyChan)
+	delete(s.retrieveReplies, reqID)
+	s.retrieveRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform key-switch")
 		log.Error(smc.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	}
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
-	// TODO: close channel?
 
 	return &RetrieveResponse{reply.Ciphertext, reply.Valid}, nil
 }
@@ -72,7 +86,9 @@ func (smc *Service) processRetrieveRequest(msg *network.Envelope) {
 	}
 
 	// Check existence of ciphertext
+	s.databaseLock.RLock()
 	ct, ok := s.database[req.Query.CipherID]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field ciphertext stays nil and field valid stay false
@@ -188,7 +204,9 @@ func (smc *Service) processRetrieveReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.retrieveRepLock.RLock()
 	s.retrieveReplies[reply.ReqID] <- reply
+	s.retrieveRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

@@ -4,7 +4,6 @@ package service
 
 import (
 	"errors"
-	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/utils"
@@ -18,7 +17,9 @@ func (smc *Service) HandleCreateSessionQuery(query *CreateSessionQuery) (network
 	req := &CreateSessionRequest{reqID, query}
 
 	// Create channel before sending request to root.
+	smc.createSessionRepLock.Lock()
 	smc.createSessionReplies[reqID] = make(chan *CreateSessionReply)
+	smc.createSessionRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending CreateSessionRequest to root")
@@ -34,10 +35,19 @@ func (smc *Service) HandleCreateSessionQuery(query *CreateSessionQuery) (network
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Sent CreateSessionRequest to root. Waiting on channel to receive reply...")
-	reply := <-smc.createSessionReplies[reqID] // TODO: timeout if root cannot send reply
+	smc.createSessionRepLock.RLock()
+	replyChan := smc.createSessionReplies[reqID]
+	smc.createSessionRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
 
-	log.Lvl4(smc.ServerIdentity(), "Received reply from channel")
-	// TODO: close channel?
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	smc.createSessionRepLock.Lock()
+	close(replyChan)
+	delete(smc.createSessionReplies, reqID)
+	smc.createSessionRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel, returning")
 
 	return &CreateSessionResponse{reply.SessionID, reply.Valid}, nil
 }
@@ -105,8 +115,7 @@ func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
 
 	// Create session as required
 	log.Lvl3(smc.ServerIdentity(), "Creating session")
-	params := bfv.DefaultParams[broad.Query.ParamsIdx]
-	session := smc.NewSession(broad.SessionID, broad.Query.Roster, params, broad.Query.Seed)
+	session := smc.NewSession(broad.SessionID, broad.Query.Roster, broad.Query.Params)
 
 	// Register session
 	smc.sessions[broad.SessionID] = session
@@ -143,7 +152,9 @@ func (smc *Service) processCreateSessionReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionReply:", reply.ReqID)
 
 	// Simply send reply through channel
+	smc.createSessionRepLock.RLock()
 	smc.createSessionReplies[reply.ReqID] <- reply
+	smc.createSessionRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

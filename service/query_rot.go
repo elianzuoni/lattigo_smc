@@ -25,7 +25,9 @@ func (smc *Service) HandleRotationQuery(query *RotationQuery) (network.Message, 
 	req := &RotationRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.rotationRepLock.Lock()
 	s.rotationReplies[reqID] = make(chan *RotationReply)
+	s.rotationRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending RotationRequest to root:", query.CipherID)
@@ -37,8 +39,21 @@ func (smc *Service) HandleRotationQuery(query *RotationQuery) (network.Message, 
 	}
 
 	// Receive reply from channel
-	log.Lvl3(smc.ServerIdentity(), "Sent RotationRequest to root. Waiting on channel to receive new CipherID...")
-	reply := <-s.rotationReplies[reqID] // TODO: timeout if root cannot send reply
+	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	s.rotationRepLock.RLock()
+	replyChan := s.rotationReplies[reqID]
+	s.rotationRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.rotationRepLock.Lock()
+	close(replyChan)
+	delete(s.rotationReplies, reqID)
+	s.rotationRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	// Check validity
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform sum")
@@ -47,7 +62,6 @@ func (smc *Service) HandleRotationQuery(query *RotationQuery) (network.Message, 
 	} else {
 		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 	}
-	// TODO: close channel?
 
 	return &RotationResponse{reply.NewCipherID, reply.Valid}, nil
 }
@@ -79,7 +93,9 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 
 	// Check feasibility
 	log.Lvl3(smc.ServerIdentity(), "Checking existence of ciphertext")
+	s.databaseLock.RLock()
 	ct, ok := s.database[req.Query.CipherID]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -89,7 +105,12 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 		return
 	}
 	log.Lvl3(smc.ServerIdentity(), "Checking if rotation key was generated")
-	if s.rotationKey == nil {
+	// We don't need to hold the lock
+	s.rotKeyLock.RLock()
+	// The rotation key is modifiable, but it is the pointer s.rotationKey itself that changes, not its content
+	rotKey := s.rotationKey
+	s.rotKeyLock.RUnlock()
+	if rotKey == nil {
 		log.Error(smc.ServerIdentity(), "Rotation key not generated")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
@@ -97,6 +118,7 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 		}
 		return
 	}
+	// TODO: refine check for specific rotation
 
 	// Evaluate the rotation
 	log.Lvl3(smc.ServerIdentity(), "Evaluating the rotation of the ciphertexts")
@@ -104,21 +126,25 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 	var ctRot *bfv.Ciphertext
 	switch bfv.Rotation(req.Query.RotIdx) {
 	case bfv.RotationRow:
-		ctRot = eval.RotateRowsNew(ct, s.rotationKey)
+		ctRot = eval.RotateRowsNew(ct, rotKey)
 	// TODO: what? they are the same?
 	case bfv.RotationLeft:
-		ctRot = eval.RotateColumnsNew(ct, req.Query.K, s.rotationKey)
+		ctRot = eval.RotateColumnsNew(ct, req.Query.K, rotKey)
 	case bfv.RotationRight:
-		ctRot = eval.RotateColumnsNew(ct, req.Query.K, s.rotationKey)
+		ctRot = eval.RotateColumnsNew(ct, req.Query.K, rotKey)
 	}
 
 	// Register in local database
-	idRot := newCipherID()
+	idRot := newCipherID(smc.ServerIdentity())
+	s.databaseLock.Lock()
 	s.database[idRot] = ctRot
+	s.databaseLock.Unlock()
 
-	// Send reply to server
+	// Set fields in reply
 	reply.NewCipherID = idRot
 	reply.Valid = true
+
+	// Send reply to server
 	log.Lvl2(smc.ServerIdentity(), "Sending positive reply to server")
 	err := smc.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
@@ -144,7 +170,9 @@ func (smc *Service) processRotationReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.rotationRepLock.RLock()
 	s.rotationReplies[reply.ReqID] <- reply
+	s.rotationRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

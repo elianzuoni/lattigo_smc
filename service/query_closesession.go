@@ -22,7 +22,9 @@ func (smc *Service) HandleCloseSessionQuery(query *CloseSessionQuery) (network.M
 
 	// Create CloseSessionRequest with its ID
 	reqID := newCloseSessionRequestID()
+	smc.closeSessionRepLock.Lock()
 	req := &CloseSessionRequest{reqID, query.SessionID, query}
+	smc.closeSessionRepLock.Unlock()
 
 	// Create channel before sending request to root.
 	smc.closeSessionReplies[reqID] = make(chan *CloseSessionReply)
@@ -41,10 +43,19 @@ func (smc *Service) HandleCloseSessionQuery(query *CloseSessionQuery) (network.M
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Sent CloseSessionRequest to root. Waiting on channel to receive reply...")
-	reply := <-smc.closeSessionReplies[reqID] // TODO: timeout if root cannot send reply
+	smc.closeSessionRepLock.RLock()
+	replyChan := smc.closeSessionReplies[reqID]
+	smc.closeSessionRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
 
-	log.Lvl4(smc.ServerIdentity(), "Received reply from channel")
-	// TODO: close channel?
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	smc.closeSessionRepLock.Lock()
+	close(replyChan)
+	delete(smc.closeSessionReplies, reqID)
+	smc.closeSessionRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel, returning")
 
 	return &CloseSessionResponse{reply.Valid}, nil
 }
@@ -169,7 +180,9 @@ func (smc *Service) processCloseSessionReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received CloseSessionReply:", reply.ReqID)
 
 	// Simply send reply through channel
+	smc.closeSessionRepLock.RLock()
 	smc.closeSessionReplies[reply.ReqID] <- reply
+	smc.closeSessionRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

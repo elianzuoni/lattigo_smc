@@ -30,7 +30,6 @@ type Client struct {
 
 	// Parameters for local encryption and decryption. Useful for Store and Retrieve queries.
 	// They are set once and for all at construction time.
-	paramsIdx int
 	params    *bfv.Parameters
 	encoder   bfv.Encoder
 	decryptor bfv.Decryptor
@@ -44,7 +43,7 @@ func (c *Client) String() string {
 }
 
 //NewClient creates a new unbound client given the definitive parameters.
-func NewClient(entryPoint *network.ServerIdentity, clientID string, paramsIdx int) *Client {
+func NewClient(entryPoint *network.ServerIdentity, clientID string, params *bfv.Parameters) *Client {
 	log.Lvl1("Client constructor called for clientID:", clientID)
 
 	client := &Client{
@@ -57,8 +56,7 @@ func NewClient(entryPoint *network.ServerIdentity, clientID string, paramsIdx in
 		masterPK:  nil,
 	}
 
-	client.paramsIdx = paramsIdx
-	client.params = bfv.DefaultParams[paramsIdx] // TODO: deep copy
+	client.params = params.Copy()
 	client.encoder = bfv.NewEncoder(client.params)
 	keygen := bfv.NewKeyGenerator(client.params)
 	client.sk, client.pk = keygen.GenKeyPair()
@@ -93,7 +91,7 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bf
 	}
 
 	// Craft CreateSessionQuery and prepare response
-	sessQuery := &CreateSessionQuery{roster, c.paramsIdx, seed}
+	sessQuery := &CreateSessionQuery{roster, c.params}
 	sessResp := &CreateSessionResponse{}
 
 	// Send query
@@ -113,7 +111,7 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bf
 	// Generate master public key
 
 	// Craft GenPubKeyQuery and prepare response
-	pubKeyQuery := &GenPubKeyQuery{sessResp.SessionID}
+	pubKeyQuery := &GenPubKeyQuery{sessResp.SessionID, seed}
 	pubKeyResp := &GenPubKeyResponse{}
 
 	// Send query
@@ -212,7 +210,8 @@ func (c *Client) UnbindFromSession() error {
 }
 
 // SendGenEvalKeyQuery send a query to generate the evaluation key.
-func (c *Client) SendGenEvalKeyQuery() error {
+// The argument "seed" can be nil, in which case a default one is used.
+func (c *Client) SendGenEvalKeyQuery(seed []byte) error {
 	log.Lvl1(c, "Called to send a query to generate the evaluation key")
 
 	// Check that the client is bound
@@ -222,8 +221,13 @@ func (c *Client) SendGenEvalKeyQuery() error {
 		return err
 	}
 
+	// Possibly substitute seed with default
+	if seed == nil {
+		seed = []byte("soreta")
+	}
+
 	// Craft query and prepare response
-	query := &GenEvalKeyQuery{c.sessionID}
+	query := &GenEvalKeyQuery{c.sessionID, seed}
 	resp := &GenEvalKeyResponse{}
 
 	// Send query
@@ -245,7 +249,8 @@ func (c *Client) SendGenEvalKeyQuery() error {
 }
 
 // SendGenRotKeyQuery send a query to generate the rotation key.
-func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64) error {
+// The argument "seed" can be nil, in which case a default one is used.
+func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64, seed []byte) error {
 	log.Lvl1(c, "Called to send a query to generate the rotation key")
 
 	// Check that the client is bound
@@ -255,8 +260,13 @@ func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64) error {
 		return err
 	}
 
+	// Possibly substitute seed with default
+	if seed == nil {
+		seed = []byte("soreta")
+	}
+
 	// Craft query and prepare response
-	query := &GenRotKeyQuery{c.sessionID, rotIdx, K}
+	query := &GenRotKeyQuery{c.sessionID, rotIdx, K, seed}
 	resp := &GenRotKeyResponse{}
 
 	// Send query
@@ -277,36 +287,32 @@ func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64) error {
 	return nil
 }
 
-// TODO: why is this query needed?
-/*
 // SendKeyQuery sends a query to have the entry point retrieve the specified keys.
-func (c *Client) SendKeyQuery(getPK, getEvK, getRtK bool, RotIdx int) error {
+func (c *Client) SendKeyQuery(getEvK, getRtK bool) (bool, bool, error) {
 	log.Lvl1(c, "Called to send a key query")
 
 	// Build query
-	query := KeyQuery{
-		PublicKey:     getPK,
-		EvaluationKey: getEvK,
-		RotationKey:   getRtK,
-		RotIdx:        RotIdx,
-	}
+	query := KeyQuery{c.sessionID, getEvK, getRtK}
 
-	resp := CreateSessionResponse{}
+	resp := KeyResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, &query, &resp)
 	if err != nil {
 		log.Error(c, "Key query returned error:", err)
-		return err
+		return false, false, err
+	}
+	if !resp.Valid {
+		err = errors.New("Server sent invalid response")
+		log.Error(c, err)
+		return false, false, err
 	}
 
 	log.Lvl2(c, "Key query was successful")
 
-	// TODO: what policy to return error?
-	return nil
+	return resp.EvalKeyObtained, resp.RotKeyObtained, nil
 }
-*/
 
 // SendStoreQuery sends a query to store in the system the provided vector. The vector is encrypted locally.
 func (c *Client) SendStoreQuery(data []uint64) (CipherID, error) {
@@ -481,8 +487,7 @@ func (c *Client) SendRelinQuery(cipherID CipherID) (CipherID, error) {
 
 	log.Lvl2(c, "Relinearisation query was successful")
 
-	// We know the Service will store the relinearised ciphertext under the same CipherID as before.
-	return cipherID, nil
+	return resp.NewCipherID, nil
 }
 
 // SendRotationQuery sends a query to perform arotIdx-rotation of k positions on the ciphertext indexed by cipherID.
@@ -519,7 +524,8 @@ func (c *Client) SendRotationQuery(cipherID CipherID, rotIdx int, K uint64) (Cip
 }
 
 // SendRefreshQuery sends a query to refresh the ciphertext indexed by cipherID.
-func (c *Client) SendRefreshQuery(cipherID CipherID) (CipherID, error) {
+// The argument "seed" can be nil, in which case a default one is used.
+func (c *Client) SendRefreshQuery(cipherID CipherID, seed []byte) (CipherID, error) {
 	log.Lvl1(c, "Called to send a refresh query")
 
 	// Check that the client is bound
@@ -530,7 +536,7 @@ func (c *Client) SendRefreshQuery(cipherID CipherID) (CipherID, error) {
 	}
 
 	// Craft query and prepare response
-	query := &RefreshQuery{c.sessionID, cipherID}
+	query := &RefreshQuery{c.sessionID, cipherID, seed}
 	resp := &RefreshResponse{}
 
 	// Send query
@@ -548,19 +554,18 @@ func (c *Client) SendRefreshQuery(cipherID CipherID) (CipherID, error) {
 
 	log.Lvl2(c, "Refresh query was successful")
 
-	// We know the Service will store the refreshed ciphertext under the same CipherID as before.
-	return cipherID, nil
+	return resp.NewCipherID, nil
 }
 
 // SendEncToSharesQuery sends a query to share the ciphertext indexed by cipherID.
-func (c *Client) SendEncToSharesQuery(cipherID CipherID) (CipherID, error) {
+func (c *Client) SendEncToSharesQuery(cipherID CipherID) (SharesID, error) {
 	log.Lvl1(c, "Called to send an enc-to-shares query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilCipherID, err
+		return NilSharesID, err
 	}
 
 	// Craft query and prepare response
@@ -572,22 +577,22 @@ func (c *Client) SendEncToSharesQuery(cipherID CipherID) (CipherID, error) {
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Enc-to-shares query returned error:", err)
-		return NilCipherID, err
+		return NilSharesID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not share.")
 		log.Error(c, err)
-		return NilCipherID, err
+		return NilSharesID, err
 	}
 
 	log.Lvl2(c, "Enc-to-shares query was successful")
 
-	// We know the Service will store the shares under the same CipherID as before.
-	return cipherID, nil
+	return resp.SharesID, nil
 }
 
 // SendSharesToEncQuery sends a query to re-encrypt the ciphertext with the shares indexed by cipherID.
-func (c *Client) SendSharesToEncQuery(cipherID CipherID) (CipherID, error) {
+// The argument "seed" can be nil, in which case a default one is used.
+func (c *Client) SendSharesToEncQuery(sharesID SharesID, seed []byte) (CipherID, error) {
 	log.Lvl1(c, "Called to send a shares-to-enc query")
 
 	// Check that the client is bound
@@ -598,7 +603,7 @@ func (c *Client) SendSharesToEncQuery(cipherID CipherID) (CipherID, error) {
 	}
 
 	// Craft query and prepare response
-	query := &SharesToEncQuery{c.sessionID, cipherID}
+	query := &SharesToEncQuery{c.sessionID, sharesID, seed}
 	resp := &SharesToEncResponse{}
 
 	// Send query
@@ -616,6 +621,5 @@ func (c *Client) SendSharesToEncQuery(cipherID CipherID) (CipherID, error) {
 
 	log.Lvl2(c, "Shares-to-enc query was successful")
 
-	// We know the Service will store the re-encrypted ciphertext under the same CipherID as before.
-	return cipherID, nil
+	return resp.NewCipherID, nil
 }

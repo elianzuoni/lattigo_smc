@@ -25,7 +25,9 @@ func (smc *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Messa
 	req := &RelinRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.relinRepLock.Lock()
 	s.relinReplies[reqID] = make(chan *RelinReply)
+	s.relinRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending RelinRequest to root.")
@@ -37,8 +39,21 @@ func (smc *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Messa
 	}
 
 	// Receive reply from channel
-	log.Lvl3(smc.ServerIdentity(), "Sent RelinRequest to root. Waiting on channel to receive new CipherID...")
-	reply := <-s.relinReplies[reqID] // TODO: timeout if root cannot send reply
+	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	s.relinRepLock.RLock()
+	replyChan := s.relinReplies[reqID]
+	s.relinRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.relinRepLock.Lock()
+	close(replyChan)
+	delete(s.relinReplies, reqID)
+	s.relinRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform relinearisation")
 		log.Error(smc.ServerIdentity(), err)
@@ -46,9 +61,8 @@ func (smc *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Messa
 	} else {
 		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 	}
-	// TODO: close channel?
 
-	return &RelinResponse{reply.Valid}, nil
+	return &RelinResponse{reply.NewCipherID, reply.Valid}, nil
 
 }
 
@@ -76,9 +90,11 @@ func (smc *Service) processRelinRequest(msg *network.Envelope) {
 		return
 	}
 
-	// Check feasibility
-	log.Lvl3(smc.ServerIdentity(), "Checking existence of ciphertext and evaluation key")
+	// Check existence of ciphertext
+	log.Lvl3(smc.ServerIdentity(), "Checking existence of ciphertext")
+	s.databaseLock.RLock()
 	ct, ok := s.database[req.Query.CipherID]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested ciphertext does not exist:", req.Query.CipherID)
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -87,8 +103,24 @@ func (smc *Service) processRelinRequest(msg *network.Envelope) {
 		}
 		return
 	}
-	if s.evalKey == nil {
+	// Check existence of evaluation key
+	log.Lvl3(smc.ServerIdentity(), "Checking existence of evaluation key")
+	// We don't need to hold the lock until the end.
+	s.evalKeyLock.RLock()
+	evalKey := s.evalKey // We can do this, since s.evalKey is unmodifiable.
+	s.evalKeyLock.RUnlock()
+	if evalKey == nil {
 		log.Error(smc.ServerIdentity(), "Evaluation key not generated")
+		err := smc.SendRaw(msg.ServerIdentity, reply)
+		if err != nil {
+			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
+		}
+		return
+	}
+	// Check that the ciphertext has the correct degree
+	log.Lvl3(smc.ServerIdentity(), "Checking degree of ciphertext (cannot relinearise with degree >= 3)")
+	if ct.Degree() >= 3 {
+		log.Error(smc.ServerIdentity(), "Cannot relinearise ciphertext of degree >= 3")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
@@ -99,13 +131,19 @@ func (smc *Service) processRelinRequest(msg *network.Envelope) {
 	// Relinearise
 	log.Lvl3(smc.ServerIdentity(), "Relinearising ciphertext")
 	eval := bfv.NewEvaluator(s.Params)
-	ctRelin := eval.RelinearizeNew(ct, s.evalKey)
+	ctRelin := eval.RelinearizeNew(ct, evalKey)
 
-	// Register (overwrite) in local database
-	s.database[req.Query.CipherID] = ctRelin
+	// Register in local database
+	newCipherID := newCipherID(smc.ServerIdentity())
+	s.databaseLock.Lock()
+	s.database[newCipherID] = ctRelin
+	s.databaseLock.Unlock()
+
+	// Set fields in reply
+	reply.Valid = true
+	reply.NewCipherID = newCipherID
 
 	// Send reply to server
-	reply.Valid = true
 	log.Lvl2(smc.ServerIdentity(), "Sending positive reply to server")
 	err := smc.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
@@ -131,7 +169,9 @@ func (smc *Service) processRelinReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.relinRepLock.RLock()
 	s.relinReplies[reply.ReqID] <- reply
+	s.relinRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

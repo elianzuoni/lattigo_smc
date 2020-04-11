@@ -25,7 +25,9 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 	req := &EncToSharesRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.encToSharesRepLock.Lock()
 	s.encToSharesReplies[reqID] = make(chan *EncToSharesReply)
+	s.encToSharesRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending EncToSharesRequest to root:", reqID)
@@ -39,16 +41,28 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	reply := <-s.encToSharesReplies[reqID] // TODO: timeout if root cannot send reply
+	s.encToSharesRepLock.RLock()
+	replyChan := s.encToSharesReplies[reqID]
+	s.encToSharesRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.encToSharesRepLock.Lock()
+	close(replyChan)
+	delete(s.encToSharesReplies, reqID)
+	s.encToSharesRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform enc-to-shares")
 		log.Error(smc.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	}
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
-	// TODO: close channel?
 
-	return &EncToSharesResponse{reply.Valid}, nil
+	return &EncToSharesResponse{reply.SharesID, reply.Valid}, nil
 }
 
 func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
@@ -57,7 +71,7 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Root. Received EncToSharesRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &EncToSharesReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+	reply := &EncToSharesReply{SessionID: req.SessionID, ReqID: req.ReqID, SharesID: NilSharesID, Valid: false}
 
 	// Extract Session, if existent
 	s, ok := smc.sessions[req.SessionID]
@@ -72,7 +86,9 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	}
 
 	// Check existence of ciphertext
+	s.databaseLock.RLock()
 	ct, ok := s.database[req.Query.CipherID]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -83,9 +99,12 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 		return
 	}
 
+	// Generate new SharesID
+	sharesID := newSharesID(smc.ServerIdentity())
+
 	// Then, launch the enc-to-shares protocol to get the shared ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Sharing ciphertext")
-	err := smc.shareCiphertext(req.SessionID, req.Query.CipherID, ct)
+	err := smc.shareCiphertext(req.SessionID, sharesID, ct)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not perform enc-to-shares:", err)
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -101,6 +120,7 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 
 	// Set fields in the reply
 	reply.Valid = true
+	reply.SharesID = sharesID
 
 	// Send the positive reply to the server
 	log.Lvl2(smc.ServerIdentity(), "Replying (positively) to server")
@@ -113,7 +133,7 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) shareCiphertext(SessionID SessionID, CipherID CipherID, ct *bfv.Ciphertext) error {
+func (smc *Service) shareCiphertext(SessionID SessionID, SharesID SharesID, ct *bfv.Ciphertext) error {
 	log.Lvl2(smc.ServerIdentity(), "Sharing a ciphertext")
 
 	// Extract session
@@ -129,7 +149,7 @@ func (smc *Service) shareCiphertext(SessionID SessionID, CipherID CipherID, ct *
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, EncToSharesProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &E2SConfig{SessionID, CipherID, ct}
+	config := &E2SConfig{SessionID, SharesID, ct}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -190,7 +210,9 @@ func (smc *Service) processEncToSharesReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.encToSharesRepLock.RLock()
 	s.encToSharesReplies[reply.ReqID] <- reply
+	s.encToSharesRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

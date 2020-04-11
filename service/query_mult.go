@@ -25,7 +25,9 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 	req := &MultiplyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
+	s.multiplyRepLock.Lock()
 	s.multiplyReplies[reqID] = make(chan *MultiplyReply)
+	s.multiplyRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending MulitplyRequest to root:", reqID)
@@ -38,8 +40,21 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 	}
 
 	// Receive reply from channel
-	log.Lvl3(smc.ServerIdentity(), "Sent MultiplyRequest to root. Waiting on channel to receive reply...")
-	reply := <-s.multiplyReplies[reqID] // TODO: timeout if root cannot send reply
+	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	s.multiplyRepLock.RLock()
+	replyChan := s.multiplyReplies[reqID]
+	s.multiplyRepLock.RUnlock()
+	reply := <-replyChan // TODO: timeout if root cannot send reply
+
+	// Close channel
+	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	s.multiplyRepLock.Lock()
+	close(replyChan)
+	delete(s.multiplyReplies, reqID)
+	s.multiplyRepLock.Unlock()
+
+	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't perform multiplication")
 		log.Error(smc.ServerIdentity(), err)
@@ -47,7 +62,6 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 	} else {
 		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel:", reply.NewCipherID)
 	}
-	// TODO: close channel?
 
 	return &MultiplyResponse{reply.NewCipherID, reply.Valid}, nil
 }
@@ -79,7 +93,9 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 
 	// Check feasibilty
 	log.Lvl3(smc.ServerIdentity(), "Checking existence of ciphertexts")
+	s.databaseLock.RLock()
 	ct1, ok := s.database[req.Query.CipherID1]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID1, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -88,7 +104,9 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 		}
 		return
 	}
+	s.databaseLock.RLock()
 	ct2, ok := s.database[req.Query.CipherID2]
+	s.databaseLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID2, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -104,12 +122,16 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 	ct := eval.MulNew(ct1, ct2)
 
 	// Register in local database
-	newCipherID := newCipherID()
+	newCipherID := newCipherID(smc.ServerIdentity())
+	s.databaseLock.Lock()
 	s.database[newCipherID] = ct
+	s.databaseLock.Unlock()
 
-	// Send reply to server
+	// Set fields in reply
 	reply.NewCipherID = newCipherID
 	reply.Valid = true
+
+	// Send reply to server
 	log.Lvl2(smc.ServerIdentity(), "Sending positive reply to server")
 	err := smc.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
@@ -135,7 +157,9 @@ func (smc *Service) processMultiplyReply(msg *network.Envelope) {
 	}
 
 	// Simply send reply through channel
+	s.multiplyRepLock.RLock()
 	s.multiplyReplies[reply.ReqID] <- reply
+	s.multiplyRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

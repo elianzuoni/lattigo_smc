@@ -81,7 +81,8 @@ func (smc *Service) newProtoCKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	ckgp := protocol.(*protocols.CollectiveKeyGenerationProtocol)
 
 	// Generate the CRP
-	crp := s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
+	crpGen := dbfv.NewCRPGenerator(s.Params, config.Seed)
+	crp := crpGen.ClockNew()
 
 	// Finally, initialise the rest of the fields
 	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
@@ -125,10 +126,11 @@ func (smc *Service) newProtoEKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	ekgp := protocol.(*protocols.RelinearizationKeyProtocol)
 
 	// Generate the CRP
+	crpGen := dbfv.NewCRPGenerator(s.Params, config.Seed)
 	modulus := s.Params.Moduli.Qi
 	crp := make([]*ring.Poly, len(modulus))
 	for j := 0; j < len(modulus); j++ {
-		crp[j] = s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
+		crp[j] = crpGen.ClockNew()
 	}
 
 	// Finally, initialise the rest of the fields
@@ -172,21 +174,19 @@ func (smc *Service) newProtoRKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	}
 	rkgp := protocol.(*protocols.RotationKeyProtocol)
 
-	// Copy the config parameters to local structure
-	// TODO: ok? The rotation key is only collected at the root...
-	s.rotIdx = config.RotIdx
-	s.k = config.K
-
 	// Generate the CRP
+	crpGen := dbfv.NewCRPGenerator(s.Params, config.Seed)
 	modulus := s.Params.Moduli.Qi
 	crp := make([]*ring.Poly, len(modulus))
 	for j := 0; j < len(modulus); j++ {
-		crp[j] = s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
+		crp[j] = crpGen.ClockNew()
 	}
 
 	// Finally, initialise the rest of the fields
 	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
-	err = rkgp.Init(s.Params, *s.skShard, s.rotationKey, bfv.Rotation(s.rotIdx), s.k, crp)
+	// No need to lock rotation key here. The root (which is the only one that uses it) has already locked it.
+	// TODO IMPORTANT: modify this when decentralising rotation key
+	err = rkgp.Init(s.Params, *s.skShard, s.rotationKey, bfv.Rotation(config.RotIdx), config.K, crp)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
@@ -268,7 +268,8 @@ func (smc *Service) newProtoRefresh(tn *onet.TreeNodeInstance, cfg *onet.Generic
 
 	// Finally, initialise the rest of the fields
 	log.Lvl3(smc.ServerIdentity(), "Initialising protocol")
-	crs := s.crpGen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
+	crpGen := dbfv.NewCRPGenerator(s.Params, config.Seed)
+	crs := crpGen.ClockNew()
 	err = refresh.Init(*s.Params, s.skShard, *config.Ciphertext, *crs)
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
@@ -305,7 +306,7 @@ func (smc *Service) newProtoE2S(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	log.Lvl3(smc.ServerIdentity(), "Creating protocol")
 	sigmaSmudging := s.Params.Sigma // TODO: how to set?
 	e2sp, err := protocols.NewEncryptionToSharesProtocol(tn, s.Params, sigmaSmudging, s.skShard, config.Ciphertext,
-		s.newShareFinaliser(config.CipherID))
+		s.newShareFinaliser(config.SharesID))
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
@@ -316,9 +317,11 @@ func (smc *Service) newProtoE2S(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 
 // This method returns a finaliser (as required by the EncryptionToSharesProtocol constructor)
 // that saves the share under the provided CipherID in the Service's shares database.
-func (s *Session) newShareFinaliser(cipherID CipherID) func(share *dbfv.AdditiveShare) {
+func (s *Session) newShareFinaliser(sharesID SharesID) func(share *dbfv.AdditiveShare) {
 	return func(share *dbfv.AdditiveShare) {
-		s.shares[cipherID] = share
+		s.sharesLock.Lock()
+		s.shares[sharesID] = share
+		s.sharesLock.Unlock()
 	}
 }
 
@@ -347,13 +350,16 @@ func (smc *Service) newProtoS2E(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 
 	// Then, create the protocol with the known parameters and the one just received
 	log.Lvl3(smc.ServerIdentity(), "Creating protocol")
-	sigmaSmudging := s.Params.Sigma  // TODO: how to set?
-	crp := s.cipherCRPgen.ClockNew() // TODO: synchronise this use, or have the CRP be decided and propagated by root
+	sigmaSmudging := s.Params.Sigma // TODO: how to set?
+	cipherCRPgen := dbfv.NewCipherCRPGenerator(s.Params, config.Seed)
+	crp := cipherCRPgen.ClockNew()
 	// Check if share exists
-	share, ok := s.shares[config.CipherID]
+	s.sharesLock.RLock()
+	share, ok := s.shares[config.SharesID]
+	s.sharesLock.RUnlock()
 	if !ok {
 		err := errors.New(tn.ServerIdentity().Description + "AdditiveShare for ciphertext " +
-			config.CipherID.String() + " not available")
+			config.SharesID.String() + " not available")
 		log.Error(err)
 		return nil, err
 	}

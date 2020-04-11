@@ -4,26 +4,28 @@ import (
 	"errors"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"sync"
 )
 
 type Service struct {
 	*onet.ServiceProcessor
 
-	// TODO: RWMutex to manage concurrent queries
-	sessions map[SessionID]*Session
+	sessionsLock sync.RWMutex
+	sessions     map[SessionID]*Session
 
 	// The CreateSession and CloseSession queries entail a broadcast from the root. The root waits for answers here
 	// TODO:  migrate to protocol
 	createSessionBroadcastAnswers map[CreateSessionRequestID]chan *CreateSessionBroadcastAnswer
 	closeSessionBroadcastAnswers  map[CloseSessionRequestID]chan *CloseSessionBroadcastAnswer
 
-	// Synchronisation point between HandleCreateSessionQuery and the corresponding processCreateSessionReply
+	// Synchronisation point between HandleCreateSessionQuery and processCreateSessionReply
+	createSessionRepLock sync.RWMutex
 	createSessionReplies map[CreateSessionRequestID]chan *CreateSessionReply
-	// Synchronisation point between HandleCloseSessionQuery and the corresponding processCloseSessionReply
+	// Synchronisation point between HandleCloseSessionQuery and processCloseSessionReply
+	closeSessionRepLock sync.RWMutex
 	closeSessionReplies map[CloseSessionRequestID]chan *CloseSessionReply
 }
 
@@ -33,56 +35,50 @@ type Session struct {
 
 	Roster *onet.Roster
 
-	// General bfv parameters
-	Params          *bfv.Parameters
-	skShard         *bfv.SecretKey
+	// These variables are set upon construction.
+	Params  *bfv.Parameters
+	skShard *bfv.SecretKey
+	// These variables have to be set via an explicit Query.
+	pubKeyLock      sync.RWMutex
 	MasterPublicKey *bfv.PublicKey
+	rotKeyLock      sync.RWMutex
 	rotationKey     *bfv.RotationKeys
+	evalKeyLock     sync.RWMutex
 	evalKey         *bfv.EvaluationKey
 
-	// CRP generators for PublicKey and Ciphertext
-	// TODO: if we can have concurrent queries, we should either lock these, or choose CRP at root and propagate it
-	crpGen       *ring.CRPGenerator
-	cipherCRPgen *ring.CRPGenerator
-
-	// Rotation parameters
-	// TODO: needed? Isn't the rotation key sufficient?
-	rotIdx int
-	k      uint64
-
-	// Stores ciphertexts. Only used at the root.
-	database map[CipherID]*bfv.Ciphertext
-	// Stores additive shares. Used at every node.
-	shares map[CipherID]*dbfv.AdditiveShare
-
-	/*
-		// Synchronisation points between protocol factories and their corresponding
-		// processBroadcast (that sets up the variables needed).
-		// All queries use, for example, the secret key shard, but only CKG and EKG wait
-		// until they become available. // TODO: is this fair?
-		waitCKG sync.Mutex // CKG protocol factory waits here to read variables
-		waitEKG sync.Mutex // EKG protocol factory waits here to read variables
-		waitRKG sync.Mutex // RKG protocol factory waits here to read variables
-		// TODO: should these be maps as well?
-		refreshParams     map[RefreshRequestID]chan *bfv.Ciphertext   // Refresh protocol factory reads variables from here
-		switchingParams   map[RetrieveRequestID]chan *SwitchingParameters // CKS protocol factory reads variables from here
-		encToSharesParams map[EncToSharesRequestID]chan *E2SParameters    // E2S protocol factory reads variables from here
-		sharesToEncParams map[SharesToEncRequestID]chan *S2EParameters    // S2E protocol factory reads variables from here
-	*/
+	// Stores ciphertexts.
+	databaseLock sync.RWMutex
+	database     map[CipherID]*bfv.Ciphertext
+	// Stores additive shares.
+	sharesLock sync.RWMutex
+	shares     map[SharesID]*dbfv.AdditiveShare
 
 	// Synchronisation point between HandleQuery and the corresponding processReply
+	genPubKeyRepLock   sync.RWMutex
 	genPubKeyReplies   map[GenPubKeyRequestID]chan *GenPubKeyReply
+	genEvalKeyRepLock  sync.RWMutex
 	genEvalKeyReplies  map[GenEvalKeyRequestID]chan *GenEvalKeyReply
+	genRotKeyRepLock   sync.RWMutex
 	genRotKeyReplies   map[GenRotKeyRequestID]chan *GenRotKeyReply
+	keyRepLock         sync.RWMutex
 	keyReplies         map[KeyRequestID]chan *KeyReply
+	storeRepLock       sync.RWMutex
 	storeReplies       map[StoreRequestID]chan *StoreReply
+	sumRepLock         sync.RWMutex
 	sumReplies         map[SumRequestID]chan *SumReply
+	multiplyRepLock    sync.RWMutex
 	multiplyReplies    map[MultiplyRequestID]chan *MultiplyReply
+	relinRepLock       sync.RWMutex
 	relinReplies       map[RelinRequestID]chan *RelinReply
+	rotationRepLock    sync.RWMutex
 	rotationReplies    map[RotationRequestID]chan *RotationReply
+	retrieveRepLock    sync.RWMutex
 	retrieveReplies    map[RetrieveRequestID]chan *RetrieveReply
+	refreshRepLock     sync.RWMutex
 	refreshReplies     map[RefreshRequestID]chan *RefreshReply
+	encToSharesRepLock sync.RWMutex
 	encToSharesReplies map[EncToSharesRequestID]chan *EncToSharesReply
+	sharesToEncRepLock sync.RWMutex
 	sharesToEncReplies map[SharesToEncRequestID]chan *SharesToEncReply
 }
 
@@ -103,7 +99,9 @@ func NewService(c *onet.Context) (onet.Service, error) {
 
 	smcService := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
-		sessions:         make(map[SessionID]*Session),
+
+		// No need to initialise sessionsLock
+		sessions: make(map[SessionID]*Session),
 
 		createSessionBroadcastAnswers: make(map[CreateSessionRequestID]chan *CreateSessionBroadcastAnswer),
 		closeSessionBroadcastAnswers:  make(map[CloseSessionRequestID]chan *CloseSessionBroadcastAnswer),
@@ -124,8 +122,8 @@ func NewService(c *onet.Context) (onet.Service, error) {
 	return smcService, nil
 }
 
-// Constructor of a session. Already requires roster, bfv parameters, and seed for CRP generator.
-func (smc *Service) NewSession(id SessionID, roster *onet.Roster, params *bfv.Parameters, seed []byte) *Session {
+// Constructor of a session. Already requires roster and bfv parameters.
+func (smc *Service) NewSession(id SessionID, roster *onet.Roster, params *bfv.Parameters) *Session {
 	log.Lvl1(smc.ServerIdentity(), "Session constructor started")
 
 	session := &Session{
@@ -135,20 +133,14 @@ func (smc *Service) NewSession(id SessionID, roster *onet.Roster, params *bfv.Pa
 
 		Params: params,
 
-		crpGen:       dbfv.NewCRPGenerator(params, seed),
-		cipherCRPgen: dbfv.NewCipherCRPGenerator(params, seed),
+		// No need to initialise pubKeyLock, rotKeyLock, and evalKeyLock
 
+		// No need to initialise databaseLock
 		database: make(map[CipherID]*bfv.Ciphertext),
-		shares:   make(map[CipherID]*dbfv.AdditiveShare),
+		// No need to initialise sharesLock
+		shares: make(map[SharesID]*dbfv.AdditiveShare),
 
-		/*
-			// No need to initialise Locks
-			refreshParams:     make(map[RefreshRequestID]chan *bfv.Ciphertext),
-			switchingParams:   make(map[RetrieveRequestID]chan *SwitchingParameters),
-			encToSharesParams: make(map[EncToSharesRequestID]chan *E2SParameters),
-			sharesToEncParams: make(map[SharesToEncRequestID]chan *S2EParameters),
-		*/
-
+		// No need to initialise locks
 		genPubKeyReplies:   make(map[GenPubKeyRequestID]chan *GenPubKeyReply),
 		genEvalKeyReplies:  make(map[GenEvalKeyRequestID]chan *GenEvalKeyReply),
 		genRotKeyReplies:   make(map[GenRotKeyRequestID]chan *GenRotKeyReply),
@@ -166,13 +158,6 @@ func (smc *Service) NewSession(id SessionID, roster *onet.Roster, params *bfv.Pa
 
 	keygen := bfv.NewKeyGenerator(params)
 	session.skShard = keygen.GenSecretKey()
-
-	/*
-		// The zero value of a Mutex is an unlocked one
-		session.waitCKG.Lock()
-		session.waitEKG.Lock()
-		session.waitRKG.Lock()
-	*/
 
 	return session
 }

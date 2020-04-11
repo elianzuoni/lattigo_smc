@@ -21,7 +21,7 @@ func genLocalTestRoster(size int) *onet.Roster {
 }
 
 func testNewClientCreateSession(roster *onet.Roster, paramsIdx int, clientID string) (*Client, SessionID, *bfv.PublicKey, error) {
-	client := NewClient(roster.List[0], clientID, paramsIdx)
+	client := NewClient(roster.List[0], clientID, bfv.DefaultParams[paramsIdx])
 
 	log.Lvl2(client, "Creating session")
 	sid, pk, err := client.CreateSession(roster, testDefaultSeed)
@@ -30,7 +30,7 @@ func testNewClientCreateSession(roster *onet.Roster, paramsIdx int, clientID str
 }
 
 func testNewClientBindToSession(roster *onet.Roster, paramsIdx int, clientID string, sid SessionID, mpk *bfv.PublicKey) (*Client, error) {
-	client := NewClient(roster.List[1], clientID, paramsIdx)
+	client := NewClient(roster.List[1], clientID, bfv.DefaultParams[paramsIdx])
 
 	log.Lvl2(client, "Binding to session")
 	err := client.BindToSession(sid, mpk)
@@ -290,7 +290,7 @@ func TestGenEvalKeyQuery(t *testing.T) {
 	// Generate evaluation key
 
 	log.Lvl2("Going to generate evaluation key. Should not return error")
-	err = c.SendGenEvalKeyQuery()
+	err = c.SendGenEvalKeyQuery(nil)
 	if err != nil {
 		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
 	}
@@ -322,7 +322,7 @@ func TestGenRotKeyQuery(t *testing.T) {
 	log.Lvl2("Going to generate rotation key. Should not return error")
 	rotIdx := 0
 	k := uint64(1000)
-	err = c.SendGenRotKeyQuery(rotIdx, k)
+	err = c.SendGenRotKeyQuery(rotIdx, k, nil)
 	if err != nil {
 		t.Fatal("Method SendGenRotKeyQuery returned error:", err)
 	}
@@ -334,7 +334,7 @@ func TestGenRotKeyQuery(t *testing.T) {
 // TODO: why is KeyQuery even needed?
 
 func TestStoreRetrieveQuery(t *testing.T) {
-	log.SetDebugVisible(4)
+	log.SetDebugVisible(3)
 	log.Lvl1("Testing Store and Retrieve queries")
 
 	size := 3
@@ -473,89 +473,6 @@ func TestSumQuery(t *testing.T) {
 	return
 }
 
-// TODO: Why doesn't it work without relinearisation? Isn't the decryptor supposed to work anyway?
-func TestMultiplyQuery(t *testing.T) {
-	log.SetDebugVisible(3)
-	log.Lvl1("Testing Multiply query")
-
-	size := 3
-	roster := genLocalTestRoster(size)
-
-	// Create session
-
-	paramsIdx := 1
-	clientID := "TestMultiplyQuery"
-	log.Lvl2("Going to create new session. Should not return error")
-	c, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
-	if err != nil {
-		t.Fatal("Method CreateSession returned error:", err)
-	}
-	log.Lvl2("Method CreateSession correctly returned no error")
-
-	// Generate data
-
-	log.Lvl2("Going to generate random data. Should not return error")
-	ctx, p, q, err := testGenRandomPolys(paramsIdx)
-	if err != nil {
-		t.Fatal("Could not generate random data:", err)
-	}
-	log.Lvl2("Successfully generated random data")
-
-	// Store the first vector
-
-	log.Lvl2("Going to store first vector. Should not return error")
-	data1 := p.Coeffs[0] // Only one modulus exists
-	cid1, err := c.SendStoreQuery(data1)
-	if err != nil {
-		t.Fatal("Method SendStoreQuery for first vector returned error:", err)
-	}
-	log.Lvl2("Method SendStoreQuery for first vector correctly returned no error")
-
-	// Store the second vector
-
-	log.Lvl2("Going to store second vector. Should not return error")
-	data2 := q.Coeffs[0] // Only one modulus exists
-	cid2, err := c.SendStoreQuery(data2)
-	if err != nil {
-		t.Fatal("Method SendStoreQuery for second vector returned error:", err)
-	}
-	log.Lvl2("Method SendStoreQuery for second vector correctly returned no error")
-
-	// Multiply the vectors remotely
-
-	log.Lvl2("Going to multiply the two vectors remotely. Should not return error")
-	cidMul, err := c.SendMultiplyQuery(cid1, cid2)
-	if err != nil {
-		t.Fatal("Method SendMultiplyQuery returned error:", err)
-	}
-	log.Lvl2("Method SendMultiplyQuery correctly returned no error")
-
-	// Multiply the vectors locally
-
-	mul := ctx.NewPoly()
-	ctx.MulCoeffs(p, q, mul)
-	origMul := mul.Coeffs[0] // Only one modulus is present
-
-	// Retrieve the remote product
-
-	log.Lvl2("Going to retrieve the remote product. Should not return error")
-	retrMul, err := c.SendRetrieveQuery(cidMul)
-	if err != nil {
-		t.Fatal("Method SendRetrieveQuery returned error:", err)
-	}
-	log.Lvl2("Method SendRetrieveQuery correctly returned no error")
-
-	// Test for equality
-
-	log.Lvl2("Going to test for equality. Should be the same")
-	if !utils.Equalslice(origMul, retrMul) {
-		t.Fatal("Original product and retrieved product are not the same")
-	}
-	log.Lvl2("Original product and retrieved product are the same")
-
-	return
-}
-
 func TestMultiplyRelinQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing Multiply and Relin query")
@@ -565,7 +482,7 @@ func TestMultiplyRelinQuery(t *testing.T) {
 
 	// Create session
 
-	paramsIdx := 0
+	paramsIdx := 1
 	clientID := "TestMultiplyRelinQuery"
 	log.Lvl2("Going to create new session. Should not return error")
 	c, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
@@ -577,7 +494,7 @@ func TestMultiplyRelinQuery(t *testing.T) {
 	// Generate evaluation key
 
 	log.Lvl2("Going to generate evaluation key. Should not return error")
-	err = c.SendGenEvalKeyQuery()
+	err = c.SendGenEvalKeyQuery(nil)
 	if err != nil {
 		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
 	}
@@ -624,7 +541,7 @@ func TestMultiplyRelinQuery(t *testing.T) {
 	// Relinearise the remote product (remotely)
 
 	log.Lvl2("Going to relinearise the remote product (remotely). Should not return error")
-	_, err = c.SendRelinQuery(cidMul) // The CipherID doesn't change
+	cidMul, err = c.SendRelinQuery(cidMul) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery returned error:", err)
 	}
@@ -676,7 +593,7 @@ func TestRefreshQuery(t *testing.T) {
 
 	// Create session
 
-	paramsIdx := 0
+	paramsIdx := 1
 	clientID := "TestRefreshQuery"
 	log.Lvl2("Going to create new session. Should not return error")
 	client, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
@@ -688,7 +605,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Generate evaluation key
 
 	log.Lvl2("Going to generate evaluation key. Should not return error")
-	err = client.SendGenEvalKeyQuery()
+	err = client.SendGenEvalKeyQuery(nil)
 	if err != nil {
 		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
 	}
@@ -733,7 +650,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Relinearise the remote ab (remotely)
 
 	log.Lvl2("Going to relinearise \"ab\" (remotely). Should not return error")
-	_, err = client.SendRelinQuery(cidAB) // The CipherID doesn't change
+	cidAB, err = client.SendRelinQuery(cidAB) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"ab\" returned error:", err)
 	}
@@ -742,7 +659,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Refresh the remote ab
 
 	log.Lvl2("Going to refresh \"ab\" (remotely). Should not return error")
-	_, err = client.SendRefreshQuery(cidAB) // The CipherID doesn't change
+	cidAB, err = client.SendRefreshQuery(cidAB, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
 	}
@@ -792,16 +709,16 @@ func TestRefreshQuery(t *testing.T) {
 	// Relinearise the remote cd (remotely)
 
 	log.Lvl2("Going to relinearise \"cd\" (remotely). Should not return error")
-	_, err = client.SendRelinQuery(cidCD) // The CipherID doesn't change
+	cidCD, err = client.SendRelinQuery(cidCD) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"cd\" returned error:", err)
 	}
 	log.Lvl2("Method SendRelinQuery for \"cd\" correctly returned no error")
 
-	// Refresh the remote abcd
+	// Refresh the remote cd
 
 	log.Lvl2("Going to refresh \"cd\" (remotely). Should not return error")
-	_, err = client.SendRefreshQuery(cidCD) // The CipherID doesn't change
+	cidCD, err = client.SendRefreshQuery(cidCD, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"cd\" returned error:", err)
 	}
@@ -811,23 +728,6 @@ func TestRefreshQuery(t *testing.T) {
 
 	cd := ctx.NewPoly()
 	ctx.MulCoeffs(c, d, cd)
-
-	// Retrieve the remote cd
-
-	log.Lvl2("Going to retrieve the remote \"cd\". Should not return error")
-	retr, err := client.SendRetrieveQuery(cidCD)
-	if err != nil {
-		t.Fatal("Method SendRetrieveQuery for \"cd\" returned error:", err)
-	}
-	log.Lvl2("Method SendRetrieveQuery for \"cd\" correctly returned no error")
-
-	// Test for equality
-
-	log.Lvl2("Going to test for equality. Should be the same")
-	if !utils.Equalslice(cd.Coeffs[0], retr) {
-		t.Fatal("Original \"cd\" and retrieved \"cd\" are not the same")
-	}
-	log.Lvl2("Original \"cd\" and retrieved \"cd\" are the same")
 
 	// Multiply ab and cd remotely
 
@@ -841,7 +741,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Relinearise the remote abcd (remotely)
 
 	log.Lvl2("Going to relinearise \"abcd\" (remotely). Should not return error")
-	_, err = client.SendRelinQuery(cidABCD) // The CipherID doesn't change
+	cidABCD, err = client.SendRelinQuery(cidABCD) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"abcd\" returned error:", err)
 	}
@@ -850,7 +750,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Refresh the remote abcd
 
 	log.Lvl2("Going to refresh \"abcd\" (remotely). Should not return error")
-	_, err = client.SendRefreshQuery(cidABCD) // The CipherID doesn't change
+	cidABCD, err = client.SendRefreshQuery(cidABCD, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"abcd\" returned error:", err)
 	}
@@ -864,7 +764,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Retrieve the remote abcd
 
 	log.Lvl2("Going to retrieve the remote \"abcd\". Should not return error")
-	retr, err = client.SendRetrieveQuery(cidABCD)
+	retr, err := client.SendRetrieveQuery(cidABCD)
 	if err != nil {
 		t.Fatal("Method SendRetrieveQuery for \"abcd\" returned error:", err)
 	}
@@ -904,7 +804,7 @@ func TestRotationQuery(t *testing.T) {
 	log.Lvl2("Going to generate first rotation key. Should not return error")
 	rotIdx := bfv.RotationLeft
 	k1 := uint64(770)
-	err = c.SendGenRotKeyQuery(rotIdx, k1)
+	err = c.SendGenRotKeyQuery(rotIdx, k1, nil)
 	if err != nil {
 		t.Fatal("First call to method SendGenRotKeyQuery returned error:", err)
 	}
@@ -914,7 +814,7 @@ func TestRotationQuery(t *testing.T) {
 
 	log.Lvl2("Going to second first rotation key. Should not return error")
 	k2 := uint64(9)
-	err = c.SendGenRotKeyQuery(rotIdx, k2)
+	err = c.SendGenRotKeyQuery(rotIdx, k2, nil)
 	if err != nil {
 		t.Fatal("Second call to method SendGenRotKeyQuery returned error:", err)
 	}

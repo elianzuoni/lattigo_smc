@@ -9,6 +9,7 @@ require (
 	github.com/urfave/cli v1.22.2
 	go.dedis.ch/kyber/v3 v3.0.4
 	go.dedis.ch/onet/v3 v3.0.21
+	go.dedis.ch/protobuf v1.0.6
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422 // indirect
 	golang.org/x/text v0.3.2 // indirect
 	gopkg.in/satori/go.uuid.v1 v1.2.0
