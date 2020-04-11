@@ -13,7 +13,9 @@ func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, er
 	log.Lvl1(smc.ServerIdentity(), "Received RefreshQuery for ciphertext:", query.CipherID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -74,7 +76,9 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 	reply := &RefreshReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -138,7 +142,9 @@ func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext, S
 	log.Lvl2(smc.ServerIdentity(), "Performing refresh")
 
 	// Extract session
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -203,7 +209,9 @@ func (smc *Service) processRefreshReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received RefreshReply")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

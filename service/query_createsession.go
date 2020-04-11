@@ -118,7 +118,9 @@ func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
 	session := smc.NewSession(broad.SessionID, broad.Query.Roster, broad.Query.Params)
 
 	// Register session
+	smc.sessionsLock.Lock()
 	smc.sessions[broad.SessionID] = session
+	smc.sessionsLock.Unlock()
 
 	// Answer to root
 	answer := &CreateSessionBroadcastAnswer{broad.ReqID, true}

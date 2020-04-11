@@ -156,7 +156,8 @@ func testS2E(t *testing.T, N int) {
 	}
 
 	// Wait for termination
-	ct := <-s2e.ChannelCiphertext
+	s2e.WaitDone()
+	ct := s2e.OutputCiphertext
 	elapsed := time.Since(now)
 	log.Lvl1("Time elapsed : ", elapsed)
 

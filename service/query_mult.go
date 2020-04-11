@@ -13,7 +13,9 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 	log.Lvl1(smc.ServerIdentity(), "Received MultiplyQuery:", query.CipherID1, "*", query.CipherID2)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -80,7 +82,9 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 	reply := &MultiplyReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: NilCipherID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -150,7 +154,9 @@ func (smc *Service) processMultiplyReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received MultiplyReply:", reply.ReqID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

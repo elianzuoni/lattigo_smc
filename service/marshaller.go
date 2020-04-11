@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/network"
 	"go.dedis.ch/protobuf"
 	uuid "gopkg.in/satori/go.uuid.v1"
 )
@@ -154,65 +153,10 @@ func (id *CipherID) UnmarshalBinary(data []byte) (err error) {
 // SharesID
 
 func (id *SharesID) MarshalBinary() (data []byte, err error) {
-	// Marshal Owner
-	ownData, err := protobuf.Encode(id.Owner)
-	if err != nil {
-		return
-	}
-	ownLen := len(ownData)
-
-	// Marshal ID
-	idData, err := id.ID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	idLen := len(idData)
-
-	// Build data as [<ownLen>, <idLen>, <owner>, <ID>]
-	data = make([]byte, 2*8+ownLen+idLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ownLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(idLen))
-	ptr += 8
-	copy(data[ptr:ptr+ownLen], ownData)
-	ptr += ownLen
-	copy(data[ptr:ptr+idLen], idData)
-	ptr += idLen
-
-	return
+	return (*uuid.UUID)(id).MarshalBinary()
 }
 func (id *SharesID) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	ownLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	idLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read Owner
-	if ownLen > 0 {
-		if id.Owner == nil {
-			id.Owner = &network.ServerIdentity{}
-		}
-		err = protobuf.Decode(data[ptr:ptr+ownLen], id.Owner)
-		ptr += ownLen
-		if err != nil {
-			return
-		}
-	}
-
-	// Read ID
-	if idLen > 0 {
-		err = id.ID.UnmarshalBinary(data[ptr : ptr+idLen])
-		ptr += idLen
-		if err != nil {
-			return
-		}
-	}
-
-	return
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 
 // Create Session

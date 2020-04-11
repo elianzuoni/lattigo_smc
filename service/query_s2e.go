@@ -13,7 +13,9 @@ func (smc *Service) HandleSharesToEncQuery(query *SharesToEncQuery) (network.Mes
 	log.Lvl1(smc.ServerIdentity(), "Received SharesToEncQuery for shares:", query.SharesID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -74,7 +76,9 @@ func (smc *Service) processSharesToEncRequest(msg *network.Envelope) {
 	reply := &SharesToEncReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -124,7 +128,14 @@ func (smc *Service) reencryptCiphertext(SessionID SessionID, SharesID SharesID, 
 	log.Lvl2(smc.ServerIdentity(), "Re-encrypting a ciphertext")
 
 	// Extract session
-	s, _ := smc.sessions[SessionID] // If we got to this point, surely the Session must exist
+	smc.sessionsLock.RLock()
+	s, ok := smc.sessions[SessionID]
+	smc.sessionsLock.RUnlock()
+	if !ok {
+		err := errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
 
 	// Create TreeNodeInstance as root (this method runs on the root)
 	tree := s.Roster.GenerateBinaryTree()
@@ -138,7 +149,6 @@ func (smc *Service) reencryptCiphertext(SessionID SessionID, SharesID SharesID, 
 		return nil, err
 	}
 
-	// TODO: is all this really needed? Is there an equivalent of CreateProtocol?
 	// Instantiate protocol
 	log.Lvl3(smc.ServerIdentity(), "Instantiating shares-to-enc protocol")
 	protocol, err := smc.NewProtocol(tni, &onet.GenericConfig{data})
@@ -172,7 +182,8 @@ func (smc *Service) reencryptCiphertext(SessionID SessionID, SharesID SharesID, 
 
 	// Wait for termination of protocol
 	log.Lvl2(s2e.ServerIdentity(), "Waiting for shares-to-enc protocol to terminate...")
-	ctReenc := <-s2e.ChannelCiphertext
+	s2e.WaitDone()
+	ctReenc := s2e.OutputCiphertext
 
 	log.Lvl2(smc.ServerIdentity(), "Shared ciphertext!")
 
@@ -185,7 +196,9 @@ func (smc *Service) processSharesToEncReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received SharesToEncReply")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

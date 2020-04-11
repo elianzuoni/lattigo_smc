@@ -13,7 +13,9 @@ func (smc *Service) HandleRotationQuery(query *RotationQuery) (network.Message, 
 	log.Lvl1(smc.ServerIdentity(), "Received RotationQuery for ciphertext:", query.CipherID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -80,7 +82,9 @@ func (smc *Service) processRotationRequest(msg *network.Envelope) {
 	reply := &RotationReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: NilCipherID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -163,7 +167,9 @@ func (smc *Service) processRotationReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received RotationReply:", reply.ReqID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

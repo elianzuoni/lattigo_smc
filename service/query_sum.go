@@ -13,7 +13,9 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received SumQuery:", query.CipherID1, "+", query.CipherID2)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -80,7 +82,9 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 	reply := &SumReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: NilCipherID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -150,7 +154,9 @@ func (smc *Service) processSumReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received SumReply:", reply.ReqID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

@@ -467,7 +467,7 @@ func (smc *Service) Process(msg *network.Envelope) {
 			smc.processSharesToEncBroadcast(msg)
 			return
 		}*/
-	if msg.MsgType.Equal(msgTypes.msgEncToSharesReply) {
+	if msg.MsgType.Equal(msgTypes.msgSharesToEncReply) {
 		smc.processSharesToEncReply(msg)
 		return
 	}

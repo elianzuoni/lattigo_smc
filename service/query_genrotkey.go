@@ -12,7 +12,9 @@ func (smc *Service) HandleGenRotKeyQuery(query *GenRotKeyQuery) (network.Message
 	log.Lvl1(smc.ServerIdentity(), "Received GenRotKeyQuery")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -74,7 +76,9 @@ func (smc *Service) processGenRotKeyRequest(msg *network.Envelope) {
 	reply := &GenRotKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent (actually, only check existence)
+	smc.sessionsLock.RLock()
 	_, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -117,7 +121,9 @@ func (smc *Service) genRotKey(SessionID SessionID, rotIdx int, K uint64, Seed []
 	log.Lvl1(smc.ServerIdentity(), "Root. Generating EvaluationKey")
 
 	// Extract session
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -191,7 +197,9 @@ func (smc *Service) processGenRotKeyReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received GenRotKeyReply")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

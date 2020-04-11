@@ -10,6 +10,19 @@ import (
 	"lattigo-smc/protocols"
 )
 
+// Though we have NewProtocol, onet needs to register the protocol name
+func init() {
+	_, _ = onet.GlobalProtocolRegister(EncToSharesProtocolName,
+		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+			return nil, nil
+		})
+
+	_, _ = onet.GlobalProtocolRegister(SharesToEncProtocolName,
+		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+			return nil, nil
+		})
+}
+
 // NewProtocol starts a new protocol given by the name in the TreeNodeInstance, and returns it correctly initialised.
 // It is able to do the initialisation because it has access to the service.
 // Only gets called at children: root has to manually call it, register the instance, and dispatch it.
@@ -64,7 +77,9 @@ func (smc *Service) newProtoCKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	}
 
 	// Then, extract session, if exists
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[config.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err = errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -109,7 +124,9 @@ func (smc *Service) newProtoEKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	}
 
 	// Then, extract session, if exists
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[config.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err = errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -158,7 +175,9 @@ func (smc *Service) newProtoRKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	}
 
 	// Then, extract session, if exists
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[config.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err = errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -209,7 +228,9 @@ func (smc *Service) newProtoPCKS(tn *onet.TreeNodeInstance, cfg *onet.GenericCon
 	}
 
 	// Then, extract session, if exists
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[config.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err = errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -250,7 +271,9 @@ func (smc *Service) newProtoRefresh(tn *onet.TreeNodeInstance, cfg *onet.Generic
 	}
 
 	// Then, extract session, if exists
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[config.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err = errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -295,7 +318,9 @@ func (smc *Service) newProtoE2S(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	}
 
 	// Then, extract session, if exists
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[config.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err = errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -341,7 +366,9 @@ func (smc *Service) newProtoS2E(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	}
 
 	// Then, extract session, if exists
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[config.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err = errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)

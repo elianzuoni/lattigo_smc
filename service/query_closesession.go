@@ -13,7 +13,9 @@ func (smc *Service) HandleCloseSessionQuery(query *CloseSessionQuery) (network.M
 	log.Lvl1(smc.ServerIdentity(), "Received CloseSessionQuery")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -69,7 +71,9 @@ func (smc *Service) processCloseSessionRequest(msg *network.Envelope) {
 	reply := &CloseSessionReply{ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -137,6 +141,7 @@ func (smc *Service) processCloseSessionBroadcast(msg *network.Envelope) {
 	answer := &CloseSessionBroadcastAnswer{ReqID: broad.ReqID}
 
 	// Check if requested session exists, and set the field "Valid"
+	smc.sessionsLock.Lock()
 	_, ok := smc.sessions[broad.Query.SessionID]
 	if ok {
 		// Delete session as required
@@ -148,6 +153,7 @@ func (smc *Service) processCloseSessionBroadcast(msg *network.Envelope) {
 		log.Lvl3(smc.ServerIdentity(), "Requested session does not exist. Returning invalid answer")
 		answer.Valid = false
 	}
+	smc.sessionsLock.Unlock()
 
 	// Answer to root
 	log.Lvl2(smc.ServerIdentity(), "Sending answer to root")

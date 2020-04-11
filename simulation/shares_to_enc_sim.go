@@ -169,7 +169,8 @@ func (sim *SharesToEncSim) Run(config *onet.SimulationConfig) error {
 
 		// Wait for completion.
 		log.Lvl3("Waiting for protocol to end...")
-		cipher := <-s2ep.ChannelCiphertext
+		s2ep.WaitDone()
+		cipher := s2ep.OutputCiphertext
 		elapsed := time.Since(now)
 		timings[i] = elapsed
 		log.Lvl1("Elapsed time : ", elapsed)

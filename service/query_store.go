@@ -16,7 +16,9 @@ func (smc *Service) HandleStoreQuery(query *StoreQuery) (network.Message, error)
 	log.Lvl1(smc.ServerIdentity(), "Received StoreRequest query")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -78,7 +80,9 @@ func (smc *Service) processStoreRequest(msg *network.Envelope) {
 	reply := &StoreReply{SessionID: req.SessionID, ReqID: req.ReqID, CipherID: NilCipherID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -116,7 +120,9 @@ func (smc *Service) processStoreReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received StoreReply:", reply.ReqID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

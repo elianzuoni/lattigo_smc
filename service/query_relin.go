@@ -13,7 +13,9 @@ func (smc *Service) HandleRelinearisationQuery(query *RelinQuery) (network.Messa
 	log.Lvl1(smc.ServerIdentity(), "Server. Received RelinQuery for ciphertext:", query.CipherID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -79,7 +81,9 @@ func (smc *Service) processRelinRequest(msg *network.Envelope) {
 	reply := &RelinReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -162,7 +166,9 @@ func (smc *Service) processRelinReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received RelinReply:", reply.ReqID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

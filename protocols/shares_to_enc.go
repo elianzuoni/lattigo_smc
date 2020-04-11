@@ -34,12 +34,11 @@ import (
 func NewSharesToEncryptionProtocol(t *onet.TreeNodeInstance, params *bfv.Parameters, sigmaSmudging float64,
 	addShare *dbfv.AdditiveShare, sk *bfv.SecretKey, crs *ring.Poly) (*SharesToEncryptionProtocol, error) {
 	proto := &SharesToEncryptionProtocol{
-		TreeNodeInstance:  t,
-		S2EProtocol:       dbfv.NewS2EProtocol(params, sigmaSmudging),
-		addShare:          addShare,
-		sk:                sk,
-		crs:               crs,
-		ChannelCiphertext: make(chan *bfv.Ciphertext),
+		TreeNodeInstance: t,
+		S2EProtocol:      dbfv.NewS2EProtocol(params, sigmaSmudging),
+		addShare:         addShare,
+		sk:               sk,
+		crs:              crs,
 	}
 
 	proto.done.Lock()
@@ -64,7 +63,6 @@ func (p *SharesToEncryptionProtocol) Start() error {
 func (p *SharesToEncryptionProtocol) Dispatch() error {
 	var reencShare *dbfv.S2EReencryptionShare         // Will be sent to parent
 	var childReencShares []StructS2EReencryptionShare //Will contain children's re-encryption shares
-	var cipher *bfv.Ciphertext                        //Will be returned to caller via ChannelAddShare
 
 	reencShare = p.AllocateShare()
 
@@ -104,8 +102,7 @@ func (p *SharesToEncryptionProtocol) Dispatch() error {
 	// Step 4: if root, compute ciphertext and return it
 	if p.IsRoot() {
 		log.Lvl2(p.ServerIdentity(), "Re-encrypting, then sending to output channel")
-		cipher = p.Reencrypt(reencShare, p.crs)
-		p.ChannelCiphertext <- cipher
+		p.OutputCiphertext = p.Reencrypt(reencShare, p.crs)
 	}
 
 	p.done.Unlock() // Signal that the protocol is finished

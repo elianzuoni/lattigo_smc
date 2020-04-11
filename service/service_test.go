@@ -9,15 +9,14 @@ import (
 	"testing"
 )
 
-// var testCoeffSize = 4096
 var testDefaultSeed = []byte("soreta")
 
 // Utility functions
 
-func genLocalTestRoster(size int) *onet.Roster {
+func genLocalTestRoster(size int) (*onet.Roster, *onet.LocalTest) {
 	local := onet.NewLocalTest(utils.SUITE)
 	_, roster, _ := local.GenTree(size, true)
-	return roster
+	return roster, local
 }
 
 func testNewClientCreateSession(roster *onet.Roster, paramsIdx int, clientID string) (*Client, SessionID, *bfv.PublicKey, error) {
@@ -57,9 +56,11 @@ func TestCreateSession(t *testing.T) {
 	log.Lvl1("Testing CreateSession")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
 	paramsIdx := 0
 	clientID := "TestCreateSession"
+
+	defer localTest.CloseAll()
 
 	// Create session
 
@@ -76,8 +77,10 @@ func TestBindToSession(t *testing.T) {
 	log.Lvl1("Testing BindToSession")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
 	paramsIdx := 0
+
+	defer localTest.CloseAll()
 
 	// Create first client, and create session
 
@@ -147,8 +150,10 @@ func TestCloseSession(t *testing.T) {
 	log.Lvl1("Testing CloseSession")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
 	paramsIdx := 0
+
+	defer localTest.CloseAll()
 
 	// Create first client, and create session
 
@@ -196,8 +201,10 @@ func TestUnbindFromSession(t *testing.T) {
 	log.Lvl1("Testing UnbindFromSession")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
 	paramsIdx := 0
+
+	defer localTest.CloseAll()
 
 	// Create first client, and create session
 
@@ -274,7 +281,8 @@ func TestGenEvalKeyQuery(t *testing.T) {
 	log.Lvl1("Testing GenEvalKeyQuery")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
 
 	// Create session
 
@@ -304,7 +312,8 @@ func TestGenRotKeyQuery(t *testing.T) {
 	log.Lvl1("Testing GenRotKeyQuery")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
 
 	// Create session
 
@@ -338,7 +347,8 @@ func TestStoreRetrieveQuery(t *testing.T) {
 	log.Lvl1("Testing Store and Retrieve queries")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
 
 	// Create session
 
@@ -396,7 +406,8 @@ func TestSumQuery(t *testing.T) {
 	log.Lvl1("Testing Sum query")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
 
 	// Create session
 
@@ -478,7 +489,8 @@ func TestMultiplyRelinQuery(t *testing.T) {
 	log.Lvl1("Testing Multiply and Relin query")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
 
 	// Create session
 
@@ -589,7 +601,8 @@ func TestRefreshQuery(t *testing.T) {
 	log.Lvl1("Testing Refresh query")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
 
 	// Create session
 
@@ -786,7 +799,8 @@ func TestRotationQuery(t *testing.T) {
 	log.Lvl1("Testing Rotation query")
 
 	size := 3
-	roster := genLocalTestRoster(size)
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
 
 	// Create session
 
@@ -894,6 +908,232 @@ func TestRotationQuery(t *testing.T) {
 		t.Fatal("Original rotated vector and retrieved rotated vector are not the same")
 	}
 	log.Lvl2("Original rotated vector and retrieved rotated vector are the same")
+
+	return
+}
+
+// The same circuit is evaluated, but with enc-shares-enc instead of refresh
+func TestEncSharesQuery(t *testing.T) {
+	log.SetDebugVisible(3)
+	log.Lvl1("Testing enc-to-shares and shares-to-enc query")
+
+	size := 3
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
+
+	// Create session
+
+	paramsIdx := 1
+	clientID := "TestEncSharesQuery"
+	log.Lvl2("Going to create new session. Should not return error")
+	client, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
+	if err != nil {
+		t.Fatal("Method CreateSession returned error:", err)
+	}
+	log.Lvl2("Method CreateSession correctly returned no error")
+
+	// Generate evaluation key
+
+	log.Lvl2("Going to generate evaluation key. Should not return error")
+	err = client.SendGenEvalKeyQuery(nil)
+	if err != nil {
+		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
+	}
+	log.Lvl2("Method SendGenEvalKeyQuery correctly returned no error")
+
+	// Generate a and b
+
+	log.Lvl2("Going to generate a and b. Should not return error")
+	ctx, a, b, err := testGenRandomPolys(paramsIdx)
+	if err != nil {
+		t.Fatal("Could not generate a and b:", err)
+	}
+	log.Lvl2("Successfully generated a and b")
+
+	// Store a
+
+	log.Lvl2("Going to store \"a\". Should not return error")
+	cidA, err := client.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for \"a\" returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for \"a\" correctly returned no error")
+
+	// Store b
+
+	log.Lvl2("Going to store \"b\". Should not return error")
+	cidB, err := client.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for \"b\" returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for \"b\" correctly returned no error")
+
+	// Multiply a and b remotely
+
+	log.Lvl2("Going to multiply \"a\" and \"b\" remotely. Should not return error")
+	cidAB, err := client.SendMultiplyQuery(cidA, cidB)
+	if err != nil {
+		t.Fatal("Method SendMultiplyQuery for\"a\" and \"b\" returned error:", err)
+	}
+	log.Lvl2("Method SendMultiplyQuery for \"a\" and \"b\" correctly returned no error")
+
+	// Relinearise the remote ab (remotely)
+
+	log.Lvl2("Going to relinearise \"ab\" (remotely). Should not return error")
+	cidAB, err = client.SendRelinQuery(cidAB) // The CipherID changes
+	if err != nil {
+		t.Fatal("Method SendRelinQuery for \"ab\" returned error:", err)
+	}
+	log.Lvl2("Method SendRelinQuery for \"ab\" correctly returned no error")
+
+	// Share the remote ab
+
+	log.Lvl2("Going to share \"ab\" (remotely). Should not return error")
+	shidAB, err := client.SendEncToSharesQuery(cidAB)
+	if err != nil {
+		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
+	}
+	log.Lvl2("Method SendEncToSharesQuery for \"ab\" correctly returned no error")
+
+	// Re-encrypt the remote ab
+
+	log.Lvl2("Going to re-encrypt \"ab\" (remotely). Should not return error")
+	cidAB, err = client.SendSharesToEncQuery(shidAB, nil) // The CipherID changes
+	if err != nil {
+		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
+	}
+	log.Lvl2("Method SendSharesToEncQuery for \"ab\" correctly returned no error")
+
+	// Multiply a and b locally
+
+	ab := ctx.NewPoly()
+	ctx.MulCoeffs(a, b, ab)
+
+	// Generate c and d
+
+	log.Lvl2("Going to generate c and d. Should not return error")
+	ctx, c, d, err := testGenRandomPolys(paramsIdx)
+	if err != nil {
+		t.Fatal("Could not generate c and d:", err)
+	}
+	log.Lvl2("Successfully generated c and d")
+
+	// Store c
+
+	log.Lvl2("Going to store \"c\". Should not return error")
+	cidC, err := client.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for \"c\" returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for \"c\" correctly returned no error")
+
+	// Store d
+
+	log.Lvl2("Going to store \"d\". Should not return error")
+	cidD, err := client.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for \"d\" returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for \"d\" correctly returned no error")
+
+	// Multiply c and d remotely
+
+	log.Lvl2("Going to multiply \"c\" and \"d\" remotely. Should not return error")
+	cidCD, err := client.SendMultiplyQuery(cidC, cidD)
+	if err != nil {
+		t.Fatal("Method SendMultiplyQuery for\"c\" and \"d\" returned error:", err)
+	}
+	log.Lvl2("Method SendMultiplyQuery for \"c\" and \"d\" correctly returned no error")
+
+	// Relinearise the remote cd (remotely)
+
+	log.Lvl2("Going to relinearise \"cd\" (remotely). Should not return error")
+	cidCD, err = client.SendRelinQuery(cidCD) // The CipherID changes
+	if err != nil {
+		t.Fatal("Method SendRelinQuery for \"cd\" returned error:", err)
+	}
+	log.Lvl2("Method SendRelinQuery for \"cd\" correctly returned no error")
+
+	// Share the remote cd
+
+	log.Lvl2("Going to share \"cd\" (remotely). Should not return error")
+	shidCD, err := client.SendEncToSharesQuery(cidCD)
+	if err != nil {
+		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
+	}
+	log.Lvl2("Method SendEncToSharesQuery for \"cd\" correctly returned no error")
+
+	// Re-encrypt the remote cd
+
+	log.Lvl2("Going to re-encrypt \"cd\" (remotely). Should not return error")
+	cidCD, err = client.SendSharesToEncQuery(shidCD, nil) // The CipherID changes
+	if err != nil {
+		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
+	}
+	log.Lvl2("Method SendSharesToEncQuery for \"cd\" correctly returned no error")
+
+	// Multiply c and d locally
+
+	cd := ctx.NewPoly()
+	ctx.MulCoeffs(c, d, cd)
+
+	// Multiply ab and cd remotely
+
+	log.Lvl2("Going to multiply \"ab\" and \"cd\" remotely. Should not return error")
+	cidABCD, err := client.SendMultiplyQuery(cidAB, cidCD)
+	if err != nil {
+		t.Fatal("Method SendMultiplyQuery for\"ab\" and \"cd\" returned error:", err)
+	}
+	log.Lvl2("Method SendMultiplyQuery for \"ab\" and \"cd\" correctly returned no error")
+
+	// Relinearise the remote abcd (remotely)
+
+	log.Lvl2("Going to relinearise \"abcd\" (remotely). Should not return error")
+	cidABCD, err = client.SendRelinQuery(cidABCD) // The CipherID changes
+	if err != nil {
+		t.Fatal("Method SendRelinQuery for \"abcd\" returned error:", err)
+	}
+	log.Lvl2("Method SendRelinQuery for \"abcd\" correctly returned no error")
+
+	// Share the remote abcd
+
+	log.Lvl2("Going to share \"abcd\" (remotely). Should not return error")
+	shidABCD, err := client.SendEncToSharesQuery(cidABCD)
+	if err != nil {
+		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
+	}
+	log.Lvl2("Method SendEncToSharesQuery for \"abcd\" correctly returned no error")
+
+	// Re-encrypt the remote abcd
+
+	log.Lvl2("Going to re-encrypt \"abcd\" (remotely). Should not return error")
+	cidABCD, err = client.SendSharesToEncQuery(shidABCD, nil) // The CipherID changes
+	if err != nil {
+		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
+	}
+	log.Lvl2("Method SendSharesToEncQuery for \"abcd\" correctly returned no error")
+
+	// Multiply ab and cd locally
+
+	abcd := ctx.NewPoly()
+	ctx.MulCoeffs(ab, cd, abcd)
+
+	// Retrieve the remote abcd
+
+	log.Lvl2("Going to retrieve the remote \"abcd\". Should not return error")
+	retr, err := client.SendRetrieveQuery(cidABCD)
+	if err != nil {
+		t.Fatal("Method SendRetrieveQuery for \"abcd\" returned error:", err)
+	}
+	log.Lvl2("Method SendRetrieveQuery for \"abcd\" correctly returned no error")
+
+	// Test for equality
+
+	log.Lvl2("Going to test for equality. Should be the same")
+	if !utils.Equalslice(abcd.Coeffs[0], retr) {
+		t.Fatal("Original \"abcd\" and retrieved \"abcd\" are not the same")
+	}
+	log.Lvl2("Original \"abcd\" and retrieved \"abcd\" are the same")
 
 	return
 }

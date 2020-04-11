@@ -185,8 +185,8 @@ type SharesToEncryptionProtocol struct {
 	channelStart       chan StructStart
 	channelReencShares chan []StructS2EReencryptionShare //A channel of slices allows to receive all shares at once
 
-	//Channel to return the ciphertext to the caller (only if root)
-	ChannelCiphertext chan *bfv.Ciphertext
+	// Re-encrypted ciphertext (to be waited with WaitDone)
+	OutputCiphertext *bfv.Ciphertext
 
 	done sync.Mutex
 }

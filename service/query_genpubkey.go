@@ -12,7 +12,9 @@ func (smc *Service) HandleGenPubKeyQuery(query *GenPubKeyQuery) (network.Message
 	log.Lvl1(smc.ServerIdentity(), "Received GenPubKeyQuery")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -74,7 +76,9 @@ func (smc *Service) processGenPubKeyRequest(msg *network.Envelope) {
 	reply := &GenPubKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -118,7 +122,9 @@ func (smc *Service) genPublicKey(SessionID SessionID, Seed []byte) error {
 	log.Lvl1(smc.ServerIdentity(), "Root. Generating PublicKey")
 
 	// Extract session
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -197,7 +203,9 @@ func (smc *Service) processGenPubKeyReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received GenPubKeyReply")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

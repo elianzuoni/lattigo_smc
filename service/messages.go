@@ -221,18 +221,15 @@ func (id CipherID) String() string {
 
 // SharesID
 
-type SharesID struct {
-	Owner *network.ServerIdentity
-	ID    uuid.UUID
-}
+type SharesID uuid.UUID
 
-var NilSharesID = SharesID{nil, uuid.Nil}
+var NilSharesID = SharesID(uuid.Nil)
 
-func newSharesID(owner *network.ServerIdentity) SharesID {
-	return SharesID{owner, uuid.NewV1()}
+func newSharesID() SharesID {
+	return SharesID(uuid.NewV1())
 }
 func (id SharesID) String() string {
-	return id.Owner.String() + ":" + id.ID.String()
+	return (uuid.UUID)(id).String()
 }
 
 // Create Session

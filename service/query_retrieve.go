@@ -13,7 +13,9 @@ func (smc *Service) HandleRetrieveQuery(query *RetrieveQuery) (network.Message, 
 	log.Lvl1(smc.ServerIdentity(), "Received RetrieveQuery for ciphertext:", query.CipherID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -74,7 +76,9 @@ func (smc *Service) processRetrieveRequest(msg *network.Envelope) {
 	reply := &RetrieveReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -132,7 +136,9 @@ func (smc *Service) switchCiphertext(SessionID SessionID, pk *bfv.PublicKey, ct 
 	log.Lvl2(smc.ServerIdentity(), "Performing public key-switching")
 
 	// Extract session
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -197,7 +203,9 @@ func (smc *Service) processRetrieveReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received RetrieveReply")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return

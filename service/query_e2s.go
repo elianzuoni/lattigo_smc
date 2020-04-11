@@ -13,7 +13,9 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 	log.Lvl1(smc.ServerIdentity(), "Received EncToSharesQuery for ciphertext:", query.CipherID)
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[query.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -74,7 +76,9 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	reply := &EncToSharesReply{SessionID: req.SessionID, ReqID: req.ReqID, SharesID: NilSharesID, Valid: false}
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[req.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -100,7 +104,7 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	}
 
 	// Generate new SharesID
-	sharesID := newSharesID(smc.ServerIdentity())
+	sharesID := newSharesID()
 
 	// Then, launch the enc-to-shares protocol to get the shared ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Sharing ciphertext")
@@ -137,7 +141,9 @@ func (smc *Service) shareCiphertext(SessionID SessionID, SharesID SharesID, ct *
 	log.Lvl2(smc.ServerIdentity(), "Sharing a ciphertext")
 
 	// Extract session
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -203,7 +209,9 @@ func (smc *Service) processEncToSharesReply(msg *network.Envelope) {
 	log.Lvl1(smc.ServerIdentity(), "Received EncToSharesReply")
 
 	// Extract Session, if existent
+	smc.sessionsLock.RLock()
 	s, ok := smc.sessions[reply.SessionID]
+	smc.sessionsLock.RUnlock()
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
