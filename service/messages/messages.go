@@ -16,19 +16,15 @@ import (
 
 // MsgTypes contains the different message types.
 type MessageTypes struct {
-	MsgCreateSessionQuery           network.MessageTypeID // Unused
-	MsgCreateSessionRequest         network.MessageTypeID
-	MsgCreateSessionBroadcast       network.MessageTypeID
-	MsgCreateSessionBroadcastAnswer network.MessageTypeID
-	MsgCreateSessionReply           network.MessageTypeID
-	MsgCreateSessionResponse        network.MessageTypeID // Unused
+	MsgCreateSessionQuery    network.MessageTypeID // Unused
+	MsgCreateSessionRequest  network.MessageTypeID
+	MsgCreateSessionReply    network.MessageTypeID
+	MsgCreateSessionResponse network.MessageTypeID // Unused
 
-	MsgCloseSessionQuery           network.MessageTypeID // Unused
-	MsgCloseSessionRequest         network.MessageTypeID
-	MsgCloseSessionBroadcast       network.MessageTypeID
-	MsgCloseSessionBroadcastAnswer network.MessageTypeID
-	MsgCloseSessionReply           network.MessageTypeID
-	MsgCloseSessionResponse        network.MessageTypeID // Unused
+	MsgCloseSessionQuery    network.MessageTypeID // Unused
+	MsgCloseSessionRequest  network.MessageTypeID
+	MsgCloseSessionReply    network.MessageTypeID
+	MsgCloseSessionResponse network.MessageTypeID // Unused
 
 	MsgGenPubKeyQuery    network.MessageTypeID // Unused
 	MsgGenPubKeyRequest  network.MessageTypeID
@@ -104,15 +100,11 @@ func init() {
 
 	MsgTypes.MsgCreateSessionQuery = network.RegisterMessage(&CreateSessionQuery{}) // Unused
 	MsgTypes.MsgCreateSessionRequest = network.RegisterMessage(&CreateSessionRequest{})
-	MsgTypes.MsgCreateSessionBroadcast = network.RegisterMessage(&CreateSessionBroadcast{})
-	MsgTypes.MsgCreateSessionBroadcastAnswer = network.RegisterMessage(&CreateSessionBroadcastAnswer{})
 	MsgTypes.MsgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
 	MsgTypes.MsgCreateSessionResponse = network.RegisterMessage(&CreateSessionResponse{}) // Unused
 
 	MsgTypes.MsgCloseSessionQuery = network.RegisterMessage(&CloseSessionQuery{}) // Unused
 	MsgTypes.MsgCloseSessionRequest = network.RegisterMessage(&CloseSessionRequest{})
-	MsgTypes.MsgCloseSessionBroadcast = network.RegisterMessage(&CloseSessionBroadcast{})
-	MsgTypes.MsgCloseSessionBroadcastAnswer = network.RegisterMessage(&CloseSessionBroadcastAnswer{})
 	MsgTypes.MsgCloseSessionReply = network.RegisterMessage(&CloseSessionReply{})
 	MsgTypes.MsgCloseSessionResponse = network.RegisterMessage(&CloseSessionResponse{}) // Unused
 
@@ -253,16 +245,10 @@ type CreateSessionRequest struct {
 	Query *CreateSessionQuery
 }
 
-type CreateSessionBroadcast struct {
-	ReqID CreateSessionRequestID
-
+type CreateSessionConfig struct {
 	SessionID SessionID
-	Query     *CreateSessionQuery
-}
-
-type CreateSessionBroadcastAnswer struct {
-	ReqID CreateSessionRequestID
-	Valid bool
+	Roster    *onet.Roster
+	Params    *bfv.Parameters
 }
 
 type CreateSessionReply struct {
@@ -298,15 +284,8 @@ type CloseSessionRequest struct {
 	Query     *CloseSessionQuery
 }
 
-type CloseSessionBroadcast struct {
-	ReqID CloseSessionRequestID
-
-	Query *CloseSessionQuery
-}
-
-type CloseSessionBroadcastAnswer struct {
-	ReqID CloseSessionRequestID
-	Valid bool
+type CloseSessionConfig struct {
+	SessionID SessionID
 }
 
 type CloseSessionReply struct {

@@ -9,9 +9,15 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/protocols"
 	"lattigo-smc/service/messages"
+	serviceProto "lattigo-smc/service/protocols"
 )
 
-// Though we have NewProtocol, onet needs to register the protocol name
+const EncToSharesProtocolName = "EncryptionToSharesProtocol"
+const SharesToEncProtocolName = "SharesToEncryptionProtocol"
+const CreateSessionProtocolName = "CreateSessionProtocol"
+const CloseSessionProtocolName = "CloseSessionProtocolName"
+
+// Though we have NewProtocol, onet needs to register the protocol name. So we register dummy protocol factories.
 func init() {
 	_, _ = onet.GlobalProtocolRegister(EncToSharesProtocolName,
 		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
@@ -19,6 +25,16 @@ func init() {
 		})
 
 	_, _ = onet.GlobalProtocolRegister(SharesToEncProtocolName,
+		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+			return nil, nil
+		})
+
+	_, _ = onet.GlobalProtocolRegister(CreateSessionProtocolName,
+		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+			return nil, nil
+		})
+
+	_, _ = onet.GlobalProtocolRegister(CloseSessionProtocolName,
 		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 			return nil, nil
 		})
@@ -56,6 +72,12 @@ func (smc *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.GenericCo
 
 	case SharesToEncProtocolName:
 		protocol, err = smc.newProtoS2E(tni, conf)
+
+	case CreateSessionProtocolName:
+		protocol, err = smc.newProtoCreateSession(tni, conf)
+
+	case CloseSessionProtocolName:
+		protocol, err = smc.newProtoCloseSession(tni, conf)
 	}
 
 	if err != nil {
@@ -295,8 +317,6 @@ func (smc *Service) newProtoRefresh(tn *onet.TreeNodeInstance, cfg *onet.Generic
 
 // Encryption to shares
 
-const EncToSharesProtocolName = "EncryptionToSharesProtocol"
-
 func (smc *Service) newProtoE2S(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	log.Lvl2(smc.ServerIdentity(), "EncToShares protocol factory")
 
@@ -330,8 +350,6 @@ func (smc *Service) newProtoE2S(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 }
 
 // Shares to encryption
-
-const SharesToEncProtocolName = "SharesToEncryptionProtocol"
 
 func (smc *Service) newProtoS2E(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
 	log.Lvl2(smc.ServerIdentity(), "SharesToEnc protocol factory")
@@ -373,4 +391,50 @@ func (smc *Service) newProtoS2E(tn *onet.TreeNodeInstance, cfg *onet.GenericConf
 	}
 
 	return s2ep, nil
+}
+
+// Create Session
+
+func (smc *Service) newProtoCreateSession(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "CreateSession protocol factory")
+
+	// First, extract configuration
+	config := &messages.CreateSessionConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, create the protocol with the known parameters and the one just received
+	p, err := serviceProto.NewCreateSessionProtocol(tn, smc.sessions, config.SessionID, config.Roster, config.Params)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
+		return nil, err
+	}
+
+	return p, nil
+}
+
+// Close Session
+
+func (smc *Service) newProtoCloseSession(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(smc.ServerIdentity(), "CloseSession protocol factory")
+
+	// First, extract configuration
+	config := &messages.CloseSessionConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, create the protocol with the known parameters and the one just received
+	p, err := serviceProto.NewCloseSessionProtocol(tn, smc.sessions, config.SessionID)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not initialise protocol", err)
+		return nil, err
+	}
+
+	return p, nil
 }

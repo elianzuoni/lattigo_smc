@@ -4,10 +4,11 @@ package service
 
 import (
 	"errors"
+	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
-	"lattigo-smc/utils"
+	"lattigo-smc/service/protocols"
 )
 
 func (smc *Service) HandleCloseSessionQuery(query *messages.CloseSessionQuery) (network.Message, error) {
@@ -69,29 +70,10 @@ func (smc *Service) processCloseSessionRequest(msg *network.Envelope) {
 	// Start by declaring reply with minimal fields.
 	reply := &messages.CloseSessionReply{ReqID: req.ReqID, Valid: false}
 
-	// Extract Session, if existent
-	s, ok := smc.sessions.GetSession(req.SessionID)
-	if !ok {
-		log.Error(smc.ServerIdentity(), "Requested session does not exist")
-		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, reply)
-		if err != nil {
-			log.Error("Could not send reply:", err)
-		}
-		return
-	}
-
-	// Create the broadcast message
-	broad := &messages.CloseSessionBroadcast{req.ReqID, req.Query}
-
-	// Create channel before sending broadcast.
-	smc.closeSessionBroadcastAnswers[req.ReqID] = make(chan *messages.CloseSessionBroadcastAnswer)
-
-	// Broadcast the message so that all nodes can delete the session.
-	log.Lvl2(smc.ServerIdentity(), "Broadcasting message to all nodes")
-	err := utils.Broadcast(smc.ServiceProcessor, s.Roster, broad)
+	// Launch the CloseSession protocol, to delete the Session at all nodes
+	err := smc.closeSession(req.Query.SessionID)
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not broadcast message:", err)
+		log.Error(smc.ServerIdentity(), "Could not close session:", err)
 		err = smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
@@ -100,25 +82,8 @@ func (smc *Service) processCloseSessionRequest(msg *network.Envelope) {
 		return
 	}
 
-	// Wait for all their answers. If anyone is negative, the response is negative
-	log.Lvl2(smc.ServerIdentity(), "Waiting for nodes' answers")
-	answers := 0
-	valid := true
-	for answers < len(s.Roster.List) {
-		// TODO: timeout if servers do not answer
-		ans := <-smc.closeSessionBroadcastAnswers[req.ReqID]
-		answers += 1
-		if !ans.Valid {
-			valid = false
-		}
-		log.Lvl4(smc.ServerIdentity(), "Received", answers, "answers")
-	}
-	// TODO: close channel?
-
-	log.Lvl3(smc.ServerIdentity(), "Received all answers")
-
 	// Send reply to server
-	reply.Valid = valid
+	reply.Valid = true
 	log.Lvl2(smc.ServerIdentity(), "Sending reply to server")
 	err = smc.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
@@ -129,48 +94,73 @@ func (smc *Service) processCloseSessionRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) processCloseSessionBroadcast(msg *network.Envelope) {
-	broad := msg.Msg.(*messages.CloseSessionBroadcast)
+func (smc *Service) closeSession(SessionID messages.SessionID) error {
+	log.Lvl2(smc.ServerIdentity(), "Closing a session")
 
-	log.Lvl1(smc.ServerIdentity(), "Received CloseSessionBroadcast")
-
-	// Start by declaring answer with default fields
-	answer := &messages.CloseSessionBroadcastAnswer{ReqID: broad.ReqID}
-
-	// Check if requested session exists, and set the field "Valid"
-	_, ok := smc.sessions.GetSession(broad.Query.SessionID)
-	if ok {
-		// Delete session as required
-		log.Lvl3(smc.ServerIdentity(), "Requested session exists. Deleting it")
-		smc.sessions.DeleteSession(broad.Query.SessionID)
-		answer.Valid = true
-	} else {
-		// Mark answer as invalid
-		log.Lvl3(smc.ServerIdentity(), "Requested session does not exist. Returning invalid answer")
-		answer.Valid = false
+	// Extract session
+	s, ok := smc.sessions.GetSession(SessionID)
+	if !ok {
+		err := errors.New("Requested session does not exist")
+		log.Error(smc.ServerIdentity(), err)
+		return err
 	}
 
-	// Answer to root
-	log.Lvl2(smc.ServerIdentity(), "Sending answer to root")
-	err := smc.SendRaw(msg.ServerIdentity, answer)
+	// Create TreeNodeInstance as root
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(smc.ServerIdentity(), err)
+		return err
+	}
+	tni := smc.NewTreeNodeInstance(tree, tree.Root, CloseSessionProtocolName)
+
+	// Create configuration for the protocol instance
+	config := &messages.CloseSessionConfig{SessionID}
+	data, err := config.MarshalBinary()
 	if err != nil {
-		log.Error("Could not answer to server:", err)
+		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
+		return err
 	}
-	log.Lvl4(smc.ServerIdentity(), "Sent answer to server")
 
-	return
-}
+	// Instantiate protocol
+	log.Lvl3(smc.ServerIdentity(), "Instantiating close-session protocol")
+	protocol, err := smc.NewProtocol(tni, &onet.GenericConfig{data})
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not instantiate create-session protocol", err)
+		return err
+	}
+	// Register protocol instance
+	log.Lvl3(smc.ServerIdentity(), "Registering close-session protocol instance")
+	err = smc.RegisterProtocolInstance(protocol)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not register protocol instance:", err)
+		return err
+	}
 
-func (smc *Service) processCloseSessionBroadcastAnswer(msg *network.Envelope) {
-	answer := (msg.Msg).(*messages.CloseSessionBroadcastAnswer)
+	csp := protocol.(*protocols.CloseSessionProtocol)
 
-	log.Lvl1(smc.ServerIdentity(), "Received CloseSessionBroadcastAnswer:", answer.ReqID)
+	// Start the protocol
+	log.Lvl2(smc.ServerIdentity(), "Starting close-session protocol")
+	err = csp.Start()
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not start enc-to-shares protocol:", err)
+		return err
+	}
+	// Call dispatch (the main logic)
+	err = csp.Dispatch()
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not dispatch enc-to-shares protocol:", err)
+		return err
+	}
 
-	// Simply send answer through channel
-	smc.closeSessionBroadcastAnswers[answer.ReqID] <- answer
-	log.Lvl4(smc.ServerIdentity(), "Sent answer through channel")
+	// Wait for termination of protocol
+	log.Lvl2(csp.ServerIdentity(), "Waiting for close-session protocol to terminate...")
+	csp.WaitDone()
+	// At this point, the session has been closed
 
-	return
+	log.Lvl2(smc.ServerIdentity(), "Closed Session!")
+
+	return nil
 }
 
 // This method is executed at the server when receiving the root's CloseSessionReply.

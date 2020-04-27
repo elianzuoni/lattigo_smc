@@ -4,10 +4,12 @@ package service
 
 import (
 	"errors"
+	"github.com/ldsec/lattigo/bfv"
+	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
-	"lattigo-smc/utils"
+	"lattigo-smc/service/protocols"
 )
 
 func (smc *Service) HandleCreateSessionQuery(query *messages.CreateSessionQuery) (network.Message, error) {
@@ -63,17 +65,11 @@ func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
 
 	// Decide the SessionID (it has to be uniquely identifying across the system, so we generate it here)
 	sessionID := messages.NewSessionID()
-	// Create the broadcast message
-	broad := &messages.CreateSessionBroadcast{req.ReqID, sessionID, req.Query}
 
-	// Create channel before sending broadcast.
-	smc.createSessionBroadcastAnswers[req.ReqID] = make(chan *messages.CreateSessionBroadcastAnswer)
-
-	// Broadcast the message so that all nodes can create the session.
-	log.Lvl2(smc.ServerIdentity(), "Broadcasting message to all nodes")
-	err := utils.Broadcast(smc.ServiceProcessor, req.Query.Roster, broad)
+	// Launch the CreateSession protocol, to create the Session at all nodes
+	err := smc.createSession(sessionID, req.Query.Roster, req.Query.Params)
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not broadcast message:", err)
+		log.Error(smc.ServerIdentity(), "Could not create session:", err)
 		err = smc.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
@@ -81,20 +77,6 @@ func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
 
 		return
 	}
-
-	// Wait for all their answers. For now, they can only be positive
-	log.Lvl2(smc.ServerIdentity(), "Waiting for nodes' answers")
-	answers := 0
-	for answers < len(req.Query.Roster.List) {
-		// TODO: timeout if servers do not answer
-		// We don't care about the content of the answer, it is surely positive
-		_ = <-smc.createSessionBroadcastAnswers[req.ReqID]
-		answers += 1
-		log.Lvl4(smc.ServerIdentity(), "Received", answers, "answers")
-	}
-	// TODO: close channel?
-
-	log.Lvl3(smc.ServerIdentity(), "Received all answers")
 
 	// Send reply to server
 	reply.SessionID = sessionID
@@ -109,37 +91,65 @@ func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
-	broad := msg.Msg.(*messages.CreateSessionBroadcast)
+func (smc *Service) createSession(SessionID messages.SessionID, roster *onet.Roster, params *bfv.Parameters) error {
+	log.Lvl2(smc.ServerIdentity(), "Creating a session")
 
-	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcast")
-
-	// Create session as required
-	log.Lvl3(smc.ServerIdentity(), "Creating session")
-	smc.sessions.NewSession(broad.SessionID, broad.Query.Roster, broad.Query.Params)
-
-	// Answer to root
-	answer := &messages.CreateSessionBroadcastAnswer{broad.ReqID, true}
-	log.Lvl2(smc.ServerIdentity(), "Sending answer to root")
-	err := smc.SendRaw(msg.ServerIdentity, answer)
-	if err != nil {
-		log.Error("Could not answer to root:", err)
+	// Create TreeNodeInstance as root
+	tree := roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(smc.ServerIdentity(), err)
+		return err
 	}
-	log.Lvl4(smc.ServerIdentity(), "Sent answer to root")
+	tni := smc.NewTreeNodeInstance(tree, tree.Root, CreateSessionProtocolName)
 
-	return
-}
+	// Create configuration for the protocol instance
+	config := &messages.CreateSessionConfig{SessionID, roster, params}
+	data, err := config.MarshalBinary()
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
+		return err
+	}
 
-func (smc *Service) processCreateSessionBroadcastAnswer(msg *network.Envelope) {
-	answer := (msg.Msg).(*messages.CreateSessionBroadcastAnswer)
+	// Instantiate protocol
+	log.Lvl3(smc.ServerIdentity(), "Instantiating create-session protocol")
+	protocol, err := smc.NewProtocol(tni, &onet.GenericConfig{data})
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not instantiate create-session protocol", err)
+		return err
+	}
+	// Register protocol instance
+	log.Lvl3(smc.ServerIdentity(), "Registering create-session protocol instance")
+	err = smc.RegisterProtocolInstance(protocol)
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not register protocol instance:", err)
+		return err
+	}
 
-	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcastAnswer:", answer.ReqID)
+	csp := protocol.(*protocols.CreateSessionProtocol)
 
-	// Simply send answer through channel
-	smc.createSessionBroadcastAnswers[answer.ReqID] <- answer
-	log.Lvl4(smc.ServerIdentity(), "Sent answer through channel")
+	// Start the protocol
+	log.Lvl2(smc.ServerIdentity(), "Starting create-session protocol")
+	err = csp.Start()
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not start enc-to-shares protocol:", err)
+		return err
+	}
+	// Call dispatch (the main logic)
+	err = csp.Dispatch()
+	if err != nil {
+		log.Error(smc.ServerIdentity(), "Could not dispatch enc-to-shares protocol:", err)
+		return err
+	}
 
-	return
+	// Wait for termination of protocol
+	log.Lvl2(csp.ServerIdentity(), "Waiting for create-session protocol to terminate...")
+	csp.WaitDone()
+	// At this point, the session has been created
+
+	log.Lvl2(smc.ServerIdentity(), "Created Session!")
+
+	return nil
 }
 
 // This method is executed at the server when receiving the root's CreateSessionReply.

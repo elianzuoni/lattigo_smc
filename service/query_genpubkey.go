@@ -138,7 +138,7 @@ func (smc *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) erro
 		return err
 	}
 
-	// Create TreeNodeInstance as root (this method runs on the root)
+	// Create TreeNodeInstance as root
 	tree := s.Roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
 	if tree == nil {
 		err := errors.New("Could not create tree")

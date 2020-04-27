@@ -15,11 +15,6 @@ type Service struct {
 
 	sessions *session.SessionStore
 
-	// The CreateSession and CloseSession queries entail a broadcast from the root. The root waits for answers here
-	// TODO:  migrate to protocol
-	createSessionBroadcastAnswers map[messages.CreateSessionRequestID]chan *messages.CreateSessionBroadcastAnswer
-	closeSessionBroadcastAnswers  map[messages.CloseSessionRequestID]chan *messages.CloseSessionBroadcastAnswer
-
 	// Synchronisation point between HandleCreateSessionQuery and processCreateSessionReply
 	createSessionRepLock sync.RWMutex
 	createSessionReplies map[messages.CreateSessionRequestID]chan *messages.CreateSessionReply
@@ -47,9 +42,6 @@ func NewService(c *onet.Context) (onet.Service, error) {
 		ServiceProcessor: onet.NewServiceProcessor(c),
 
 		sessions: session.NewSessionStore(),
-
-		createSessionBroadcastAnswers: make(map[messages.CreateSessionRequestID]chan *messages.CreateSessionBroadcastAnswer),
-		closeSessionBroadcastAnswers:  make(map[messages.CloseSessionRequestID]chan *messages.CloseSessionBroadcastAnswer),
 
 		createSessionReplies: make(map[messages.CreateSessionRequestID]chan *messages.CreateSessionReply),
 		closeSessionReplies:  make(map[messages.CloseSessionRequestID]chan *messages.CloseSessionReply),
@@ -128,14 +120,10 @@ func registerClientQueryHandlers(smcService *Service) error {
 func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 	// Create Session
 	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCreateSessionRequest)
-	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCreateSessionBroadcast)
-	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCreateSessionBroadcastAnswer)
 	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCreateSessionReply)
 
 	// Close Session
 	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCloseSessionRequest)
-	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCloseSessionBroadcast)
-	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCloseSessionBroadcastAnswer)
 	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCloseSessionReply)
 
 	// Generate Public Key
@@ -200,14 +188,6 @@ func (smc *Service) Process(msg *network.Envelope) {
 		smc.processCreateSessionRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionBroadcast) {
-		smc.processCreateSessionBroadcast(msg)
-		return
-	}
-	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionBroadcastAnswer) {
-		smc.processCreateSessionBroadcastAnswer(msg)
-		return
-	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionReply) {
 		smc.processCreateSessionReply(msg)
 		return
@@ -216,14 +196,6 @@ func (smc *Service) Process(msg *network.Envelope) {
 	// Close Session
 	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionRequest) {
 		smc.processCloseSessionRequest(msg)
-		return
-	}
-	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionBroadcast) {
-		smc.processCloseSessionBroadcast(msg)
-		return
-	}
-	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionBroadcastAnswer) {
-		smc.processCloseSessionBroadcastAnswer(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionReply) {
