@@ -5,17 +5,16 @@ import (
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/messages"
 )
 
 // Handles the client's MultiplyQuery. Forwards the query to root, and waits for reply on a channel.
 // Either returns the new CipherID or an invalid response, depending on what the root replied.
-func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, error) {
+func (smc *Service) HandleMultiplyQuery(query *messages.MultiplyQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received MultiplyQuery:", query.CipherID1, "*", query.CipherID2)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -23,13 +22,13 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 	}
 
 	// Create MultiplyRequest with its ID
-	reqID := newMultiplyRequestID()
-	req := &MultiplyRequest{query.SessionID, reqID, query}
+	reqID := messages.NewMultiplyRequestID()
+	req := &messages.MultiplyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.multiplyRepLock.Lock()
-	s.multiplyReplies[reqID] = make(chan *MultiplyReply)
-	s.multiplyRepLock.Unlock()
+	s.MultiplyRepLock.Lock()
+	s.MultiplyReplies[reqID] = make(chan *messages.MultiplyReply)
+	s.MultiplyRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending MulitplyRequest to root:", reqID)
@@ -43,17 +42,17 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.multiplyRepLock.RLock()
-	replyChan := s.multiplyReplies[reqID]
-	s.multiplyRepLock.RUnlock()
+	s.MultiplyRepLock.RLock()
+	replyChan := s.MultiplyReplies[reqID]
+	s.MultiplyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.multiplyRepLock.Lock()
+	s.MultiplyRepLock.Lock()
 	close(replyChan)
-	delete(s.multiplyReplies, reqID)
-	s.multiplyRepLock.Unlock()
+	delete(s.MultiplyReplies, reqID)
+	s.MultiplyRepLock.Unlock()
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
@@ -65,7 +64,7 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel:", reply.NewCipherID)
 	}
 
-	return &MultiplyResponse{reply.NewCipherID, reply.Valid}, nil
+	return &messages.MultiplyResponse{reply.NewCipherID, reply.Valid}, nil
 }
 
 // This method is executed at the root when receiving a MultiplyRequest.
@@ -73,18 +72,16 @@ func (smc *Service) HandleMultiplyQuery(query *MultiplyQuery) (network.Message, 
 // on the result, it either returns an invalid reply, or performs the multiplication and stores the new
 // ciphertext under a new CipherID which is returned in a valid reply.
 func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*MultiplyRequest)
+	req := (msg.Msg).(*messages.MultiplyRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received MultiplyRequest ", req.ReqID,
 		"for product:", req.Query.CipherID1, "*", req.Query.CipherID2)
 
 	// Start by declaring reply with minimal fields.
-	reply := &MultiplyReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: NilCipherID, Valid: false}
+	reply := &messages.MultiplyReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: messages.NilCipherID, Valid: false}
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -97,9 +94,7 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 
 	// Check feasibilty
 	log.Lvl3(smc.ServerIdentity(), "Checking existence of ciphertexts")
-	s.databaseLock.RLock()
-	ct1, ok := s.database[req.Query.CipherID1]
-	s.databaseLock.RUnlock()
+	ct1, ok := s.GetCiphertext(req.Query.CipherID1)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID1, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -108,9 +103,7 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 		}
 		return
 	}
-	s.databaseLock.RLock()
-	ct2, ok := s.database[req.Query.CipherID2]
-	s.databaseLock.RUnlock()
+	ct2, ok := s.GetCiphertext(req.Query.CipherID2)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID2, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -126,10 +119,8 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 	ct := eval.MulNew(ct1, ct2)
 
 	// Register in local database
-	newCipherID := newCipherID(smc.ServerIdentity())
-	s.databaseLock.Lock()
-	s.database[newCipherID] = ct
-	s.databaseLock.Unlock()
+	newCipherID := messages.NewCipherID(smc.ServerIdentity())
+	s.StoreCiphertext(newCipherID, ct)
 
 	// Set fields in reply
 	reply.NewCipherID = newCipherID
@@ -149,23 +140,21 @@ func (smc *Service) processMultiplyRequest(msg *network.Envelope) {
 // This method is executed at the server when receiving the root's MultiplyReply.
 // It simply sends the reply through the channel.
 func (smc *Service) processMultiplyReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*MultiplyReply)
+	reply := (msg.Msg).(*messages.MultiplyReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received MultiplyReply:", reply.ReqID)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[reply.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(reply.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
 	// Simply send reply through channel
-	s.multiplyRepLock.RLock()
-	s.multiplyReplies[reply.ReqID] <- reply
-	s.multiplyRepLock.RUnlock()
+	s.MultiplyRepLock.RLock()
+	s.MultiplyReplies[reply.ReqID] <- reply
+	s.MultiplyRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

@@ -5,17 +5,16 @@ import (
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/messages"
 )
 
 // Handles the client's SumQuery. Forwards the query to root, and waits for reply on a channel.
 // Either returns the new CipherID or an invalid response, depending on what the root replied.
-func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
+func (smc *Service) HandleSumQuery(query *messages.SumQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received SumQuery:", query.CipherID1, "+", query.CipherID2)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -23,13 +22,13 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 	}
 
 	// Create SumRequest with its ID
-	reqID := newSumRequestID()
-	req := &SumRequest{query.SessionID, reqID, query}
+	reqID := messages.NewSumRequestID()
+	req := &messages.SumRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.sumRepLock.Lock()
-	s.sumReplies[reqID] = make(chan *SumReply)
-	s.sumRepLock.Unlock()
+	s.SumRepLock.Lock()
+	s.SumReplies[reqID] = make(chan *messages.SumReply)
+	s.SumRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending SumRequest to root:", reqID)
@@ -43,17 +42,17 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.sumRepLock.RLock()
-	replyChan := s.sumReplies[reqID]
-	s.sumRepLock.RUnlock()
+	s.SumRepLock.RLock()
+	replyChan := s.SumReplies[reqID]
+	s.SumRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.sumRepLock.Lock()
+	s.SumRepLock.Lock()
 	close(replyChan)
-	delete(s.sumReplies, reqID)
-	s.sumRepLock.Unlock()
+	delete(s.SumReplies, reqID)
+	s.SumRepLock.Unlock()
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
@@ -65,7 +64,7 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel:", reply.NewCipherID)
 	}
 
-	return &SumResponse{reply.NewCipherID, reply.Valid}, nil
+	return &messages.SumResponse{reply.NewCipherID, reply.Valid}, nil
 }
 
 // This method is executed at the root when receiving a SumRequest.
@@ -73,18 +72,16 @@ func (smc *Service) HandleSumQuery(query *SumQuery) (network.Message, error) {
 // on the result, it either returns an invalid reply, or performs the sum and stores the new ciphertext under a new
 // CipherID which is returned in a valid reply.
 func (smc *Service) processSumRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*SumRequest)
+	req := (msg.Msg).(*messages.SumRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received SumRequest ", req.ReqID, "for sum:",
 		req.Query.CipherID1, "+", req.Query.CipherID2)
 
 	// Start by declaring reply with minimal fields.
-	reply := &SumReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: NilCipherID, Valid: false}
+	reply := &messages.SumReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: messages.NilCipherID, Valid: false}
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -97,9 +94,7 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 
 	// Check feasibility
 	log.Lvl3(smc.ServerIdentity(), "Checking existence of ciphertexts")
-	s.databaseLock.RLock()
-	ct1, ok := s.database[req.Query.CipherID1]
-	s.databaseLock.RUnlock()
+	ct1, ok := s.GetCiphertext(req.Query.CipherID1)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID1, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -108,9 +103,7 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 		}
 		return
 	}
-	s.databaseLock.RLock()
-	ct2, ok := s.database[req.Query.CipherID2]
-	s.databaseLock.RUnlock()
+	ct2, ok := s.GetCiphertext(req.Query.CipherID2)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID2, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply)
@@ -126,10 +119,8 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 	ct := eval.AddNew(ct1, ct2)
 
 	// Register in local database
-	newCipherID := newCipherID(smc.ServerIdentity())
-	s.databaseLock.Lock()
-	s.database[newCipherID] = ct
-	s.databaseLock.Unlock()
+	newCipherID := messages.NewCipherID(smc.ServerIdentity())
+	s.StoreCiphertext(newCipherID, ct)
 
 	// Set fields in reply
 	reply.NewCipherID = newCipherID
@@ -149,23 +140,21 @@ func (smc *Service) processSumRequest(msg *network.Envelope) {
 // This method is executed at the server when receiving the root's SumReply.
 // It simply sends the reply through the channel.
 func (smc *Service) processSumReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*SumReply)
+	reply := (msg.Msg).(*messages.SumReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received SumReply:", reply.ReqID)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[reply.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(reply.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
 	// Simply send reply through channel
-	s.sumRepLock.RLock()
-	s.sumReplies[reply.ReqID] <- reply
-	s.sumRepLock.RUnlock()
+	s.SumRepLock.RLock()
+	s.SumReplies[reply.ReqID] <- reply
+	s.SumRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

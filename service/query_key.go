@@ -6,20 +6,19 @@ import (
 	"errors"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/messages"
 )
 
 // HandleKeyQuery is the handler registered for message type KeyQuery: a client asks this server to retrieve keys
 // from the root.
 // The request is forwarded to the root, and the method returns a response based on the reply sent by the server,
 // indicating which keys were retrieved.
-func (smc *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
+func (smc *Service) HandleKeyQuery(query *messages.KeyQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received KeyQuery query. ReqRotKey:", query.RotationKey,
 		"; ReqEvalKey:", query.EvaluationKey)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -27,13 +26,13 @@ func (smc *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 	}
 
 	// Create KeyRequest with its ID
-	reqID := newKeyRequestID()
-	req := &KeyRequest{query.SessionID, reqID, query}
+	reqID := messages.NewKeyRequestID()
+	req := &messages.KeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.keyRepLock.Lock()
-	s.keyReplies[reqID] = make(chan *KeyReply)
-	s.keyRepLock.Unlock()
+	s.KeyRepLock.Lock()
+	s.KeyReplies[reqID] = make(chan *messages.KeyReply)
+	s.KeyRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending KeyRequest to root:", reqID)
@@ -49,52 +48,50 @@ func (smc *Service) HandleKeyQuery(query *KeyQuery) (network.Message, error) {
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.keyRepLock.RLock()
-	replyChan := s.keyReplies[reqID]
-	s.keyRepLock.RUnlock()
+	s.KeyRepLock.RLock()
+	replyChan := s.KeyReplies[reqID]
+	s.KeyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.keyRepLock.Lock()
+	s.KeyRepLock.Lock()
 	close(replyChan)
-	delete(s.keyReplies, reqID)
-	s.keyRepLock.Unlock()
+	delete(s.KeyReplies, reqID)
+	s.KeyRepLock.Unlock()
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
 	// Save (in the Service struct) the received keys.
 	if reply.EvalKey != nil {
 		// We don't need to hold the lock
-		s.evalKeyLock.Lock()
-		s.evalKey = reply.EvalKey
-		s.evalKeyLock.Unlock()
+		s.EvalKeyLock.Lock()
+		s.EvalKey = reply.EvalKey
+		s.EvalKeyLock.Unlock()
 	}
 	if reply.RotKeys != nil {
 		// We don't need to hold the lock
-		s.rotKeyLock.Lock()
-		s.rotationKey = reply.RotKeys // TODO: overwrite no matter what?
-		s.rotKeyLock.Unlock()
+		s.RotKeyLock.Lock()
+		s.RotationKey = reply.RotKeys // TODO: overwrite no matter what?
+		s.RotKeyLock.Unlock()
 	}
 
-	return &KeyResponse{reply.EvalKey != nil, reply.RotKeys != nil, reply.Valid}, nil
+	return &messages.KeyResponse{reply.EvalKey != nil, reply.RotKeys != nil, reply.Valid}, nil
 }
 
 // KeyQuery is received at root from server.
 // It comprises two flags, signalling which keys the server is asking for.
 func (smc *Service) processKeyRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*KeyRequest)
+	req := (msg.Msg).(*messages.KeyRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received KeyQuery. ReqRotKey:", req.Query.RotationKey,
 		"; ReqEvalKey:", req.Query.EvaluationKey)
 
 	// Start by declaring reply with minimal fields.
-	reply := &KeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+	reply := &messages.KeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -107,15 +104,15 @@ func (smc *Service) processKeyRequest(msg *network.Envelope) {
 
 	if req.Query.EvaluationKey {
 		// We don't need to hold the lock
-		s.evalKeyLock.RLock()
-		reply.EvalKey = s.evalKey
-		s.evalKeyLock.RUnlock()
+		s.EvalKeyLock.RLock()
+		reply.EvalKey = s.EvalKey
+		s.EvalKeyLock.RUnlock()
 	}
 	if req.Query.RotationKey {
 		// We don't need to hold the lock
-		s.rotKeyLock.RLock()
-		reply.RotKeys = s.rotationKey
-		s.rotKeyLock.RUnlock()
+		s.RotKeyLock.RLock()
+		reply.RotKeys = s.RotationKey
+		s.RotKeyLock.RUnlock()
 	}
 	reply.Valid = true
 
@@ -130,22 +127,20 @@ func (smc *Service) processKeyRequest(msg *network.Envelope) {
 // This method is executed at the server when receiving the root's KeyReply.
 // It just sends the reply through the channel.
 func (smc *Service) processKeyReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*KeyReply)
+	reply := (msg.Msg).(*messages.KeyReply)
 	log.Lvl1(smc.ServerIdentity(), "Server. Received KeyReply. RotKeyRcvd:", reply.RotKeys != nil,
 		"EvalKeyRcvd:", reply.EvalKey != nil)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[reply.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(reply.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
 	// Simply send reply through channel
-	s.keyRepLock.RLock()
-	s.keyReplies[reply.ReqID] <- reply
-	s.keyRepLock.RUnlock()
+	s.KeyRepLock.RLock()
+	s.KeyReplies[reply.ReqID] <- reply
+	s.KeyRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 }

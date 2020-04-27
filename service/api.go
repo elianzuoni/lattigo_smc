@@ -11,6 +11,7 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/messages"
 	"lattigo-smc/utils"
 )
 
@@ -24,7 +25,7 @@ type Client struct {
 	entryPoint *network.ServerIdentity
 
 	// The information on the session this Client is currently attached to
-	sessionID SessionID
+	sessionID messages.SessionID
 	masterPK  *bfv.PublicKey
 	encryptor bfv.Encryptor
 
@@ -52,7 +53,7 @@ func NewClient(entryPoint *network.ServerIdentity, clientID string, params *bfv.
 		clientID:   clientID,
 		entryPoint: entryPoint,
 
-		sessionID: NilSessionID,
+		sessionID: messages.NilSessionID,
 		masterPK:  nil,
 	}
 
@@ -67,20 +68,20 @@ func NewClient(entryPoint *network.ServerIdentity, clientID string, params *bfv.
 
 // isBound returns whether or not the client is already bound to a session.
 func (c *Client) isBound() bool {
-	return c.sessionID != NilSessionID
+	return c.sessionID != messages.NilSessionID
 }
 
 // Sends a CreateSessionQuery to the system (only if the client isn't already bound), and then
 // a GenPubKeyQuery, because a session without its masterPK makes no sense
 // The argument "seed" can be nil, in which case a default one is used.
-func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bfv.PublicKey, error) {
+func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (messages.SessionID, *bfv.PublicKey, error) {
 	log.Lvl1(c, "Creating new session")
 
 	// Check that the client isn't already bound
 	if c.isBound() {
 		err := errors.New("Cannot CreateSession: is already bound")
 		log.Error(c, err)
-		return NilSessionID, nil, err
+		return messages.NilSessionID, nil, err
 	}
 
 	// Create session
@@ -91,40 +92,40 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bf
 	}
 
 	// Craft CreateSessionQuery and prepare response
-	sessQuery := &CreateSessionQuery{roster, c.params}
-	sessResp := &CreateSessionResponse{}
+	sessQuery := &messages.CreateSessionQuery{roster, c.params}
+	sessResp := &messages.CreateSessionResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending CreateSession query to entry point")
 	err := c.SendProtobuf(c.entryPoint, sessQuery, sessResp)
 	if err != nil {
 		log.Error(c, "CreateSession query returned error:", err)
-		return NilSessionID, nil, err
+		return messages.NilSessionID, nil, err
 	}
 	if !sessResp.Valid {
 		err = errors.New("Received response is invalid. Service could not create session.")
 		log.Error(c, err)
-		return NilSessionID, nil, err
+		return messages.NilSessionID, nil, err
 	}
 	log.Lvl3(c, "CreateSession query was successful!")
 
 	// Generate master public key
 
 	// Craft GenPubKeyQuery and prepare response
-	pubKeyQuery := &GenPubKeyQuery{sessResp.SessionID, seed}
-	pubKeyResp := &GenPubKeyResponse{}
+	pubKeyQuery := &messages.GenPubKeyQuery{sessResp.SessionID, seed}
+	pubKeyResp := &messages.GenPubKeyResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending GenPubKey query to entry point")
 	err = c.SendProtobuf(c.entryPoint, pubKeyQuery, pubKeyResp)
 	if err != nil {
 		log.Error(c, "GenPubKey query returned error:", err)
-		return NilSessionID, nil, err
+		return messages.NilSessionID, nil, err
 	}
 	if !pubKeyResp.Valid {
 		err = errors.New("Received response is invalid. Service could not generate public key.")
 		log.Error(c, err)
-		return NilSessionID, nil, err
+		return messages.NilSessionID, nil, err
 	}
 	log.Lvl3(c, "GenPubKey query was successful!")
 
@@ -137,7 +138,7 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (SessionID, *bf
 }
 
 // BindToSession binds the client to an already existing session, without triggering any query to the system.
-func (c *Client) BindToSession(sessionID SessionID, masterPK *bfv.PublicKey) error {
+func (c *Client) BindToSession(sessionID messages.SessionID, masterPK *bfv.PublicKey) error {
 	// Check that the client is not bound
 	if c.isBound() {
 		err := errors.New("Cannot BindToSession: is already bound")
@@ -168,8 +169,8 @@ func (c *Client) CloseSession() error {
 	// Close session
 
 	// Craft CloseSessionQuery and prepare response
-	query := &CloseSessionQuery{c.sessionID}
-	resp := &CloseSessionResponse{}
+	query := &messages.CloseSessionQuery{c.sessionID}
+	resp := &messages.CloseSessionResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending CloseSession query to entry point")
@@ -202,7 +203,7 @@ func (c *Client) UnbindFromSession() error {
 	}
 
 	// Unset session parameters
-	c.sessionID = NilSessionID
+	c.sessionID = messages.NilSessionID
 	c.masterPK = nil
 	c.encryptor = nil
 
@@ -227,8 +228,8 @@ func (c *Client) SendGenEvalKeyQuery(seed []byte) error {
 	}
 
 	// Craft query and prepare response
-	query := &GenEvalKeyQuery{c.sessionID, seed}
-	resp := &GenEvalKeyResponse{}
+	query := &messages.GenEvalKeyQuery{c.sessionID, seed}
+	resp := &messages.GenEvalKeyResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
@@ -266,8 +267,8 @@ func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64, seed []byte) error {
 	}
 
 	// Craft query and prepare response
-	query := &GenRotKeyQuery{c.sessionID, rotIdx, K, seed}
-	resp := &GenRotKeyResponse{}
+	query := &messages.GenRotKeyQuery{c.sessionID, rotIdx, K, seed}
+	resp := &messages.GenRotKeyResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
@@ -292,9 +293,9 @@ func (c *Client) SendKeyQuery(getEvK, getRtK bool) (bool, bool, error) {
 	log.Lvl1(c, "Called to send a key query")
 
 	// Build query
-	query := KeyQuery{c.sessionID, getEvK, getRtK}
+	query := messages.KeyQuery{c.sessionID, getEvK, getRtK}
 
-	resp := KeyResponse{}
+	resp := messages.KeyResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
@@ -315,14 +316,14 @@ func (c *Client) SendKeyQuery(getEvK, getRtK bool) (bool, bool, error) {
 }
 
 // SendStoreQuery sends a query to store in the system the provided vector. The vector is encrypted locally.
-func (c *Client) SendStoreQuery(data []uint64) (CipherID, error) {
+func (c *Client) SendStoreQuery(data []uint64) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a store query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	// Encrypt data
@@ -331,20 +332,20 @@ func (c *Client) SendStoreQuery(data []uint64) (CipherID, error) {
 	cipher := c.encryptor.EncryptNew(plain)
 
 	// Craft query and prepare response
-	query := &StoreQuery{c.sessionID, cipher}
-	resp := &StoreResponse{}
+	query := &messages.StoreQuery{c.sessionID, cipher}
+	resp := &messages.StoreResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Store query returned error:", err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid: service could not store")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	log.Lvl2(c, "Store query was successful")
@@ -354,7 +355,7 @@ func (c *Client) SendStoreQuery(data []uint64) (CipherID, error) {
 
 // SendRetrieveQuery sends a query to retrieve the ciphertext indexed by cipherID, switched under the
 // client's own public key. The switched ciphertext is decrypted locally and returned in clear.
-func (c *Client) SendRetrieveQuery(cipherID CipherID) ([]uint64, error) {
+func (c *Client) SendRetrieveQuery(cipherID messages.CipherID) ([]uint64, error) {
 	log.Lvl1(c, "Called to send a retrieve query")
 
 	// Check that the client is bound
@@ -365,8 +366,8 @@ func (c *Client) SendRetrieveQuery(cipherID CipherID) ([]uint64, error) {
 	}
 
 	// Craft query and prepare response
-	query := &RetrieveQuery{c.sessionID, c.pk, cipherID}
-	resp := &RetrieveResponse{}
+	query := &messages.RetrieveQuery{c.sessionID, c.pk, cipherID}
+	resp := &messages.RetrieveResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
@@ -392,31 +393,31 @@ func (c *Client) SendRetrieveQuery(cipherID CipherID) ([]uint64, error) {
 }
 
 // SendSumQuery sends a query to sum two ciphertexts.
-func (c *Client) SendSumQuery(cipherID1, cipherID2 CipherID) (CipherID, error) {
+func (c *Client) SendSumQuery(cipherID1, cipherID2 messages.CipherID) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a sum query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	// Craft query and prepare response
-	query := &SumQuery{c.sessionID, cipherID1, cipherID2}
-	resp := &SumResponse{}
+	query := &messages.SumQuery{c.sessionID, cipherID1, cipherID2}
+	resp := &messages.SumResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Sum query returned error:", err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not sum.")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	log.Lvl2(c, "Sum query was successful")
@@ -425,31 +426,31 @@ func (c *Client) SendSumQuery(cipherID1, cipherID2 CipherID) (CipherID, error) {
 }
 
 // SendMultiplyQuery sends a query to sum two ciphertexts.
-func (c *Client) SendMultiplyQuery(cipherID1, cipherID2 CipherID) (CipherID, error) {
+func (c *Client) SendMultiplyQuery(cipherID1, cipherID2 messages.CipherID) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a multiply query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	// Craft query and prepare response
-	query := &MultiplyQuery{c.sessionID, cipherID1, cipherID2}
-	resp := &MultiplyResponse{}
+	query := &messages.MultiplyQuery{c.sessionID, cipherID1, cipherID2}
+	resp := &messages.MultiplyResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Multiply query returned error:", err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not multiply.")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	log.Lvl2(c, "Multiply query was successful")
@@ -458,31 +459,31 @@ func (c *Client) SendMultiplyQuery(cipherID1, cipherID2 CipherID) (CipherID, err
 }
 
 // SendRelinQuery sends a query to relinearise the ciphertext indexed by cipherID.
-func (c *Client) SendRelinQuery(cipherID CipherID) (CipherID, error) {
+func (c *Client) SendRelinQuery(cipherID messages.CipherID) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a relinearisation query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	// Craft query and prepare response
-	query := &RelinQuery{c.sessionID, cipherID}
-	resp := &RelinResponse{}
+	query := &messages.RelinQuery{c.sessionID, cipherID}
+	resp := &messages.RelinResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Relinearisation query returned error:", err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not relinearise.")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	log.Lvl2(c, "Relinearisation query was successful")
@@ -491,31 +492,31 @@ func (c *Client) SendRelinQuery(cipherID CipherID) (CipherID, error) {
 }
 
 // SendRotationQuery sends a query to perform arotIdx-rotation of k positions on the ciphertext indexed by cipherID.
-func (c *Client) SendRotationQuery(cipherID CipherID, rotIdx int, K uint64) (CipherID, error) {
+func (c *Client) SendRotationQuery(cipherID messages.CipherID, rotIdx int, K uint64) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a rotation query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	// Craft query and prepare response
-	query := &RotationQuery{c.sessionID, cipherID, K, rotIdx}
-	resp := &RotationResponse{}
+	query := &messages.RotationQuery{c.sessionID, cipherID, K, rotIdx}
+	resp := &messages.RotationResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Refresh query returned error:", err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not rotate.")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	log.Lvl2(c, "Refresh query was successful")
@@ -525,31 +526,31 @@ func (c *Client) SendRotationQuery(cipherID CipherID, rotIdx int, K uint64) (Cip
 
 // SendRefreshQuery sends a query to refresh the ciphertext indexed by cipherID.
 // The argument "seed" can be nil, in which case a default one is used.
-func (c *Client) SendRefreshQuery(cipherID CipherID, seed []byte) (CipherID, error) {
+func (c *Client) SendRefreshQuery(cipherID messages.CipherID, seed []byte) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a refresh query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	// Craft query and prepare response
-	query := &RefreshQuery{c.sessionID, cipherID, seed}
-	resp := &RefreshResponse{}
+	query := &messages.RefreshQuery{c.sessionID, cipherID, seed}
+	resp := &messages.RefreshResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Refresh query returned error:", err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not refresh.")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	log.Lvl2(c, "Refresh query was successful")
@@ -558,31 +559,31 @@ func (c *Client) SendRefreshQuery(cipherID CipherID, seed []byte) (CipherID, err
 }
 
 // SendEncToSharesQuery sends a query to share the ciphertext indexed by cipherID.
-func (c *Client) SendEncToSharesQuery(cipherID CipherID) (SharesID, error) {
+func (c *Client) SendEncToSharesQuery(cipherID messages.CipherID) (messages.SharesID, error) {
 	log.Lvl1(c, "Called to send an enc-to-shares query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilSharesID, err
+		return messages.NilSharesID, err
 	}
 
 	// Craft query and prepare response
-	query := &EncToSharesQuery{c.sessionID, cipherID}
-	resp := &EncToSharesResponse{}
+	query := &messages.EncToSharesQuery{c.sessionID, cipherID}
+	resp := &messages.EncToSharesResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Enc-to-shares query returned error:", err)
-		return NilSharesID, err
+		return messages.NilSharesID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not share.")
 		log.Error(c, err)
-		return NilSharesID, err
+		return messages.NilSharesID, err
 	}
 
 	log.Lvl2(c, "Enc-to-shares query was successful")
@@ -592,31 +593,31 @@ func (c *Client) SendEncToSharesQuery(cipherID CipherID) (SharesID, error) {
 
 // SendSharesToEncQuery sends a query to re-encrypt the ciphertext with the shares indexed by cipherID.
 // The argument "seed" can be nil, in which case a default one is used.
-func (c *Client) SendSharesToEncQuery(sharesID SharesID, seed []byte) (CipherID, error) {
+func (c *Client) SendSharesToEncQuery(sharesID messages.SharesID, seed []byte) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a shares-to-enc query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	// Craft query and prepare response
-	query := &SharesToEncQuery{c.sessionID, sharesID, seed}
-	resp := &SharesToEncResponse{}
+	query := &messages.SharesToEncQuery{c.sessionID, sharesID, seed}
+	resp := &messages.SharesToEncResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Shares-to-enc query returned error:", err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not share.")
 		log.Error(c, err)
-		return NilCipherID, err
+		return messages.NilCipherID, err
 	}
 
 	log.Lvl2(c, "Shares-to-enc query was successful")

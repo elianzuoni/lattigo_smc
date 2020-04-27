@@ -6,15 +6,14 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
+	"lattigo-smc/service/messages"
 )
 
-func (smc *Service) HandleGenPubKeyQuery(query *GenPubKeyQuery) (network.Message, error) {
+func (smc *Service) HandleGenPubKeyQuery(query *messages.GenPubKeyQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received GenPubKeyQuery")
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -22,13 +21,13 @@ func (smc *Service) HandleGenPubKeyQuery(query *GenPubKeyQuery) (network.Message
 	}
 
 	// Create GenPubKeyRequest with its ID
-	reqID := newGenPubKeyRequestID()
-	req := &GenPubKeyRequest{query.SessionID, reqID, query}
+	reqID := messages.NewGenPubKeyRequestID()
+	req := &messages.GenPubKeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.genPubKeyRepLock.Lock()
-	s.genPubKeyReplies[reqID] = make(chan *GenPubKeyReply)
-	s.genPubKeyRepLock.Unlock()
+	s.GenPubKeyRepLock.Lock()
+	s.GenPubKeyReplies[reqID] = make(chan *messages.GenPubKeyReply)
+	s.GenPubKeyRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending GenPubKeyRequest to root:", reqID)
@@ -42,17 +41,17 @@ func (smc *Service) HandleGenPubKeyQuery(query *GenPubKeyQuery) (network.Message
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.genPubKeyRepLock.RLock()
-	replyChan := s.genPubKeyReplies[reqID]
-	s.genPubKeyRepLock.RUnlock()
+	s.GenPubKeyRepLock.RLock()
+	replyChan := s.GenPubKeyReplies[reqID]
+	s.GenPubKeyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.genPubKeyRepLock.Lock()
+	s.GenPubKeyRepLock.Lock()
 	close(replyChan)
-	delete(s.genPubKeyReplies, reqID)
-	s.genPubKeyRepLock.Unlock()
+	delete(s.GenPubKeyReplies, reqID)
+	s.GenPubKeyRepLock.Unlock()
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
@@ -64,21 +63,19 @@ func (smc *Service) HandleGenPubKeyQuery(query *GenPubKeyQuery) (network.Message
 		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 	}
 
-	return &GenPubKeyResponse{reply.MasterPublicKey, reply.Valid}, nil
+	return &messages.GenPubKeyResponse{reply.MasterPublicKey, reply.Valid}, nil
 }
 
 func (smc *Service) processGenPubKeyRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*GenPubKeyRequest)
+	req := (msg.Msg).(*messages.GenPubKeyRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received GenPubKeyRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &GenPubKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+	reply := &messages.GenPubKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -118,13 +115,11 @@ func (smc *Service) processGenPubKeyRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) genPublicKey(SessionID SessionID, Seed []byte) error {
+func (smc *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) error {
 	log.Lvl1(smc.ServerIdentity(), "Root. Generating PublicKey")
 
 	// Extract session
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -135,8 +130,8 @@ func (smc *Service) genPublicKey(SessionID SessionID, Seed []byte) error {
 	// We must hold the lock until the end, because only at the end the PubKey is generated
 	// We can do so, because no other lock is held by this goroutine, or any other which waits for this
 	// or for which this waits.
-	s.pubKeyLock.Lock()
-	defer s.pubKeyLock.Unlock()
+	s.PubKeyLock.Lock()
+	defer s.PubKeyLock.Unlock()
 	if s.MasterPublicKey != nil {
 		err := errors.New("MasterPublicKey is already set")
 		log.Error(smc.ServerIdentity(), err)
@@ -144,11 +139,16 @@ func (smc *Service) genPublicKey(SessionID SessionID, Seed []byte) error {
 	}
 
 	// Create TreeNodeInstance as root (this method runs on the root)
-	tree := s.Roster.GenerateBinaryTree()
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(smc.ServerIdentity(), err)
+		return err
+	}
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveKeyGenerationProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &GenPubKeyConfig{SessionID, Seed}
+	config := &messages.GenPubKeyConfig{SessionID, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -198,23 +198,21 @@ func (smc *Service) genPublicKey(SessionID SessionID, Seed []byte) error {
 }
 
 func (smc *Service) processGenPubKeyReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*GenPubKeyReply)
+	reply := (msg.Msg).(*messages.GenPubKeyReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received GenPubKeyReply")
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[reply.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(reply.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
 	// Simply send reply through channel
-	s.genPubKeyRepLock.RLock()
-	s.genPubKeyReplies[reply.ReqID] <- reply
-	s.genPubKeyRepLock.RUnlock()
+	s.GenPubKeyRepLock.RLock()
+	s.GenPubKeyReplies[reply.ReqID] <- reply
+	s.GenPubKeyRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

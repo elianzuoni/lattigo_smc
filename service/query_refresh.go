@@ -7,15 +7,14 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
+	"lattigo-smc/service/messages"
 )
 
-func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, error) {
+func (smc *Service) HandleRefreshQuery(query *messages.RefreshQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received RefreshQuery for ciphertext:", query.CipherID)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -23,13 +22,13 @@ func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, er
 	}
 
 	// Create RefreshRequest with its ID
-	reqID := newRefreshRequestID()
-	req := &RefreshRequest{query.SessionID, reqID, query}
+	reqID := messages.NewRefreshRequestID()
+	req := &messages.RefreshRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.refreshRepLock.Lock()
-	s.refreshReplies[reqID] = make(chan *RefreshReply)
-	s.refreshRepLock.Unlock()
+	s.RefreshRepLock.Lock()
+	s.RefreshReplies[reqID] = make(chan *messages.RefreshReply)
+	s.RefreshRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending RefreshRequest to root:", reqID)
@@ -43,17 +42,17 @@ func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, er
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.refreshRepLock.RLock()
-	replyChan := s.refreshReplies[reqID]
-	s.refreshRepLock.RUnlock()
+	s.RefreshRepLock.RLock()
+	replyChan := s.RefreshReplies[reqID]
+	s.RefreshRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.refreshRepLock.Lock()
+	s.RefreshRepLock.Lock()
 	close(replyChan)
-	delete(s.refreshReplies, reqID)
-	s.refreshRepLock.Unlock()
+	delete(s.RefreshReplies, reqID)
+	s.RefreshRepLock.Unlock()
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
@@ -64,21 +63,19 @@ func (smc *Service) HandleRefreshQuery(query *RefreshQuery) (network.Message, er
 	}
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 
-	return &RefreshResponse{reply.NewCipherID, reply.Valid}, nil
+	return &messages.RefreshResponse{reply.NewCipherID, reply.Valid}, nil
 }
 
 func (smc *Service) processRefreshRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*RefreshRequest)
+	req := (msg.Msg).(*messages.RefreshRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received RefreshRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &RefreshReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+	reply := &messages.RefreshReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -90,9 +87,7 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 	}
 
 	// Check existence of ciphertext
-	s.databaseLock.RLock()
-	ct, ok := s.database[req.Query.CipherID]
-	s.databaseLock.RUnlock()
+	ct, ok := s.GetCiphertext(req.Query.CipherID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -116,10 +111,8 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 	}
 
 	// Register in the local database
-	newCipherID := newCipherID(smc.ServerIdentity())
-	s.databaseLock.Lock()
-	s.database[newCipherID] = ctRefresh
-	s.databaseLock.Unlock()
+	newCipherID := messages.NewCipherID(smc.ServerIdentity())
+	s.StoreCiphertext(newCipherID, ctRefresh)
 
 	log.Lvl3(smc.ServerIdentity(), "Successfully refreshed ciphertext")
 
@@ -138,13 +131,11 @@ func (smc *Service) processRefreshRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext, Seed []byte) (*bfv.Ciphertext, error) {
+func (smc *Service) refreshCiphertext(SessionID messages.SessionID, ct *bfv.Ciphertext, Seed []byte) (*bfv.Ciphertext, error) {
 	log.Lvl2(smc.ServerIdentity(), "Performing refresh")
 
 	// Extract session
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -152,11 +143,16 @@ func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext, S
 	}
 
 	// Create TreeNodeInstance as root (this method runs on the root)
-	tree := s.Roster.GenerateBinaryTree()
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.CollectiveRefreshName)
 
 	// Create configuration for the protocol instance
-	config := &RefreshConfig{SessionID, ct, Seed}
+	config := &messages.RefreshConfig{SessionID, ct, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -204,23 +200,21 @@ func (smc *Service) refreshCiphertext(SessionID SessionID, ct *bfv.Ciphertext, S
 }
 
 func (smc *Service) processRefreshReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*RefreshReply)
+	reply := (msg.Msg).(*messages.RefreshReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received RefreshReply")
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[reply.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(reply.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
 	// Simply send reply through channel
-	s.refreshRepLock.RLock()
-	s.refreshReplies[reply.ReqID] <- reply
-	s.refreshRepLock.RUnlock()
+	s.RefreshRepLock.RLock()
+	s.RefreshReplies[reply.ReqID] <- reply
+	s.RefreshRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

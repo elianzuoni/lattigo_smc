@@ -7,15 +7,14 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
+	"lattigo-smc/service/messages"
 )
 
-func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Message, error) {
+func (smc *Service) HandleEncToSharesQuery(query *messages.EncToSharesQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received EncToSharesQuery for ciphertext:", query.CipherID)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -23,13 +22,13 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 	}
 
 	// Create EncToSharesRequest with its ID
-	reqID := newEncToSharesRequestID()
-	req := &EncToSharesRequest{query.SessionID, reqID, query}
+	reqID := messages.NewEncToSharesRequestID()
+	req := &messages.EncToSharesRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.encToSharesRepLock.Lock()
-	s.encToSharesReplies[reqID] = make(chan *EncToSharesReply)
-	s.encToSharesRepLock.Unlock()
+	s.EncToSharesRepLock.Lock()
+	s.EncToSharesReplies[reqID] = make(chan *messages.EncToSharesReply)
+	s.EncToSharesRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending EncToSharesRequest to root:", reqID)
@@ -43,17 +42,17 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.encToSharesRepLock.RLock()
-	replyChan := s.encToSharesReplies[reqID]
-	s.encToSharesRepLock.RUnlock()
+	s.EncToSharesRepLock.RLock()
+	replyChan := s.EncToSharesReplies[reqID]
+	s.EncToSharesRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.encToSharesRepLock.Lock()
+	s.EncToSharesRepLock.Lock()
 	close(replyChan)
-	delete(s.encToSharesReplies, reqID)
-	s.encToSharesRepLock.Unlock()
+	delete(s.EncToSharesReplies, reqID)
+	s.EncToSharesRepLock.Unlock()
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
@@ -64,21 +63,19 @@ func (smc *Service) HandleEncToSharesQuery(query *EncToSharesQuery) (network.Mes
 	}
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 
-	return &EncToSharesResponse{reply.SharesID, reply.Valid}, nil
+	return &messages.EncToSharesResponse{reply.SharesID, reply.Valid}, nil
 }
 
 func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*EncToSharesRequest)
+	req := (msg.Msg).(*messages.EncToSharesRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received EncToSharesRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &EncToSharesReply{SessionID: req.SessionID, ReqID: req.ReqID, SharesID: NilSharesID, Valid: false}
+	reply := &messages.EncToSharesReply{SessionID: req.SessionID, ReqID: req.ReqID, SharesID: messages.NilSharesID, Valid: false}
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -90,9 +87,7 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	}
 
 	// Check existence of ciphertext
-	s.databaseLock.RLock()
-	ct, ok := s.database[req.Query.CipherID]
-	s.databaseLock.RUnlock()
+	ct, ok := s.GetCiphertext(req.Query.CipherID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field valid stays false
@@ -104,7 +99,7 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	}
 
 	// Generate new SharesID
-	sharesID := newSharesID()
+	sharesID := messages.NewSharesID()
 
 	// Then, launch the enc-to-shares protocol to get the shared ciphertext
 	log.Lvl2(smc.ServerIdentity(), "Sharing ciphertext")
@@ -137,13 +132,11 @@ func (smc *Service) processEncToSharesRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) shareCiphertext(SessionID SessionID, SharesID SharesID, ct *bfv.Ciphertext) error {
+func (smc *Service) shareCiphertext(SessionID messages.SessionID, SharesID messages.SharesID, ct *bfv.Ciphertext) error {
 	log.Lvl2(smc.ServerIdentity(), "Sharing a ciphertext")
 
 	// Extract session
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -151,11 +144,16 @@ func (smc *Service) shareCiphertext(SessionID SessionID, SharesID SharesID, ct *
 	}
 
 	// Create TreeNodeInstance as root (this method runs on the root)
-	tree := s.Roster.GenerateBinaryTree()
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(smc.ServerIdentity(), err)
+		return err
+	}
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, EncToSharesProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &E2SConfig{SessionID, SharesID, ct}
+	config := &messages.E2SConfig{SessionID, SharesID, ct}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -204,23 +202,21 @@ func (smc *Service) shareCiphertext(SessionID SessionID, SharesID SharesID, ct *
 }
 
 func (smc *Service) processEncToSharesReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*EncToSharesReply)
+	reply := (msg.Msg).(*messages.EncToSharesReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received EncToSharesReply")
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[reply.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(reply.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
 	// Simply send reply through channel
-	s.encToSharesRepLock.RLock()
-	s.encToSharesReplies[reply.ReqID] <- reply
-	s.encToSharesRepLock.RUnlock()
+	s.EncToSharesRepLock.RLock()
+	s.EncToSharesReplies[reply.ReqID] <- reply
+	s.EncToSharesRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

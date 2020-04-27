@@ -6,19 +6,20 @@ import (
 	"errors"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/messages"
 	"lattigo-smc/utils"
 )
 
-func (smc *Service) HandleCreateSessionQuery(query *CreateSessionQuery) (network.Message, error) {
+func (smc *Service) HandleCreateSessionQuery(query *messages.CreateSessionQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionQuery")
 
 	// Create CreateSessionRequest with its ID
-	reqID := newCreateSessionRequestID()
-	req := &CreateSessionRequest{reqID, query}
+	reqID := messages.NewCreateSessionRequestID()
+	req := &messages.CreateSessionRequest{reqID, query}
 
 	// Create channel before sending request to root.
 	smc.createSessionRepLock.Lock()
-	smc.createSessionReplies[reqID] = make(chan *CreateSessionReply)
+	smc.createSessionReplies[reqID] = make(chan *messages.CreateSessionReply)
 	smc.createSessionRepLock.Unlock()
 
 	// Send request to root
@@ -49,24 +50,24 @@ func (smc *Service) HandleCreateSessionQuery(query *CreateSessionQuery) (network
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel, returning")
 
-	return &CreateSessionResponse{reply.SessionID, reply.Valid}, nil
+	return &messages.CreateSessionResponse{reply.SessionID, reply.Valid}, nil
 }
 
 func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*CreateSessionRequest)
+	req := (msg.Msg).(*messages.CreateSessionRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received CreateSessionRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &CreateSessionReply{ReqID: req.ReqID, Valid: false}
+	reply := &messages.CreateSessionReply{ReqID: req.ReqID, Valid: false}
 
 	// Decide the SessionID (it has to be uniquely identifying across the system, so we generate it here)
-	sessionID := newSessionID()
+	sessionID := messages.NewSessionID()
 	// Create the broadcast message
-	broad := &CreateSessionBroadcast{req.ReqID, sessionID, req.Query}
+	broad := &messages.CreateSessionBroadcast{req.ReqID, sessionID, req.Query}
 
 	// Create channel before sending broadcast.
-	smc.createSessionBroadcastAnswers[req.ReqID] = make(chan *CreateSessionBroadcastAnswer)
+	smc.createSessionBroadcastAnswers[req.ReqID] = make(chan *messages.CreateSessionBroadcastAnswer)
 
 	// Broadcast the message so that all nodes can create the session.
 	log.Lvl2(smc.ServerIdentity(), "Broadcasting message to all nodes")
@@ -109,21 +110,16 @@ func (smc *Service) processCreateSessionRequest(msg *network.Envelope) {
 }
 
 func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
-	broad := msg.Msg.(*CreateSessionBroadcast)
+	broad := msg.Msg.(*messages.CreateSessionBroadcast)
 
 	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcast")
 
 	// Create session as required
 	log.Lvl3(smc.ServerIdentity(), "Creating session")
-	session := smc.NewSession(broad.SessionID, broad.Query.Roster, broad.Query.Params)
-
-	// Register session
-	smc.sessionsLock.Lock()
-	smc.sessions[broad.SessionID] = session
-	smc.sessionsLock.Unlock()
+	smc.sessions.NewSession(broad.SessionID, broad.Query.Roster, broad.Query.Params)
 
 	// Answer to root
-	answer := &CreateSessionBroadcastAnswer{broad.ReqID, true}
+	answer := &messages.CreateSessionBroadcastAnswer{broad.ReqID, true}
 	log.Lvl2(smc.ServerIdentity(), "Sending answer to root")
 	err := smc.SendRaw(msg.ServerIdentity, answer)
 	if err != nil {
@@ -135,7 +131,7 @@ func (smc *Service) processCreateSessionBroadcast(msg *network.Envelope) {
 }
 
 func (smc *Service) processCreateSessionBroadcastAnswer(msg *network.Envelope) {
-	answer := (msg.Msg).(*CreateSessionBroadcastAnswer)
+	answer := (msg.Msg).(*messages.CreateSessionBroadcastAnswer)
 
 	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionBroadcastAnswer:", answer.ReqID)
 
@@ -149,7 +145,7 @@ func (smc *Service) processCreateSessionBroadcastAnswer(msg *network.Envelope) {
 // This method is executed at the server when receiving the root's CreateSessionReply.
 // It simply sends the reply through the channel.
 func (smc *Service) processCreateSessionReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*CreateSessionReply)
+	reply := (msg.Msg).(*messages.CreateSessionReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received CreateSessionReply:", reply.ReqID)
 

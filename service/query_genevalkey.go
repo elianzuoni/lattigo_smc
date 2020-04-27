@@ -6,15 +6,14 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
+	"lattigo-smc/service/messages"
 )
 
-func (smc *Service) HandleGenEvalKeyQuery(query *GenEvalKeyQuery) (network.Message, error) {
+func (smc *Service) HandleGenEvalKeyQuery(query *messages.GenEvalKeyQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received GenEvalKeyQuery")
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -22,13 +21,13 @@ func (smc *Service) HandleGenEvalKeyQuery(query *GenEvalKeyQuery) (network.Messa
 	}
 
 	// Create GenEvalKeyRequest with its ID
-	reqID := newGenEvalKeyRequestID()
-	req := &GenEvalKeyRequest{query.SessionID, reqID, query}
+	reqID := messages.NewGenEvalKeyRequestID()
+	req := &messages.GenEvalKeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.genEvalKeyRepLock.Lock()
-	s.genEvalKeyReplies[reqID] = make(chan *GenEvalKeyReply)
-	s.genEvalKeyRepLock.Unlock()
+	s.GenEvalKeyRepLock.Lock()
+	s.GenEvalKeyReplies[reqID] = make(chan *messages.GenEvalKeyReply)
+	s.GenEvalKeyRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending GenEvalKeyRequest to root:", reqID)
@@ -42,17 +41,17 @@ func (smc *Service) HandleGenEvalKeyQuery(query *GenEvalKeyQuery) (network.Messa
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.genEvalKeyRepLock.RLock()
-	replyChan := s.genEvalKeyReplies[reqID]
-	s.genEvalKeyRepLock.RUnlock()
+	s.GenEvalKeyRepLock.RLock()
+	replyChan := s.GenEvalKeyReplies[reqID]
+	s.GenEvalKeyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.genEvalKeyRepLock.Lock()
+	s.GenEvalKeyRepLock.Lock()
 	close(replyChan)
-	delete(s.genEvalKeyReplies, reqID)
-	s.genEvalKeyRepLock.Unlock()
+	delete(s.GenEvalKeyReplies, reqID)
+	s.GenEvalKeyRepLock.Unlock()
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
@@ -64,21 +63,19 @@ func (smc *Service) HandleGenEvalKeyQuery(query *GenEvalKeyQuery) (network.Messa
 		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 	}
 
-	return &GenEvalKeyResponse{reply.Valid}, nil
+	return &messages.GenEvalKeyResponse{reply.Valid}, nil
 }
 
 func (smc *Service) processGenEvalKeyRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*GenEvalKeyRequest)
+	req := (msg.Msg).(*messages.GenEvalKeyRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received GenEvalKeyRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &GenEvalKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+	reply := &messages.GenEvalKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent (actually, only check existence)
-	smc.sessionsLock.RLock()
-	_, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	_, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -117,13 +114,11 @@ func (smc *Service) processGenEvalKeyRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) genEvalKey(SessionID SessionID, Seed []byte) error {
+func (smc *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) error {
 	log.Lvl1(smc.ServerIdentity(), "Root. Generating EvaluationKey")
 
 	// Extract session
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -134,20 +129,25 @@ func (smc *Service) genEvalKey(SessionID SessionID, Seed []byte) error {
 	// We must hold the lock until the end, because only at the end the EvalKey is generated
 	// We can do so, because no other lock is held by this goroutine, or any other which waits for this
 	// or for which this waits.
-	s.evalKeyLock.Lock()
-	defer s.evalKeyLock.Unlock()
-	if s.evalKey != nil {
+	s.EvalKeyLock.Lock()
+	defer s.EvalKeyLock.Unlock()
+	if s.EvalKey != nil {
 		err := errors.New("Evaluation key is already set")
 		log.Error(smc.ServerIdentity(), err)
 		return err
 	}
 
 	// Create TreeNodeInstance as root (this method runs on the root)
-	tree := s.Roster.GenerateBinaryTree()
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(smc.ServerIdentity(), err)
+		return err
+	}
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &GenEvalKeyConfig{SessionID, Seed}
+	config := &messages.GenEvalKeyConfig{SessionID, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -190,30 +190,28 @@ func (smc *Service) genEvalKey(SessionID SessionID, Seed []byte) error {
 	ekgp.WaitDone()
 
 	// Retrieve EvaluationKey
-	s.evalKey = ekgp.EvaluationKey
+	s.EvalKey = ekgp.EvaluationKey
 	log.Lvl1(smc.ServerIdentity(), "Generated EvaluationKey!")
 
 	return nil
 }
 
 func (smc *Service) processGenEvalKeyReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*GenEvalKeyReply)
+	reply := (msg.Msg).(*messages.GenEvalKeyReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received GenEvalKeyReply")
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[reply.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(reply.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
 	// Simply send reply through channel
-	s.genEvalKeyRepLock.RLock()
-	s.genEvalKeyReplies[reply.ReqID] <- reply
-	s.genEvalKeyRepLock.RUnlock()
+	s.GenEvalKeyRepLock.RLock()
+	s.GenEvalKeyReplies[reply.ReqID] <- reply
+	s.GenEvalKeyRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

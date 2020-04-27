@@ -3,7 +3,7 @@
 // It also defines a data structure containing the MessageTypeID of all those messages.
 // It also registers those message types to the underlying onet library, with the init method.
 
-package service
+package messages
 
 import (
 	"github.com/ldsec/lattigo/bfv"
@@ -15,171 +15,171 @@ import (
 )
 
 // MsgTypes contains the different message types.
-type MsgTypes struct {
-	msgCreateSessionQuery           network.MessageTypeID // Unused
-	msgCreateSessionRequest         network.MessageTypeID
-	msgCreateSessionBroadcast       network.MessageTypeID
-	msgCreateSessionBroadcastAnswer network.MessageTypeID
-	msgCreateSessionReply           network.MessageTypeID
-	msgCreateSessionResponse        network.MessageTypeID // Unused
+type MessageTypes struct {
+	MsgCreateSessionQuery           network.MessageTypeID // Unused
+	MsgCreateSessionRequest         network.MessageTypeID
+	MsgCreateSessionBroadcast       network.MessageTypeID
+	MsgCreateSessionBroadcastAnswer network.MessageTypeID
+	MsgCreateSessionReply           network.MessageTypeID
+	MsgCreateSessionResponse        network.MessageTypeID // Unused
 
-	msgCloseSessionQuery           network.MessageTypeID // Unused
-	msgCloseSessionRequest         network.MessageTypeID
-	msgCloseSessionBroadcast       network.MessageTypeID
-	msgCloseSessionBroadcastAnswer network.MessageTypeID
-	msgCloseSessionReply           network.MessageTypeID
-	msgCloseSessionResponse        network.MessageTypeID // Unused
+	MsgCloseSessionQuery           network.MessageTypeID // Unused
+	MsgCloseSessionRequest         network.MessageTypeID
+	MsgCloseSessionBroadcast       network.MessageTypeID
+	MsgCloseSessionBroadcastAnswer network.MessageTypeID
+	MsgCloseSessionReply           network.MessageTypeID
+	MsgCloseSessionResponse        network.MessageTypeID // Unused
 
-	msgGenPubKeyQuery    network.MessageTypeID // Unused
-	msgGenPubKeyRequest  network.MessageTypeID
-	msgGenPubKeyReply    network.MessageTypeID
-	msgGenPubKeyResponse network.MessageTypeID // Unused
+	MsgGenPubKeyQuery    network.MessageTypeID // Unused
+	MsgGenPubKeyRequest  network.MessageTypeID
+	MsgGenPubKeyReply    network.MessageTypeID
+	MsgGenPubKeyResponse network.MessageTypeID // Unused
 
-	msgGenEvalKeyQuery    network.MessageTypeID // Unused
-	msgGenEvalKeyRequest  network.MessageTypeID
-	msgGenEvalKeyReply    network.MessageTypeID
-	msgGenEvalKeyResponse network.MessageTypeID // Unused
+	MsgGenEvalKeyQuery    network.MessageTypeID // Unused
+	MsgGenEvalKeyRequest  network.MessageTypeID
+	MsgGenEvalKeyReply    network.MessageTypeID
+	MsgGenEvalKeyResponse network.MessageTypeID // Unused
 
-	msgGenRotKeyQuery    network.MessageTypeID // Unused
-	msgGenRotKeyRequest  network.MessageTypeID
-	msgGenRotKeyReply    network.MessageTypeID
-	msgGenRotKeyResponse network.MessageTypeID // Unused
+	MsgGenRotKeyQuery    network.MessageTypeID // Unused
+	MsgGenRotKeyRequest  network.MessageTypeID
+	MsgGenRotKeyReply    network.MessageTypeID
+	MsgGenRotKeyResponse network.MessageTypeID // Unused
 
-	msgKeyQuery    network.MessageTypeID // Unused
-	msgKeyRequest  network.MessageTypeID
-	msgKeyReply    network.MessageTypeID
-	msgKeyResponse network.MessageTypeID // Unused
+	MsgKeyQuery    network.MessageTypeID // Unused
+	MsgKeyRequest  network.MessageTypeID
+	MsgKeyReply    network.MessageTypeID
+	MsgKeyResponse network.MessageTypeID // Unused
 
-	msgStoreQuery    network.MessageTypeID // Unused
-	msgStoreRequest  network.MessageTypeID
-	msgStoreReply    network.MessageTypeID
-	msgStoreResponse network.MessageTypeID // Unused
+	MsgStoreQuery    network.MessageTypeID // Unused
+	MsgStoreRequest  network.MessageTypeID
+	MsgStoreReply    network.MessageTypeID
+	MsgStoreResponse network.MessageTypeID // Unused
 
-	msgRetrieveQuery    network.MessageTypeID // Unused
-	msgRetrieveRequest  network.MessageTypeID
-	msgRetrieveReply    network.MessageTypeID
-	msgRetrieveResponse network.MessageTypeID // Unused
+	MsgRetrieveQuery    network.MessageTypeID // Unused
+	MsgRetrieveRequest  network.MessageTypeID
+	MsgRetrieveReply    network.MessageTypeID
+	MsgRetrieveResponse network.MessageTypeID // Unused
 
-	msgSumQuery    network.MessageTypeID // Unused
-	msgSumRequest  network.MessageTypeID
-	msgSumReply    network.MessageTypeID
-	msgSumResponse network.MessageTypeID // Unused
+	MsgSumQuery    network.MessageTypeID // Unused
+	MsgSumRequest  network.MessageTypeID
+	MsgSumReply    network.MessageTypeID
+	MsgSumResponse network.MessageTypeID // Unused
 
-	msgMultiplyQuery    network.MessageTypeID // Unused
-	msgMultiplyRequest  network.MessageTypeID
-	msgMultiplyReply    network.MessageTypeID
-	msgMultiplyResponse network.MessageTypeID // Unused
+	MsgMultiplyQuery    network.MessageTypeID // Unused
+	MsgMultiplyRequest  network.MessageTypeID
+	MsgMultiplyReply    network.MessageTypeID
+	MsgMultiplyResponse network.MessageTypeID // Unused
 
-	msgRelinQuery    network.MessageTypeID // Unused
-	msgRelinRequest  network.MessageTypeID
-	msgRelinReply    network.MessageTypeID
-	msgRelinResponse network.MessageTypeID // Unused
+	MsgRelinQuery    network.MessageTypeID // Unused
+	MsgRelinRequest  network.MessageTypeID
+	MsgRelinReply    network.MessageTypeID
+	MsgRelinResponse network.MessageTypeID // Unused
 
-	msgRefreshQuery    network.MessageTypeID // Unused
-	msgRefreshRequest  network.MessageTypeID
-	msgRefreshReply    network.MessageTypeID
-	msgRefreshResponse network.MessageTypeID // Unused
+	MsgRefreshQuery    network.MessageTypeID // Unused
+	MsgRefreshRequest  network.MessageTypeID
+	MsgRefreshReply    network.MessageTypeID
+	MsgRefreshResponse network.MessageTypeID // Unused
 
-	msgRotationQuery    network.MessageTypeID // Unused
-	msgRotationRequest  network.MessageTypeID
-	msgRotationReply    network.MessageTypeID
-	msgRotationResponse network.MessageTypeID // Unused
+	MsgRotationQuery    network.MessageTypeID // Unused
+	MsgRotationRequest  network.MessageTypeID
+	MsgRotationReply    network.MessageTypeID
+	MsgRotationResponse network.MessageTypeID // Unused
 
-	msgEncToSharesQuery    network.MessageTypeID // Unused
-	msgEncToSharesRequest  network.MessageTypeID
-	msgEncToSharesReply    network.MessageTypeID
-	msgEncToSharesResponse network.MessageTypeID // Unused
+	MsgEncToSharesQuery    network.MessageTypeID // Unused
+	MsgEncToSharesRequest  network.MessageTypeID
+	MsgEncToSharesReply    network.MessageTypeID
+	MsgEncToSharesResponse network.MessageTypeID // Unused
 
-	msgSharesToEncQuery    network.MessageTypeID // Unused
-	msgSharesToEncRequest  network.MessageTypeID
-	msgSharesToEncReply    network.MessageTypeID
-	msgSharesToEncResponse network.MessageTypeID // Unused
+	MsgSharesToEncQuery    network.MessageTypeID // Unused
+	MsgSharesToEncRequest  network.MessageTypeID
+	MsgSharesToEncReply    network.MessageTypeID
+	MsgSharesToEncResponse network.MessageTypeID // Unused
 }
 
-var msgTypes = MsgTypes{}
+var MsgTypes = MessageTypes{}
 
 // Registers all the message types to the onet library
 func init() {
 	log.Lvl1("Registering messages")
 
-	msgTypes.msgCreateSessionQuery = network.RegisterMessage(&CreateSessionQuery{}) // Unused
-	msgTypes.msgCreateSessionRequest = network.RegisterMessage(&CreateSessionRequest{})
-	msgTypes.msgCreateSessionBroadcast = network.RegisterMessage(&CreateSessionBroadcast{})
-	msgTypes.msgCreateSessionBroadcastAnswer = network.RegisterMessage(&CreateSessionBroadcastAnswer{})
-	msgTypes.msgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
-	msgTypes.msgCreateSessionResponse = network.RegisterMessage(&CreateSessionResponse{}) // Unused
+	MsgTypes.MsgCreateSessionQuery = network.RegisterMessage(&CreateSessionQuery{}) // Unused
+	MsgTypes.MsgCreateSessionRequest = network.RegisterMessage(&CreateSessionRequest{})
+	MsgTypes.MsgCreateSessionBroadcast = network.RegisterMessage(&CreateSessionBroadcast{})
+	MsgTypes.MsgCreateSessionBroadcastAnswer = network.RegisterMessage(&CreateSessionBroadcastAnswer{})
+	MsgTypes.MsgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
+	MsgTypes.MsgCreateSessionResponse = network.RegisterMessage(&CreateSessionResponse{}) // Unused
 
-	msgTypes.msgCloseSessionQuery = network.RegisterMessage(&CloseSessionQuery{}) // Unused
-	msgTypes.msgCloseSessionRequest = network.RegisterMessage(&CloseSessionRequest{})
-	msgTypes.msgCloseSessionBroadcast = network.RegisterMessage(&CloseSessionBroadcast{})
-	msgTypes.msgCloseSessionBroadcastAnswer = network.RegisterMessage(&CloseSessionBroadcastAnswer{})
-	msgTypes.msgCloseSessionReply = network.RegisterMessage(&CloseSessionReply{})
-	msgTypes.msgCloseSessionResponse = network.RegisterMessage(&CloseSessionResponse{}) // Unused
+	MsgTypes.MsgCloseSessionQuery = network.RegisterMessage(&CloseSessionQuery{}) // Unused
+	MsgTypes.MsgCloseSessionRequest = network.RegisterMessage(&CloseSessionRequest{})
+	MsgTypes.MsgCloseSessionBroadcast = network.RegisterMessage(&CloseSessionBroadcast{})
+	MsgTypes.MsgCloseSessionBroadcastAnswer = network.RegisterMessage(&CloseSessionBroadcastAnswer{})
+	MsgTypes.MsgCloseSessionReply = network.RegisterMessage(&CloseSessionReply{})
+	MsgTypes.MsgCloseSessionResponse = network.RegisterMessage(&CloseSessionResponse{}) // Unused
 
-	msgTypes.msgGenPubKeyQuery = network.RegisterMessage(&GenPubKeyQuery{}) // Unused
-	msgTypes.msgGenPubKeyRequest = network.RegisterMessage(&GenPubKeyRequest{})
-	msgTypes.msgGenPubKeyReply = network.RegisterMessage(&GenPubKeyReply{})
-	msgTypes.msgGenPubKeyResponse = network.RegisterMessage(&GenPubKeyResponse{}) // Unused
+	MsgTypes.MsgGenPubKeyQuery = network.RegisterMessage(&GenPubKeyQuery{}) // Unused
+	MsgTypes.MsgGenPubKeyRequest = network.RegisterMessage(&GenPubKeyRequest{})
+	MsgTypes.MsgGenPubKeyReply = network.RegisterMessage(&GenPubKeyReply{})
+	MsgTypes.MsgGenPubKeyResponse = network.RegisterMessage(&GenPubKeyResponse{}) // Unused
 
-	msgTypes.msgGenEvalKeyQuery = network.RegisterMessage(&GenEvalKeyQuery{}) // Unused
-	msgTypes.msgGenEvalKeyRequest = network.RegisterMessage(&GenEvalKeyRequest{})
-	msgTypes.msgGenEvalKeyReply = network.RegisterMessage(&GenEvalKeyReply{})
-	msgTypes.msgGenEvalKeyResponse = network.RegisterMessage(&GenEvalKeyResponse{}) // Unused
+	MsgTypes.MsgGenEvalKeyQuery = network.RegisterMessage(&GenEvalKeyQuery{}) // Unused
+	MsgTypes.MsgGenEvalKeyRequest = network.RegisterMessage(&GenEvalKeyRequest{})
+	MsgTypes.MsgGenEvalKeyReply = network.RegisterMessage(&GenEvalKeyReply{})
+	MsgTypes.MsgGenEvalKeyResponse = network.RegisterMessage(&GenEvalKeyResponse{}) // Unused
 
-	msgTypes.msgGenRotKeyQuery = network.RegisterMessage(&GenRotKeyQuery{}) // Unused
-	msgTypes.msgGenRotKeyRequest = network.RegisterMessage(&GenRotKeyRequest{})
-	msgTypes.msgGenRotKeyReply = network.RegisterMessage(&GenRotKeyReply{})
-	msgTypes.msgGenRotKeyResponse = network.RegisterMessage(&GenRotKeyResponse{}) // Unused
+	MsgTypes.MsgGenRotKeyQuery = network.RegisterMessage(&GenRotKeyQuery{}) // Unused
+	MsgTypes.MsgGenRotKeyRequest = network.RegisterMessage(&GenRotKeyRequest{})
+	MsgTypes.MsgGenRotKeyReply = network.RegisterMessage(&GenRotKeyReply{})
+	MsgTypes.MsgGenRotKeyResponse = network.RegisterMessage(&GenRotKeyResponse{}) // Unused
 
-	msgTypes.msgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
-	msgTypes.msgKeyRequest = network.RegisterMessage(&KeyRequest{})
-	msgTypes.msgKeyReply = network.RegisterMessage(&KeyReply{})
-	msgTypes.msgKeyResponse = network.RegisterMessage(&KeyResponse{}) // Unused
+	MsgTypes.MsgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
+	MsgTypes.MsgKeyRequest = network.RegisterMessage(&KeyRequest{})
+	MsgTypes.MsgKeyReply = network.RegisterMessage(&KeyReply{})
+	MsgTypes.MsgKeyResponse = network.RegisterMessage(&KeyResponse{}) // Unused
 
-	msgTypes.msgStoreQuery = network.RegisterMessage(&StoreQuery{}) // Unused
-	msgTypes.msgStoreRequest = network.RegisterMessage(&StoreRequest{})
-	msgTypes.msgStoreReply = network.RegisterMessage(&StoreReply{})
-	msgTypes.msgStoreResponse = network.RegisterMessage(&StoreResponse{}) // Unused
+	MsgTypes.MsgStoreQuery = network.RegisterMessage(&StoreQuery{}) // Unused
+	MsgTypes.MsgStoreRequest = network.RegisterMessage(&StoreRequest{})
+	MsgTypes.MsgStoreReply = network.RegisterMessage(&StoreReply{})
+	MsgTypes.MsgStoreResponse = network.RegisterMessage(&StoreResponse{}) // Unused
 
-	msgTypes.msgRetrieveQuery = network.RegisterMessage(&RetrieveQuery{}) // Unused
-	msgTypes.msgRetrieveRequest = network.RegisterMessage(&RetrieveRequest{})
-	msgTypes.msgRetrieveReply = network.RegisterMessage(&RetrieveReply{})
-	msgTypes.msgRetrieveResponse = network.RegisterMessage(&RetrieveResponse{}) // Unused
+	MsgTypes.MsgRetrieveQuery = network.RegisterMessage(&RetrieveQuery{}) // Unused
+	MsgTypes.MsgRetrieveRequest = network.RegisterMessage(&RetrieveRequest{})
+	MsgTypes.MsgRetrieveReply = network.RegisterMessage(&RetrieveReply{})
+	MsgTypes.MsgRetrieveResponse = network.RegisterMessage(&RetrieveResponse{}) // Unused
 
-	msgTypes.msgSumQuery = network.RegisterMessage(&SumQuery{}) // Unused
-	msgTypes.msgSumRequest = network.RegisterMessage(&SumRequest{})
-	msgTypes.msgSumReply = network.RegisterMessage(&SumReply{})
-	msgTypes.msgSumResponse = network.RegisterMessage(&SumResponse{}) // Unused
+	MsgTypes.MsgSumQuery = network.RegisterMessage(&SumQuery{}) // Unused
+	MsgTypes.MsgSumRequest = network.RegisterMessage(&SumRequest{})
+	MsgTypes.MsgSumReply = network.RegisterMessage(&SumReply{})
+	MsgTypes.MsgSumResponse = network.RegisterMessage(&SumResponse{}) // Unused
 
-	msgTypes.msgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{}) // Unused
-	msgTypes.msgMultiplyRequest = network.RegisterMessage(&MultiplyRequest{})
-	msgTypes.msgMultiplyReply = network.RegisterMessage(&MultiplyReply{})
-	msgTypes.msgMultiplyResponse = network.RegisterMessage(&MultiplyResponse{}) // Unused
+	MsgTypes.MsgMultiplyQuery = network.RegisterMessage(&MultiplyQuery{}) // Unused
+	MsgTypes.MsgMultiplyRequest = network.RegisterMessage(&MultiplyRequest{})
+	MsgTypes.MsgMultiplyReply = network.RegisterMessage(&MultiplyReply{})
+	MsgTypes.MsgMultiplyResponse = network.RegisterMessage(&MultiplyResponse{}) // Unused
 
-	msgTypes.msgRelinQuery = network.RegisterMessage(&RelinQuery{}) // Unused
-	msgTypes.msgRelinRequest = network.RegisterMessage(&RelinRequest{})
-	msgTypes.msgRelinReply = network.RegisterMessage(&RelinReply{})
-	msgTypes.msgRelinResponse = network.RegisterMessage(&RelinResponse{}) // Unused
+	MsgTypes.MsgRelinQuery = network.RegisterMessage(&RelinQuery{}) // Unused
+	MsgTypes.MsgRelinRequest = network.RegisterMessage(&RelinRequest{})
+	MsgTypes.MsgRelinReply = network.RegisterMessage(&RelinReply{})
+	MsgTypes.MsgRelinResponse = network.RegisterMessage(&RelinResponse{}) // Unused
 
-	msgTypes.msgRefreshQuery = network.RegisterMessage(&RefreshQuery{}) // Unused
-	msgTypes.msgRefreshRequest = network.RegisterMessage(&RefreshRequest{})
-	msgTypes.msgRefreshReply = network.RegisterMessage(&RefreshReply{})
-	msgTypes.msgRefreshResponse = network.RegisterMessage(&RefreshResponse{}) // Unused
+	MsgTypes.MsgRefreshQuery = network.RegisterMessage(&RefreshQuery{}) // Unused
+	MsgTypes.MsgRefreshRequest = network.RegisterMessage(&RefreshRequest{})
+	MsgTypes.MsgRefreshReply = network.RegisterMessage(&RefreshReply{})
+	MsgTypes.MsgRefreshResponse = network.RegisterMessage(&RefreshResponse{}) // Unused
 
-	msgTypes.msgRotationQuery = network.RegisterMessage(&RotationQuery{}) // Unused
-	msgTypes.msgRotationRequest = network.RegisterMessage(&RotationRequest{})
-	msgTypes.msgRotationReply = network.RegisterMessage(&RotationReply{})
-	msgTypes.msgRotationResponse = network.RegisterMessage(&RotationResponse{}) // Unused
+	MsgTypes.MsgRotationQuery = network.RegisterMessage(&RotationQuery{}) // Unused
+	MsgTypes.MsgRotationRequest = network.RegisterMessage(&RotationRequest{})
+	MsgTypes.MsgRotationReply = network.RegisterMessage(&RotationReply{})
+	MsgTypes.MsgRotationResponse = network.RegisterMessage(&RotationResponse{}) // Unused
 
-	msgTypes.msgEncToSharesQuery = network.RegisterMessage(&EncToSharesQuery{}) // Unused
-	msgTypes.msgEncToSharesRequest = network.RegisterMessage(&EncToSharesRequest{})
-	msgTypes.msgEncToSharesReply = network.RegisterMessage(&EncToSharesReply{})
-	msgTypes.msgEncToSharesResponse = network.RegisterMessage(&EncToSharesResponse{}) // Unused
+	MsgTypes.MsgEncToSharesQuery = network.RegisterMessage(&EncToSharesQuery{}) // Unused
+	MsgTypes.MsgEncToSharesRequest = network.RegisterMessage(&EncToSharesRequest{})
+	MsgTypes.MsgEncToSharesReply = network.RegisterMessage(&EncToSharesReply{})
+	MsgTypes.MsgEncToSharesResponse = network.RegisterMessage(&EncToSharesResponse{}) // Unused
 
-	msgTypes.msgSharesToEncQuery = network.RegisterMessage(&SharesToEncQuery{}) // Unused
-	msgTypes.msgSharesToEncRequest = network.RegisterMessage(&SharesToEncRequest{})
-	msgTypes.msgSharesToEncReply = network.RegisterMessage(&SharesToEncReply{})
-	msgTypes.msgSharesToEncResponse = network.RegisterMessage(&SharesToEncResponse{}) // Unused
+	MsgTypes.MsgSharesToEncQuery = network.RegisterMessage(&SharesToEncQuery{}) // Unused
+	MsgTypes.MsgSharesToEncRequest = network.RegisterMessage(&SharesToEncRequest{})
+	MsgTypes.MsgSharesToEncReply = network.RegisterMessage(&SharesToEncReply{})
+	MsgTypes.MsgSharesToEncResponse = network.RegisterMessage(&SharesToEncResponse{}) // Unused
 }
 
 /*********************** Message structs *********************/
@@ -190,7 +190,7 @@ type SessionID uuid.UUID
 
 var NilSessionID = SessionID(uuid.Nil)
 
-func newSessionID() SessionID {
+func NewSessionID() SessionID {
 	return SessionID(uuid.NewV1())
 }
 func (id SessionID) String() string {
@@ -206,7 +206,7 @@ type CipherID struct {
 
 var NilCipherID = CipherID{"", uuid.Nil}
 
-func newCipherID(owner *network.ServerIdentity) CipherID {
+func NewCipherID(owner *network.ServerIdentity) CipherID {
 	data, _ := protobuf.Encode(owner)
 	return CipherID{string(data), uuid.NewV1()}
 }
@@ -225,7 +225,7 @@ type SharesID uuid.UUID
 
 var NilSharesID = SharesID(uuid.Nil)
 
-func newSharesID() SharesID {
+func NewSharesID() SharesID {
 	return SharesID(uuid.NewV1())
 }
 func (id SharesID) String() string {
@@ -241,7 +241,7 @@ type CreateSessionQuery struct {
 
 type CreateSessionRequestID uuid.UUID
 
-func newCreateSessionRequestID() CreateSessionRequestID {
+func NewCreateSessionRequestID() CreateSessionRequestID {
 	return CreateSessionRequestID(uuid.NewV1())
 }
 func (id CreateSessionRequestID) String() string {
@@ -285,7 +285,7 @@ type CloseSessionQuery struct {
 
 type CloseSessionRequestID uuid.UUID
 
-func newCloseSessionRequestID() CloseSessionRequestID {
+func NewCloseSessionRequestID() CloseSessionRequestID {
 	return CloseSessionRequestID(uuid.NewV1())
 }
 func (id CloseSessionRequestID) String() string {
@@ -328,7 +328,7 @@ type GenPubKeyQuery struct {
 
 type GenPubKeyRequestID uuid.UUID
 
-func newGenPubKeyRequestID() GenPubKeyRequestID {
+func NewGenPubKeyRequestID() GenPubKeyRequestID {
 	return GenPubKeyRequestID(uuid.NewV1())
 }
 func (id GenPubKeyRequestID) String() string {
@@ -368,7 +368,7 @@ type GenEvalKeyQuery struct {
 
 type GenEvalKeyRequestID uuid.UUID
 
-func newGenEvalKeyRequestID() GenEvalKeyRequestID {
+func NewGenEvalKeyRequestID() GenEvalKeyRequestID {
 	return GenEvalKeyRequestID(uuid.NewV1())
 }
 func (id GenEvalKeyRequestID) String() string {
@@ -408,7 +408,7 @@ type GenRotKeyQuery struct {
 
 type GenRotKeyRequestID uuid.UUID
 
-func newGenRotKeyRequestID() GenRotKeyRequestID {
+func NewGenRotKeyRequestID() GenRotKeyRequestID {
 	return GenRotKeyRequestID(uuid.NewV1())
 }
 func (id GenRotKeyRequestID) String() string {
@@ -451,7 +451,7 @@ type KeyQuery struct {
 
 type KeyRequestID uuid.UUID
 
-func newKeyRequestID() KeyRequestID {
+func NewKeyRequestID() KeyRequestID {
 	return KeyRequestID(uuid.NewV1())
 }
 func (id KeyRequestID) String() string {
@@ -497,7 +497,7 @@ type StoreQuery struct {
 
 type StoreRequestID uuid.UUID
 
-func newStoreRequestID() StoreRequestID {
+func NewStoreRequestID() StoreRequestID {
 	return StoreRequestID(uuid.NewV1())
 }
 func (id StoreRequestID) String() string {
@@ -505,7 +505,7 @@ func (id StoreRequestID) String() string {
 }
 
 // StoreRequest is sent by server to root.
-// Contains new ciphertext to store.
+// Contains New ciphertext to store.
 type StoreRequest struct {
 	SessionID SessionID
 
@@ -539,7 +539,7 @@ type RetrieveQuery struct {
 
 type RetrieveRequestID uuid.UUID
 
-func newRetrieveRequestID() RetrieveRequestID {
+func NewRetrieveRequestID() RetrieveRequestID {
 	return RetrieveRequestID(uuid.NewV1())
 }
 func (id RetrieveRequestID) String() string {
@@ -587,7 +587,7 @@ type SumQuery struct {
 // Server further assigns an ID to the query
 type SumRequestID uuid.UUID
 
-func newSumRequestID() SumRequestID {
+func NewSumRequestID() SumRequestID {
 	return SumRequestID(uuid.NewV1())
 }
 func (id SumRequestID) String() string {
@@ -602,7 +602,7 @@ type SumRequest struct {
 	Query *SumQuery
 }
 
-// Root answers with the same SumRequestID, the CipherID of the new ciphertext,
+// Root answers with the same SumRequestID, the CipherID of the New ciphertext,
 // and a flag indicating whether the operation succeeded.
 type SumReply struct {
 	SessionID SessionID
@@ -630,7 +630,7 @@ type MultiplyQuery struct {
 
 type MultiplyRequestID uuid.UUID
 
-func newMultiplyRequestID() MultiplyRequestID {
+func NewMultiplyRequestID() MultiplyRequestID {
 	return MultiplyRequestID(uuid.NewV1())
 }
 func (id MultiplyRequestID) String() string {
@@ -645,7 +645,7 @@ type MultiplyRequest struct {
 	Query *MultiplyQuery
 }
 
-// Root answers with the same SumRequestID, the CipherID of the new ciphertext,
+// Root answers with the same SumRequestID, the CipherID of the New ciphertext,
 // and a flag indicating whether the operation succeeded.
 type MultiplyReply struct {
 	SessionID SessionID
@@ -671,7 +671,7 @@ type RelinQuery struct {
 
 type RelinRequestID uuid.UUID
 
-func newRelinRequestID() RelinRequestID {
+func NewRelinRequestID() RelinRequestID {
 	return RelinRequestID(uuid.NewV1())
 }
 func (id RelinRequestID) String() string {
@@ -711,7 +711,7 @@ type RefreshQuery struct {
 
 type RefreshRequestID uuid.UUID
 
-func newRefreshRequestID() RefreshRequestID {
+func NewRefreshRequestID() RefreshRequestID {
 	return RefreshRequestID(uuid.NewV1())
 }
 func (id RefreshRequestID) String() string {
@@ -757,7 +757,7 @@ type RotationQuery struct {
 
 type RotationRequestID uuid.UUID
 
-func newRotationRequestID() RotationRequestID {
+func NewRotationRequestID() RotationRequestID {
 	return RotationRequestID(uuid.NewV1())
 }
 func (id RotationRequestID) String() string {
@@ -795,7 +795,7 @@ type EncToSharesQuery struct {
 
 type EncToSharesRequestID uuid.UUID
 
-func newEncToSharesRequestID() EncToSharesRequestID {
+func NewEncToSharesRequestID() EncToSharesRequestID {
 	return EncToSharesRequestID(uuid.NewV1())
 }
 func (id EncToSharesRequestID) String() string {
@@ -840,7 +840,7 @@ type SharesToEncQuery struct {
 
 type SharesToEncRequestID uuid.UUID
 
-func newSharesToEncRequestID() SharesToEncRequestID {
+func NewSharesToEncRequestID() SharesToEncRequestID {
 	return SharesToEncRequestID(uuid.NewV1())
 }
 func (id SharesToEncRequestID) String() string {

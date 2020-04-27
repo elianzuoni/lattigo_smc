@@ -5,6 +5,7 @@ import (
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"lattigo-smc/service/messages"
 	"lattigo-smc/utils"
 	"testing"
 )
@@ -19,7 +20,7 @@ func genLocalTestRoster(size int) (*onet.Roster, *onet.LocalTest) {
 	return roster, local
 }
 
-func testNewClientCreateSession(roster *onet.Roster, paramsIdx int, clientID string) (*Client, SessionID, *bfv.PublicKey, error) {
+func testNewClientCreateSession(roster *onet.Roster, paramsIdx int, clientID string) (*Client, messages.SessionID, *bfv.PublicKey, error) {
 	client := NewClient(roster.List[0], clientID, bfv.DefaultParams[paramsIdx])
 
 	log.Lvl2(client, "Creating session")
@@ -28,7 +29,7 @@ func testNewClientCreateSession(roster *onet.Roster, paramsIdx int, clientID str
 	return client, sid, pk, err
 }
 
-func testNewClientBindToSession(roster *onet.Roster, paramsIdx int, clientID string, sid SessionID, mpk *bfv.PublicKey) (*Client, error) {
+func testNewClientBindToSession(roster *onet.Roster, paramsIdx int, clientID string, sid messages.SessionID, mpk *bfv.PublicKey) (*Client, error) {
 	client := NewClient(roster.List[1], clientID, bfv.DefaultParams[paramsIdx])
 
 	log.Lvl2(client, "Binding to session")

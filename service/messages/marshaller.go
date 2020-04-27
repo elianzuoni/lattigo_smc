@@ -1,6 +1,6 @@
 // BinaryMarshaller implementation of message structures that need it.
 
-package service
+package messages
 
 import (
 	"encoding/binary"

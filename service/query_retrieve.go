@@ -7,15 +7,14 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
+	"lattigo-smc/service/messages"
 )
 
-func (smc *Service) HandleRetrieveQuery(query *RetrieveQuery) (network.Message, error) {
+func (smc *Service) HandleRetrieveQuery(query *messages.RetrieveQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received RetrieveQuery for ciphertext:", query.CipherID)
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -23,13 +22,13 @@ func (smc *Service) HandleRetrieveQuery(query *RetrieveQuery) (network.Message, 
 	}
 
 	// Create RetrieveRequest with its ID
-	reqID := newRetrieveRequestID()
-	req := &RetrieveRequest{query.SessionID, reqID, query}
+	reqID := messages.NewRetrieveRequestID()
+	req := &messages.RetrieveRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.retrieveRepLock.Lock()
-	s.retrieveReplies[reqID] = make(chan *RetrieveReply)
-	s.retrieveRepLock.Unlock()
+	s.RetrieveRepLock.Lock()
+	s.RetrieveReplies[reqID] = make(chan *messages.RetrieveReply)
+	s.RetrieveRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending RetrieveRequest to root:", reqID)
@@ -43,17 +42,17 @@ func (smc *Service) HandleRetrieveQuery(query *RetrieveQuery) (network.Message, 
 
 	// Receive reply from channel
 	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.retrieveRepLock.RLock()
-	replyChan := s.retrieveReplies[reqID]
-	s.retrieveRepLock.RUnlock()
+	s.RetrieveRepLock.RLock()
+	replyChan := s.RetrieveReplies[reqID]
+	s.RetrieveRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.retrieveRepLock.Lock()
+	s.RetrieveRepLock.Lock()
 	close(replyChan)
-	delete(s.retrieveReplies, reqID)
-	s.retrieveRepLock.Unlock()
+	delete(s.RetrieveReplies, reqID)
+	s.RetrieveRepLock.Unlock()
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel")
 
@@ -64,21 +63,19 @@ func (smc *Service) HandleRetrieveQuery(query *RetrieveQuery) (network.Message, 
 	}
 	log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
 
-	return &RetrieveResponse{reply.Ciphertext, reply.Valid}, nil
+	return &messages.RetrieveResponse{reply.Ciphertext, reply.Valid}, nil
 }
 
 func (smc *Service) processRetrieveRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*RetrieveRequest)
+	req := (msg.Msg).(*messages.RetrieveRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received RetrieveRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &RetrieveReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
+	reply := &messages.RetrieveReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -90,9 +87,7 @@ func (smc *Service) processRetrieveRequest(msg *network.Envelope) {
 	}
 
 	// Check existence of ciphertext
-	s.databaseLock.RLock()
-	ct, ok := s.database[req.Query.CipherID]
-	s.databaseLock.RUnlock()
+	ct, ok := s.GetCiphertext(req.Query.CipherID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
 		err := smc.SendRaw(msg.ServerIdentity, reply) // Field ciphertext stays nil and field valid stay false
@@ -132,13 +127,11 @@ func (smc *Service) processRetrieveRequest(msg *network.Envelope) {
 	return
 }
 
-func (smc *Service) switchCiphertext(SessionID SessionID, pk *bfv.PublicKey, ct *bfv.Ciphertext) (*bfv.Ciphertext, error) {
+func (smc *Service) switchCiphertext(SessionID messages.SessionID, pk *bfv.PublicKey, ct *bfv.Ciphertext) (*bfv.Ciphertext, error) {
 	log.Lvl2(smc.ServerIdentity(), "Performing public key-switching")
 
 	// Extract session
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -146,11 +139,16 @@ func (smc *Service) switchCiphertext(SessionID SessionID, pk *bfv.PublicKey, ct 
 	}
 
 	// Create TreeNodeInstance as root (this method runs on the root)
-	tree := s.Roster.GenerateBinaryTree()
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(smc.ServerIdentity(), err)
+		return nil, err
+	}
 	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.CollectivePublicKeySwitchingProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &PublicSwitchConfig{SessionID, pk, ct}
+	config := &messages.PublicSwitchConfig{SessionID, pk, ct}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -198,23 +196,21 @@ func (smc *Service) switchCiphertext(SessionID SessionID, pk *bfv.PublicKey, ct 
 }
 
 func (smc *Service) processRetrieveReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*RetrieveReply)
+	reply := (msg.Msg).(*messages.RetrieveReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received RetrieveReply")
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[reply.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(reply.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
 	// Simply send reply through channel
-	s.retrieveRepLock.RLock()
-	s.retrieveReplies[reply.ReqID] <- reply
-	s.retrieveRepLock.RUnlock()
+	s.RetrieveRepLock.RLock()
+	s.RetrieveReplies[reply.ReqID] <- reply
+	s.RetrieveRepLock.RUnlock()
 	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
 
 	return

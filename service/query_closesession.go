@@ -6,16 +6,15 @@ import (
 	"errors"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/messages"
 	"lattigo-smc/utils"
 )
 
-func (smc *Service) HandleCloseSessionQuery(query *CloseSessionQuery) (network.Message, error) {
+func (smc *Service) HandleCloseSessionQuery(query *messages.CloseSessionQuery) (network.Message, error) {
 	log.Lvl1(smc.ServerIdentity(), "Received CloseSessionQuery")
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[query.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(smc.ServerIdentity(), err)
@@ -23,13 +22,13 @@ func (smc *Service) HandleCloseSessionQuery(query *CloseSessionQuery) (network.M
 	}
 
 	// Create CloseSessionRequest with its ID
-	reqID := newCloseSessionRequestID()
+	reqID := messages.NewCloseSessionRequestID()
 	smc.closeSessionRepLock.Lock()
-	req := &CloseSessionRequest{reqID, query.SessionID, query}
+	req := &messages.CloseSessionRequest{reqID, query.SessionID, query}
 	smc.closeSessionRepLock.Unlock()
 
 	// Create channel before sending request to root.
-	smc.closeSessionReplies[reqID] = make(chan *CloseSessionReply)
+	smc.closeSessionReplies[reqID] = make(chan *messages.CloseSessionReply)
 
 	// Send request to root
 	log.Lvl2(smc.ServerIdentity(), "Sending CloseSessionRequest to root")
@@ -59,21 +58,19 @@ func (smc *Service) HandleCloseSessionQuery(query *CloseSessionQuery) (network.M
 
 	log.Lvl4(smc.ServerIdentity(), "Closed channel, returning")
 
-	return &CloseSessionResponse{reply.Valid}, nil
+	return &messages.CloseSessionResponse{reply.Valid}, nil
 }
 
 func (smc *Service) processCloseSessionRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*CloseSessionRequest)
+	req := (msg.Msg).(*messages.CloseSessionRequest)
 
 	log.Lvl1(smc.ServerIdentity(), "Root. Received CloseSessionRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &CloseSessionReply{ReqID: req.ReqID, Valid: false}
+	reply := &messages.CloseSessionReply{ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
-	smc.sessionsLock.RLock()
-	s, ok := smc.sessions[req.SessionID]
-	smc.sessionsLock.RUnlock()
+	s, ok := smc.sessions.GetSession(req.SessionID)
 	if !ok {
 		log.Error(smc.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
@@ -85,10 +82,10 @@ func (smc *Service) processCloseSessionRequest(msg *network.Envelope) {
 	}
 
 	// Create the broadcast message
-	broad := &CloseSessionBroadcast{req.ReqID, req.Query}
+	broad := &messages.CloseSessionBroadcast{req.ReqID, req.Query}
 
 	// Create channel before sending broadcast.
-	smc.closeSessionBroadcastAnswers[req.ReqID] = make(chan *CloseSessionBroadcastAnswer)
+	smc.closeSessionBroadcastAnswers[req.ReqID] = make(chan *messages.CloseSessionBroadcastAnswer)
 
 	// Broadcast the message so that all nodes can delete the session.
 	log.Lvl2(smc.ServerIdentity(), "Broadcasting message to all nodes")
@@ -133,27 +130,25 @@ func (smc *Service) processCloseSessionRequest(msg *network.Envelope) {
 }
 
 func (smc *Service) processCloseSessionBroadcast(msg *network.Envelope) {
-	broad := msg.Msg.(*CloseSessionBroadcast)
+	broad := msg.Msg.(*messages.CloseSessionBroadcast)
 
 	log.Lvl1(smc.ServerIdentity(), "Received CloseSessionBroadcast")
 
 	// Start by declaring answer with default fields
-	answer := &CloseSessionBroadcastAnswer{ReqID: broad.ReqID}
+	answer := &messages.CloseSessionBroadcastAnswer{ReqID: broad.ReqID}
 
 	// Check if requested session exists, and set the field "Valid"
-	smc.sessionsLock.Lock()
-	_, ok := smc.sessions[broad.Query.SessionID]
+	_, ok := smc.sessions.GetSession(broad.Query.SessionID)
 	if ok {
 		// Delete session as required
 		log.Lvl3(smc.ServerIdentity(), "Requested session exists. Deleting it")
-		delete(smc.sessions, broad.Query.SessionID)
+		smc.sessions.DeleteSession(broad.Query.SessionID)
 		answer.Valid = true
 	} else {
 		// Mark answer as invalid
 		log.Lvl3(smc.ServerIdentity(), "Requested session does not exist. Returning invalid answer")
 		answer.Valid = false
 	}
-	smc.sessionsLock.Unlock()
 
 	// Answer to root
 	log.Lvl2(smc.ServerIdentity(), "Sending answer to root")
@@ -167,7 +162,7 @@ func (smc *Service) processCloseSessionBroadcast(msg *network.Envelope) {
 }
 
 func (smc *Service) processCloseSessionBroadcastAnswer(msg *network.Envelope) {
-	answer := (msg.Msg).(*CloseSessionBroadcastAnswer)
+	answer := (msg.Msg).(*messages.CloseSessionBroadcastAnswer)
 
 	log.Lvl1(smc.ServerIdentity(), "Received CloseSessionBroadcastAnswer:", answer.ReqID)
 
@@ -181,7 +176,7 @@ func (smc *Service) processCloseSessionBroadcastAnswer(msg *network.Envelope) {
 // This method is executed at the server when receiving the root's CloseSessionReply.
 // It simply sends the reply through the channel.
 func (smc *Service) processCloseSessionReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*CloseSessionReply)
+	reply := (msg.Msg).(*messages.CloseSessionReply)
 
 	log.Lvl1(smc.ServerIdentity(), "Received CloseSessionReply:", reply.ReqID)
 

@@ -2,84 +2,30 @@ package service
 
 import (
 	"errors"
-	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/messages"
+	"lattigo-smc/service/session"
 	"sync"
 )
 
 type Service struct {
 	*onet.ServiceProcessor
 
-	sessionsLock sync.RWMutex
-	sessions     map[SessionID]*Session
+	sessions *session.SessionStore
 
 	// The CreateSession and CloseSession queries entail a broadcast from the root. The root waits for answers here
 	// TODO:  migrate to protocol
-	createSessionBroadcastAnswers map[CreateSessionRequestID]chan *CreateSessionBroadcastAnswer
-	closeSessionBroadcastAnswers  map[CloseSessionRequestID]chan *CloseSessionBroadcastAnswer
+	createSessionBroadcastAnswers map[messages.CreateSessionRequestID]chan *messages.CreateSessionBroadcastAnswer
+	closeSessionBroadcastAnswers  map[messages.CloseSessionRequestID]chan *messages.CloseSessionBroadcastAnswer
 
 	// Synchronisation point between HandleCreateSessionQuery and processCreateSessionReply
 	createSessionRepLock sync.RWMutex
-	createSessionReplies map[CreateSessionRequestID]chan *CreateSessionReply
+	createSessionReplies map[messages.CreateSessionRequestID]chan *messages.CreateSessionReply
 	// Synchronisation point between HandleCloseSessionQuery and processCloseSessionReply
 	closeSessionRepLock sync.RWMutex
-	closeSessionReplies map[CloseSessionRequestID]chan *CloseSessionReply
-}
-
-// Service is the service of lattigoSMC - allows to compute the different HE operations
-type Session struct {
-	SessionID SessionID
-
-	Roster *onet.Roster
-
-	// These variables are set upon construction.
-	Params  *bfv.Parameters
-	skShard *bfv.SecretKey
-	// These variables have to be set via an explicit Query.
-	pubKeyLock      sync.RWMutex
-	MasterPublicKey *bfv.PublicKey
-	rotKeyLock      sync.RWMutex
-	rotationKey     *bfv.RotationKeys
-	evalKeyLock     sync.RWMutex
-	evalKey         *bfv.EvaluationKey
-
-	// Stores ciphertexts.
-	databaseLock sync.RWMutex
-	database     map[CipherID]*bfv.Ciphertext
-	// Stores additive shares.
-	sharesLock sync.RWMutex
-	shares     map[SharesID]*dbfv.AdditiveShare
-
-	// Synchronisation point between HandleQuery and the corresponding processReply
-	genPubKeyRepLock   sync.RWMutex
-	genPubKeyReplies   map[GenPubKeyRequestID]chan *GenPubKeyReply
-	genEvalKeyRepLock  sync.RWMutex
-	genEvalKeyReplies  map[GenEvalKeyRequestID]chan *GenEvalKeyReply
-	genRotKeyRepLock   sync.RWMutex
-	genRotKeyReplies   map[GenRotKeyRequestID]chan *GenRotKeyReply
-	keyRepLock         sync.RWMutex
-	keyReplies         map[KeyRequestID]chan *KeyReply
-	storeRepLock       sync.RWMutex
-	storeReplies       map[StoreRequestID]chan *StoreReply
-	sumRepLock         sync.RWMutex
-	sumReplies         map[SumRequestID]chan *SumReply
-	multiplyRepLock    sync.RWMutex
-	multiplyReplies    map[MultiplyRequestID]chan *MultiplyReply
-	relinRepLock       sync.RWMutex
-	relinReplies       map[RelinRequestID]chan *RelinReply
-	rotationRepLock    sync.RWMutex
-	rotationReplies    map[RotationRequestID]chan *RotationReply
-	retrieveRepLock    sync.RWMutex
-	retrieveReplies    map[RetrieveRequestID]chan *RetrieveReply
-	refreshRepLock     sync.RWMutex
-	refreshReplies     map[RefreshRequestID]chan *RefreshReply
-	encToSharesRepLock sync.RWMutex
-	encToSharesReplies map[EncToSharesRequestID]chan *EncToSharesReply
-	sharesToEncRepLock sync.RWMutex
-	sharesToEncReplies map[SharesToEncRequestID]chan *SharesToEncReply
+	closeSessionReplies map[messages.CloseSessionRequestID]chan *messages.CloseSessionReply
 }
 
 const ServiceName = "LattigoSMC"
@@ -100,14 +46,13 @@ func NewService(c *onet.Context) (onet.Service, error) {
 	smcService := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
 
-		// No need to initialise sessionsLock
-		sessions: make(map[SessionID]*Session),
+		sessions: session.NewSessionStore(),
 
-		createSessionBroadcastAnswers: make(map[CreateSessionRequestID]chan *CreateSessionBroadcastAnswer),
-		closeSessionBroadcastAnswers:  make(map[CloseSessionRequestID]chan *CloseSessionBroadcastAnswer),
+		createSessionBroadcastAnswers: make(map[messages.CreateSessionRequestID]chan *messages.CreateSessionBroadcastAnswer),
+		closeSessionBroadcastAnswers:  make(map[messages.CloseSessionRequestID]chan *messages.CloseSessionBroadcastAnswer),
 
-		createSessionReplies: make(map[CreateSessionRequestID]chan *CreateSessionReply),
-		closeSessionReplies:  make(map[CloseSessionRequestID]chan *CloseSessionReply),
+		createSessionReplies: make(map[messages.CreateSessionRequestID]chan *messages.CreateSessionReply),
+		closeSessionReplies:  make(map[messages.CloseSessionRequestID]chan *messages.CloseSessionReply),
 	}
 
 	// Registers the handlers for client requests.
@@ -120,46 +65,6 @@ func NewService(c *onet.Context) (onet.Service, error) {
 	registerServerMsgHandler(c, smcService)
 
 	return smcService, nil
-}
-
-// Constructor of a session. Already requires roster and bfv parameters.
-func (smc *Service) NewSession(id SessionID, roster *onet.Roster, params *bfv.Parameters) *Session {
-	log.Lvl1(smc.ServerIdentity(), "Session constructor started")
-
-	session := &Session{
-		SessionID: id,
-
-		Roster: roster,
-
-		Params: params,
-
-		// No need to initialise pubKeyLock, rotKeyLock, and evalKeyLock
-
-		// No need to initialise databaseLock
-		database: make(map[CipherID]*bfv.Ciphertext),
-		// No need to initialise sharesLock
-		shares: make(map[SharesID]*dbfv.AdditiveShare),
-
-		// No need to initialise locks
-		genPubKeyReplies:   make(map[GenPubKeyRequestID]chan *GenPubKeyReply),
-		genEvalKeyReplies:  make(map[GenEvalKeyRequestID]chan *GenEvalKeyReply),
-		genRotKeyReplies:   make(map[GenRotKeyRequestID]chan *GenRotKeyReply),
-		keyReplies:         make(map[KeyRequestID]chan *KeyReply),
-		storeReplies:       make(map[StoreRequestID]chan *StoreReply),
-		sumReplies:         make(map[SumRequestID]chan *SumReply),
-		multiplyReplies:    make(map[MultiplyRequestID]chan *MultiplyReply),
-		relinReplies:       make(map[RelinRequestID]chan *RelinReply),
-		rotationReplies:    make(map[RotationRequestID]chan *RotationReply),
-		retrieveReplies:    make(map[RetrieveRequestID]chan *RetrieveReply),
-		refreshReplies:     make(map[RefreshRequestID]chan *RefreshReply),
-		encToSharesReplies: make(map[EncToSharesRequestID]chan *EncToSharesReply),
-		sharesToEncReplies: make(map[SharesToEncRequestID]chan *SharesToEncReply),
-	}
-
-	keygen := bfv.NewKeyGenerator(params)
-	session.skShard = keygen.GenSecretKey()
-
-	return session
 }
 
 // Registers in smcService handlers - of the form func(msg interface{})(ret interface{}, err error) -
@@ -222,68 +127,68 @@ func registerClientQueryHandlers(smcService *Service) error {
 // server-root interaction). Upon reception of one of these messages, the method Process will be invoked.
 func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 	// Create Session
-	c.RegisterProcessor(smcService, msgTypes.msgCreateSessionRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgCreateSessionBroadcast)
-	c.RegisterProcessor(smcService, msgTypes.msgCreateSessionBroadcastAnswer)
-	c.RegisterProcessor(smcService, msgTypes.msgCreateSessionReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCreateSessionRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCreateSessionBroadcast)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCreateSessionBroadcastAnswer)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCreateSessionReply)
 
 	// Close Session
-	c.RegisterProcessor(smcService, msgTypes.msgCloseSessionRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgCloseSessionBroadcast)
-	c.RegisterProcessor(smcService, msgTypes.msgCloseSessionBroadcastAnswer)
-	c.RegisterProcessor(smcService, msgTypes.msgCloseSessionReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCloseSessionRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCloseSessionBroadcast)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCloseSessionBroadcastAnswer)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgCloseSessionReply)
 
 	// Generate Public Key
-	c.RegisterProcessor(smcService, msgTypes.msgGenPubKeyRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgGenPubKeyReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgGenPubKeyRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgGenPubKeyReply)
 
 	// Generate Evaluation Key
-	c.RegisterProcessor(smcService, msgTypes.msgGenEvalKeyRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgGenEvalKeyReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgGenEvalKeyRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgGenEvalKeyReply)
 
 	// Generate Rotation Key
-	c.RegisterProcessor(smcService, msgTypes.msgGenRotKeyRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgGenRotKeyReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgGenRotKeyRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgGenRotKeyReply)
 
 	// Key
-	c.RegisterProcessor(smcService, msgTypes.msgKeyRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgKeyReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgKeyRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgKeyReply)
 
 	// Store
-	c.RegisterProcessor(smcService, msgTypes.msgStoreRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgStoreReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgStoreRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgStoreReply)
 
 	// Retrieve
-	c.RegisterProcessor(smcService, msgTypes.msgRetrieveRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgRetrieveReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgRetrieveRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgRetrieveReply)
 
 	// Sum
-	c.RegisterProcessor(smcService, msgTypes.msgSumRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgSumReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgSumRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgSumReply)
 
 	// Multiply
-	c.RegisterProcessor(smcService, msgTypes.msgMultiplyRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgMultiplyReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgMultiplyRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgMultiplyReply)
 
 	// Relinearise
-	c.RegisterProcessor(smcService, msgTypes.msgRelinRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgRelinReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgRelinRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgRelinReply)
 
 	// Refresh
-	c.RegisterProcessor(smcService, msgTypes.msgRefreshRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgRefreshReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgRefreshRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgRefreshReply)
 
 	// Rotation
-	c.RegisterProcessor(smcService, msgTypes.msgRotationRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgRotationReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgRotationRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgRotationReply)
 
 	// Encryption to shares
-	c.RegisterProcessor(smcService, msgTypes.msgEncToSharesRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgEncToSharesReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgEncToSharesRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgEncToSharesReply)
 
 	// Shares to encryption
-	c.RegisterProcessor(smcService, msgTypes.msgSharesToEncRequest)
-	c.RegisterProcessor(smcService, msgTypes.msgSharesToEncReply)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgSharesToEncRequest)
+	c.RegisterProcessor(smcService, messages.MsgTypes.MsgSharesToEncReply)
 }
 
 // Process processes messages from servers. It is called by the onet library upon reception of any of
@@ -291,183 +196,167 @@ func registerServerMsgHandler(c *onet.Context, smcService *Service) {
 // is bound to be a giant if-else-if, which "manually" dispatches based on the message type.
 func (smc *Service) Process(msg *network.Envelope) {
 	// Create Session
-	if msg.MsgType.Equal(msgTypes.msgCreateSessionRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionRequest) {
 		smc.processCreateSessionRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgCreateSessionBroadcast) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionBroadcast) {
 		smc.processCreateSessionBroadcast(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgCreateSessionBroadcastAnswer) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionBroadcastAnswer) {
 		smc.processCreateSessionBroadcastAnswer(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgCreateSessionReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionReply) {
 		smc.processCreateSessionReply(msg)
 		return
 	}
 
 	// Close Session
-	if msg.MsgType.Equal(msgTypes.msgCloseSessionRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionRequest) {
 		smc.processCloseSessionRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgCloseSessionBroadcast) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionBroadcast) {
 		smc.processCloseSessionBroadcast(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgCloseSessionBroadcastAnswer) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionBroadcastAnswer) {
 		smc.processCloseSessionBroadcastAnswer(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgCloseSessionReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionReply) {
 		smc.processCloseSessionReply(msg)
 		return
 	}
 
 	// Generate Public Key
-	if msg.MsgType.Equal(msgTypes.msgGenPubKeyRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgGenPubKeyRequest) {
 		smc.processGenPubKeyRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgGenPubKeyReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgGenPubKeyReply) {
 		smc.processGenPubKeyReply(msg)
 		return
 	}
 
 	// Generate Evaluation Key
-	if msg.MsgType.Equal(msgTypes.msgGenEvalKeyRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgGenEvalKeyRequest) {
 		smc.processGenEvalKeyRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgGenEvalKeyReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgGenEvalKeyReply) {
 		smc.processGenEvalKeyReply(msg)
 		return
 	}
 
 	// Generate Rotation Key
-	if msg.MsgType.Equal(msgTypes.msgGenRotKeyRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgGenRotKeyRequest) {
 		smc.processGenRotKeyRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgGenRotKeyReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgGenRotKeyReply) {
 		smc.processGenRotKeyReply(msg)
 		return
 	}
 
 	// Key
-	if msg.MsgType.Equal(msgTypes.msgKeyRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgKeyRequest) {
 		smc.processKeyRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgKeyReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgKeyReply) {
 		smc.processKeyReply(msg)
 		return
 	}
 
 	// Store
-	if msg.MsgType.Equal(msgTypes.msgStoreRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgStoreRequest) {
 		smc.processStoreRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgStoreReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgStoreReply) {
 		smc.processStoreReply(msg)
 		return
 	}
 
 	// Retrieve
-	if msg.MsgType.Equal(msgTypes.msgRetrieveRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgRetrieveRequest) {
 		smc.processRetrieveRequest(msg)
 		return
-	} /*
-		if msg.MsgType.Equal(msgTypes.msgRetrieveBroadcast) {
-			smc.processRetrieveBroadcast(msg)
-			return
-		}*/
-	if msg.MsgType.Equal(msgTypes.msgRetrieveReply) {
+	}
+	if msg.MsgType.Equal(messages.MsgTypes.MsgRetrieveReply) {
 		smc.processRetrieveReply(msg)
 		return
 	}
 
 	// Sum
-	if msg.MsgType.Equal(msgTypes.msgSumRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgSumRequest) {
 		smc.processSumRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgSumReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgSumReply) {
 		smc.processSumReply(msg)
 		return
 	}
 
 	// Multiply
-	if msg.MsgType.Equal(msgTypes.msgMultiplyRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgMultiplyRequest) {
 		smc.processMultiplyRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgMultiplyReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgMultiplyReply) {
 		smc.processMultiplyReply(msg)
 		return
 	}
 
 	// Relinearise
-	if msg.MsgType.Equal(msgTypes.msgRelinRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgRelinRequest) {
 		smc.processRelinRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgRelinReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgRelinReply) {
 		smc.processRelinReply(msg)
 		return
 	}
 
 	// Refresh
-	if msg.MsgType.Equal(msgTypes.msgRefreshRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgRefreshRequest) {
 		smc.processRefreshRequest(msg)
 		return
-	} /*
-		if msg.MsgType.Equal(msgTypes.msgRefreshBroadcast) {
-			smc.processRefreshBroadcast(msg)
-			return
-		}*/
-	if msg.MsgType.Equal(msgTypes.msgRefreshReply) {
+	}
+	if msg.MsgType.Equal(messages.MsgTypes.MsgRefreshReply) {
 		smc.processRefreshReply(msg)
 		return
 	}
 
 	// Rotation
-	if msg.MsgType.Equal(msgTypes.msgRotationRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgRotationRequest) {
 		smc.processRotationRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(msgTypes.msgRotationReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgRotationReply) {
 		smc.processRotationReply(msg)
 		return
 	}
 
 	// Encryption to shares
-	if msg.MsgType.Equal(msgTypes.msgEncToSharesRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgEncToSharesRequest) {
 		smc.processEncToSharesRequest(msg)
 		return
-	} /*
-		if msg.MsgType.Equal(msgTypes.msgEncToSharesBroadcast) {
-			smc.processEncToSharesBroadcast(msg)
-			return
-		}*/
-	if msg.MsgType.Equal(msgTypes.msgEncToSharesReply) {
+	}
+	if msg.MsgType.Equal(messages.MsgTypes.MsgEncToSharesReply) {
 		smc.processEncToSharesReply(msg)
 		return
 	}
 
 	// Shares to encryption
-	if msg.MsgType.Equal(msgTypes.msgSharesToEncRequest) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgSharesToEncRequest) {
 		smc.processSharesToEncRequest(msg)
 		return
-	} /*
-		if msg.MsgType.Equal(msgTypes.msgEncToSharesBroadcast) {
-			smc.processSharesToEncBroadcast(msg)
-			return
-		}*/
-	if msg.MsgType.Equal(msgTypes.msgSharesToEncReply) {
+	}
+	if msg.MsgType.Equal(messages.MsgTypes.MsgSharesToEncReply) {
 		smc.processSharesToEncReply(msg)
 		return
 	}
