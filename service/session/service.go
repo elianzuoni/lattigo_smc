@@ -14,15 +14,23 @@ type Service struct {
 
 	sessions *SessionStore
 
-	// Synchronisation point between HandleCreateSessionQuery and processCreateSessionReply
+	// Synchronisation points on which a reply from a contacted server is waited for
 	createSessionRepLock sync.RWMutex
 	createSessionReplies map[messages.CreateSessionRequestID]chan *messages.CreateSessionReply
-	// Synchronisation point between HandleCloseSessionQuery and processCloseSessionReply
-	closeSessionRepLock sync.RWMutex
-	closeSessionReplies map[messages.CloseSessionRequestID]chan *messages.CloseSessionReply
-	// Synchronisation point between RetrieveRemoteCiphertext and processGetCipherReply
-	getCipherRepLock sync.RWMutex
-	getCipherReplies map[messages.GetCipherRequestID]chan *messages.GetCipherReply
+	closeSessionRepLock  sync.RWMutex
+	closeSessionReplies  map[messages.CloseSessionRequestID]chan *messages.CloseSessionReply
+	genPubKeyRepLock     sync.RWMutex
+	genPubKeyReplies     map[messages.GenPubKeyRequestID]chan *messages.GenPubKeyReply
+	genEvalKeyRepLock    sync.RWMutex
+	genEvalKeyReplies    map[messages.GenEvalKeyRequestID]chan *messages.GenEvalKeyReply
+	genRotKeyRepLock     sync.RWMutex
+	genRotKeyReplies     map[messages.GenRotKeyRequestID]chan *messages.GenRotKeyReply
+	keyRepLock           sync.RWMutex
+	keyReplies           map[messages.KeyRequestID]chan *messages.KeyReply
+	storeRepLock         sync.RWMutex
+	storeReplies         map[messages.StoreRequestID]chan *messages.StoreReply
+	getCipherRepLock     sync.RWMutex
+	getCipherReplies     map[messages.GetCipherRequestID]chan *messages.GetCipherReply
 }
 
 const ServiceName = "SessionService"
@@ -45,6 +53,11 @@ func NewService(c *onet.Context) (onet.Service, error) {
 
 		createSessionReplies: make(map[messages.CreateSessionRequestID]chan *messages.CreateSessionReply),
 		closeSessionReplies:  make(map[messages.CloseSessionRequestID]chan *messages.CloseSessionReply),
+		genPubKeyReplies:     make(map[messages.GenPubKeyRequestID]chan *messages.GenPubKeyReply),
+		genEvalKeyReplies:    make(map[messages.GenEvalKeyRequestID]chan *messages.GenEvalKeyReply),
+		genRotKeyReplies:     make(map[messages.GenRotKeyRequestID]chan *messages.GenRotKeyReply),
+		keyReplies:           make(map[messages.KeyRequestID]chan *messages.KeyReply),
+		storeReplies:         make(map[messages.StoreRequestID]chan *messages.StoreReply),
 		getCipherReplies:     make(map[messages.GetCipherRequestID]chan *messages.GetCipherReply),
 	}
 
@@ -128,91 +141,91 @@ func registerServerMsgHandler(c *onet.Context, serv *Service) {
 }
 
 // Retrieves Session from the underlying SessionStore. Returns boolean indicating success.
-func (serv *Service) GetSession(id messages.SessionID) (s *Session, ok bool) {
-	return serv.sessions.GetSession(id)
+func (service *Service) GetSession(id messages.SessionID) (s *Session, ok bool) {
+	return service.sessions.GetSession(id)
 }
 
 // Process processes messages from servers. It is called by the onet library upon reception of any of
 // the messages registered in registerServerMsgHandler. For this reason, the Process method
 // is bound to be a giant if-else-if, which "manually" dispatches based on the message type.
-func (serv *Service) Process(msg *network.Envelope) {
+func (service *Service) Process(msg *network.Envelope) {
 	// Create Session
 	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionRequest) {
-		serv.processCreateSessionRequest(msg)
+		service.processCreateSessionRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgCreateSessionReply) {
-		serv.processCreateSessionReply(msg)
+		service.processCreateSessionReply(msg)
 		return
 	}
 
 	// Close Session
 	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionRequest) {
-		serv.processCloseSessionRequest(msg)
+		service.processCloseSessionRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgCloseSessionReply) {
-		serv.processCloseSessionReply(msg)
+		service.processCloseSessionReply(msg)
 		return
 	}
 
 	// Generate Public Key
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGenPubKeyRequest) {
-		serv.processGenPubKeyRequest(msg)
+		service.processGenPubKeyRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGenPubKeyReply) {
-		serv.processGenPubKeyReply(msg)
+		service.processGenPubKeyReply(msg)
 		return
 	}
 
 	// Generate Evaluation Key
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGenEvalKeyRequest) {
-		serv.processGenEvalKeyRequest(msg)
+		service.processGenEvalKeyRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGenEvalKeyReply) {
-		serv.processGenEvalKeyReply(msg)
+		service.processGenEvalKeyReply(msg)
 		return
 	}
 
 	// Generate Rotation Key
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGenRotKeyRequest) {
-		serv.processGenRotKeyRequest(msg)
+		service.processGenRotKeyRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGenRotKeyReply) {
-		serv.processGenRotKeyReply(msg)
+		service.processGenRotKeyReply(msg)
 		return
 	}
 
 	// Key
 	if msg.MsgType.Equal(messages.MsgTypes.MsgKeyRequest) {
-		serv.processKeyRequest(msg)
+		service.processKeyRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgKeyReply) {
-		serv.processKeyReply(msg)
+		service.processKeyReply(msg)
 		return
 	}
 
 	// Store
 	if msg.MsgType.Equal(messages.MsgTypes.MsgStoreRequest) {
-		serv.processStoreRequest(msg)
+		service.processStoreRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgStoreReply) {
-		serv.processStoreReply(msg)
+		service.processStoreReply(msg)
 		return
 	}
 
 	// Get Cipher
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherRequest) {
-		serv.processGetCipherRequest(msg)
+		service.processGetCipherRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherReply) {
-		serv.processGetCipherReply(msg)
+		service.processGetCipherReply(msg)
 		return
 	}
 

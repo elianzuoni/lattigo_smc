@@ -26,9 +26,9 @@ func (service *Service) HandleMultiplyQuery(query *messages.MultiplyQuery) (netw
 	req := &messages.MultiplyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.MultiplyRepLock.Lock()
-	s.MultiplyReplies[reqID] = make(chan *messages.MultiplyReply)
-	s.MultiplyRepLock.Unlock()
+	service.multiplyRepLock.Lock()
+	service.multiplyReplies[reqID] = make(chan *messages.MultiplyReply)
+	service.multiplyRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending MulitplyRequest to root:", reqID)
@@ -42,17 +42,17 @@ func (service *Service) HandleMultiplyQuery(query *messages.MultiplyQuery) (netw
 
 	// Receive reply from channel
 	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.MultiplyRepLock.RLock()
-	replyChan := s.MultiplyReplies[reqID]
-	s.MultiplyRepLock.RUnlock()
+	service.multiplyRepLock.RLock()
+	replyChan := service.multiplyReplies[reqID]
+	service.multiplyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.MultiplyRepLock.Lock()
+	service.multiplyRepLock.Lock()
 	close(replyChan)
-	delete(s.MultiplyReplies, reqID)
-	s.MultiplyRepLock.Unlock()
+	delete(service.multiplyReplies, reqID)
+	service.multiplyRepLock.Unlock()
 
 	log.Lvl4(service.ServerIdentity(), "Closed channel")
 
@@ -144,17 +144,10 @@ func (service *Service) processMultiplyReply(msg *network.Envelope) {
 
 	log.Lvl1(service.ServerIdentity(), "Received MultiplyReply:", reply.ReqID)
 
-	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(reply.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return
-	}
-
 	// Simply send reply through channel
-	s.MultiplyRepLock.RLock()
-	s.MultiplyReplies[reply.ReqID] <- reply
-	s.MultiplyRepLock.RUnlock()
+	service.multiplyRepLock.RLock()
+	service.multiplyReplies[reply.ReqID] <- reply
+	service.multiplyRepLock.RUnlock()
 	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return

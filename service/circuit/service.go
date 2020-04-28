@@ -7,10 +7,28 @@ import (
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
 	"lattigo-smc/service/session"
+	"sync"
 )
 
 type Service struct {
 	*onet.ServiceProcessor
+
+	sumRepLock         sync.RWMutex
+	sumReplies         map[messages.SumRequestID]chan *messages.SumReply
+	multiplyRepLock    sync.RWMutex
+	multiplyReplies    map[messages.MultiplyRequestID]chan *messages.MultiplyReply
+	relinRepLock       sync.RWMutex
+	relinReplies       map[messages.RelinRequestID]chan *messages.RelinReply
+	rotationRepLock    sync.RWMutex
+	rotationReplies    map[messages.RotationRequestID]chan *messages.RotationReply
+	retrieveRepLock    sync.RWMutex
+	retrieveReplies    map[messages.RetrieveRequestID]chan *messages.RetrieveReply
+	refreshRepLock     sync.RWMutex
+	refreshReplies     map[messages.RefreshRequestID]chan *messages.RefreshReply
+	encToSharesRepLock sync.RWMutex
+	encToSharesReplies map[messages.EncToSharesRequestID]chan *messages.EncToSharesReply
+	sharesToEncRepLock sync.RWMutex
+	sharesToEncReplies map[messages.SharesToEncRequestID]chan *messages.SharesToEncReply
 }
 
 const ServiceName = "CircuitService"
@@ -30,6 +48,16 @@ func NewService(c *onet.Context) (onet.Service, error) {
 
 	service := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
+
+		// Synchronisation points on which a reply from a contacted server is waited for
+		sumReplies:         make(map[messages.SumRequestID]chan *messages.SumReply),
+		multiplyReplies:    make(map[messages.MultiplyRequestID]chan *messages.MultiplyReply),
+		relinReplies:       make(map[messages.RelinRequestID]chan *messages.RelinReply),
+		rotationReplies:    make(map[messages.RotationRequestID]chan *messages.RotationReply),
+		retrieveReplies:    make(map[messages.RetrieveRequestID]chan *messages.RetrieveReply),
+		refreshReplies:     make(map[messages.RefreshRequestID]chan *messages.RefreshReply),
+		encToSharesReplies: make(map[messages.EncToSharesRequestID]chan *messages.EncToSharesReply),
+		sharesToEncReplies: make(map[messages.SharesToEncRequestID]chan *messages.SharesToEncReply),
 	}
 
 	// Registers the handlers for client requests.

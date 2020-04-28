@@ -26,9 +26,9 @@ func (service *Service) HandleRefreshQuery(query *messages.RefreshQuery) (networ
 	req := &messages.RefreshRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.RefreshRepLock.Lock()
-	s.RefreshReplies[reqID] = make(chan *messages.RefreshReply)
-	s.RefreshRepLock.Unlock()
+	service.refreshRepLock.Lock()
+	service.refreshReplies[reqID] = make(chan *messages.RefreshReply)
+	service.refreshRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending RefreshRequest to root:", reqID)
@@ -42,17 +42,17 @@ func (service *Service) HandleRefreshQuery(query *messages.RefreshQuery) (networ
 
 	// Receive reply from channel
 	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.RefreshRepLock.RLock()
-	replyChan := s.RefreshReplies[reqID]
-	s.RefreshRepLock.RUnlock()
+	service.refreshRepLock.RLock()
+	replyChan := service.refreshReplies[reqID]
+	service.refreshRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.RefreshRepLock.Lock()
+	service.refreshRepLock.Lock()
 	close(replyChan)
-	delete(s.RefreshReplies, reqID)
-	s.RefreshRepLock.Unlock()
+	delete(service.refreshReplies, reqID)
+	service.refreshRepLock.Unlock()
 
 	log.Lvl4(service.ServerIdentity(), "Closed channel")
 
@@ -204,17 +204,10 @@ func (service *Service) processRefreshReply(msg *network.Envelope) {
 
 	log.Lvl1(service.ServerIdentity(), "Received RefreshReply")
 
-	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(reply.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return
-	}
-
 	// Simply send reply through channel
-	s.RefreshRepLock.RLock()
-	s.RefreshReplies[reply.ReqID] <- reply
-	s.RefreshRepLock.RUnlock()
+	service.refreshRepLock.RLock()
+	service.refreshReplies[reply.ReqID] <- reply
+	service.refreshRepLock.RUnlock()
 	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return

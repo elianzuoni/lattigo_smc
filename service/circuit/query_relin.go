@@ -26,9 +26,9 @@ func (service *Service) HandleRelinearisationQuery(query *messages.RelinQuery) (
 	req := &messages.RelinRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.RelinRepLock.Lock()
-	s.RelinReplies[reqID] = make(chan *messages.RelinReply)
-	s.RelinRepLock.Unlock()
+	service.relinRepLock.Lock()
+	service.relinReplies[reqID] = make(chan *messages.RelinReply)
+	service.relinRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending RelinRequest to root.")
@@ -41,17 +41,17 @@ func (service *Service) HandleRelinearisationQuery(query *messages.RelinQuery) (
 
 	// Receive reply from channel
 	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.RelinRepLock.RLock()
-	replyChan := s.RelinReplies[reqID]
-	s.RelinRepLock.RUnlock()
+	service.relinRepLock.RLock()
+	replyChan := service.relinReplies[reqID]
+	service.relinRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.RelinRepLock.Lock()
+	service.relinRepLock.Lock()
 	close(replyChan)
-	delete(s.RelinReplies, reqID)
-	s.RelinRepLock.Unlock()
+	delete(service.relinReplies, reqID)
+	service.relinRepLock.Unlock()
 
 	log.Lvl4(service.ServerIdentity(), "Closed channel")
 
@@ -158,17 +158,10 @@ func (service *Service) processRelinReply(msg *network.Envelope) {
 
 	log.Lvl1(service.ServerIdentity(), "Received RelinReply:", reply.ReqID)
 
-	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(reply.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return
-	}
-
 	// Simply send reply through channel
-	s.RelinRepLock.RLock()
-	s.RelinReplies[reply.ReqID] <- reply
-	s.RelinRepLock.RUnlock()
+	service.relinRepLock.RLock()
+	service.relinReplies[reply.ReqID] <- reply
+	service.relinRepLock.RUnlock()
 	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return

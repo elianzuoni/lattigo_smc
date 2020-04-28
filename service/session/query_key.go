@@ -13,15 +13,15 @@ import (
 // from the root.
 // The request is forwarded to the root, and the method returns a response based on the reply sent by the server,
 // indicating which keys were retrieved.
-func (serv *Service) HandleKeyQuery(query *messages.KeyQuery) (network.Message, error) {
-	log.Lvl1(serv.ServerIdentity(), "Received KeyQuery query. ReqRotKey:", query.RotationKey,
+func (service *Service) HandleKeyQuery(query *messages.KeyQuery) (network.Message, error) {
+	log.Lvl1(service.ServerIdentity(), "Received KeyQuery query. ReqRotKey:", query.RotationKey,
 		"; ReqEvalKey:", query.EvaluationKey)
 
 	// Extract Session, if existent
-	s, ok := serv.sessions.GetSession(query.SessionID)
+	s, ok := service.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
-		log.Error(serv.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), err)
 		return nil, err
 	}
 
@@ -30,37 +30,37 @@ func (serv *Service) HandleKeyQuery(query *messages.KeyQuery) (network.Message, 
 	req := &messages.KeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.KeyRepLock.Lock()
-	s.KeyReplies[reqID] = make(chan *messages.KeyReply)
-	s.KeyRepLock.Unlock()
+	service.keyRepLock.Lock()
+	service.keyReplies[reqID] = make(chan *messages.KeyReply)
+	service.keyRepLock.Unlock()
 
 	// Send request to root
-	log.Lvl2(serv.ServerIdentity(), "Sending KeyRequest to root:", reqID)
+	log.Lvl2(service.ServerIdentity(), "Sending KeyRequest to root:", reqID)
 	tree := s.Roster.GenerateBinaryTree()
-	err := serv.SendRaw(tree.Root.ServerIdentity, req)
+	err := service.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Could not forward query to the root: " + err.Error())
-		log.Error(serv.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), err)
 		return nil, err
 	}
 
-	log.Lvl2(serv.ServerIdentity(), "Forwarded request to the root")
+	log.Lvl2(service.ServerIdentity(), "Forwarded request to the root")
 
 	// Receive reply from channel
-	log.Lvl3(serv.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.KeyRepLock.RLock()
-	replyChan := s.KeyReplies[reqID]
-	s.KeyRepLock.RUnlock()
+	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	service.keyRepLock.RLock()
+	replyChan := service.keyReplies[reqID]
+	service.keyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
-	log.Lvl3(serv.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.KeyRepLock.Lock()
+	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+	service.keyRepLock.Lock()
 	close(replyChan)
-	delete(s.KeyReplies, reqID)
-	s.KeyRepLock.Unlock()
+	delete(service.keyReplies, reqID)
+	service.keyRepLock.Unlock()
 
-	log.Lvl4(serv.ServerIdentity(), "Closed channel")
+	log.Lvl4(service.ServerIdentity(), "Closed channel")
 
 	// Save (in the Service struct) the received keys.
 	if reply.EvalKey != nil {
@@ -81,21 +81,21 @@ func (serv *Service) HandleKeyQuery(query *messages.KeyQuery) (network.Message, 
 
 // KeyQuery is received at root from server.
 // It comprises two flags, signalling which keys the server is asking for.
-func (serv *Service) processKeyRequest(msg *network.Envelope) {
+func (service *Service) processKeyRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.KeyRequest)
 
-	log.Lvl1(serv.ServerIdentity(), "Root. Received KeyQuery. ReqRotKey:", req.Query.RotationKey,
+	log.Lvl1(service.ServerIdentity(), "Root. Received KeyQuery. ReqRotKey:", req.Query.RotationKey,
 		"; ReqEvalKey:", req.Query.EvaluationKey)
 
 	// Start by declaring reply with minimal fields.
 	reply := &messages.KeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent
-	s, ok := serv.sessions.GetSession(req.SessionID)
+	s, ok := service.sessions.GetSession(req.SessionID)
 	if !ok {
-		log.Error(serv.ServerIdentity(), "Requested session does not exist")
+		log.Error(service.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := serv.SendRaw(msg.ServerIdentity, &reply)
+		err := service.SendRaw(msg.ServerIdentity, &reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}
@@ -117,8 +117,8 @@ func (serv *Service) processKeyRequest(msg *network.Envelope) {
 	reply.Valid = true
 
 	// Send the result.
-	log.Lvl2(serv.ServerIdentity(), "Sending KeyReply to server", msg.ServerIdentity)
-	err := serv.SendRaw(msg.ServerIdentity, &reply)
+	log.Lvl2(service.ServerIdentity(), "Sending KeyReply to server", msg.ServerIdentity)
+	err := service.SendRaw(msg.ServerIdentity, &reply)
 	if err != nil {
 		log.Error("Could not send reply : ", err)
 	}
@@ -126,21 +126,15 @@ func (serv *Service) processKeyRequest(msg *network.Envelope) {
 
 // This method is executed at the server when receiving the root's KeyReply.
 // It just sends the reply through the channel.
-func (serv *Service) processKeyReply(msg *network.Envelope) {
+func (service *Service) processKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*messages.KeyReply)
-	log.Lvl1(serv.ServerIdentity(), "Server. Received KeyReply. RotKeyRcvd:", reply.RotKeys != nil,
+
+	log.Lvl1(service.ServerIdentity(), "Server. Received KeyReply. RotKeyRcvd:", reply.RotKeys != nil,
 		"EvalKeyRcvd:", reply.EvalKey != nil)
 
-	// Extract Session, if existent
-	s, ok := serv.sessions.GetSession(reply.SessionID)
-	if !ok {
-		log.Error(serv.ServerIdentity(), "Requested session does not exist")
-		return
-	}
-
 	// Simply send reply through channel
-	s.KeyRepLock.RLock()
-	s.KeyReplies[reply.ReqID] <- reply
-	s.KeyRepLock.RUnlock()
-	log.Lvl4(serv.ServerIdentity(), "Sent reply through channel")
+	service.keyRepLock.RLock()
+	service.keyReplies[reply.ReqID] <- reply
+	service.keyRepLock.RUnlock()
+	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 }

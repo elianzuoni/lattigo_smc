@@ -26,9 +26,9 @@ func (service *Service) HandleSharesToEncQuery(query *messages.SharesToEncQuery)
 	req := &messages.SharesToEncRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.SharesToEncRepLock.Lock()
-	s.SharesToEncReplies[reqID] = make(chan *messages.SharesToEncReply)
-	s.SharesToEncRepLock.Unlock()
+	service.sharesToEncRepLock.Lock()
+	service.sharesToEncReplies[reqID] = make(chan *messages.SharesToEncReply)
+	service.sharesToEncRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending SharesToEncRequest to root:", reqID)
@@ -42,17 +42,17 @@ func (service *Service) HandleSharesToEncQuery(query *messages.SharesToEncQuery)
 
 	// Receive reply from channel
 	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.SharesToEncRepLock.RLock()
-	replyChan := s.SharesToEncReplies[reqID]
-	s.SharesToEncRepLock.RUnlock()
+	service.sharesToEncRepLock.RLock()
+	replyChan := service.sharesToEncReplies[reqID]
+	service.sharesToEncRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.SharesToEncRepLock.Lock()
+	service.sharesToEncRepLock.Lock()
 	close(replyChan)
-	delete(s.SharesToEncReplies, reqID)
-	s.SharesToEncRepLock.Unlock()
+	delete(service.sharesToEncReplies, reqID)
+	service.sharesToEncRepLock.Unlock()
 
 	log.Lvl4(service.ServerIdentity(), "Closed channel")
 
@@ -193,17 +193,10 @@ func (service *Service) processSharesToEncReply(msg *network.Envelope) {
 
 	log.Lvl1(service.ServerIdentity(), "Received SharesToEncReply")
 
-	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(reply.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return
-	}
-
 	// Simply send reply through channel
-	s.SharesToEncRepLock.RLock()
-	s.SharesToEncReplies[reply.ReqID] <- reply
-	s.SharesToEncRepLock.RUnlock()
+	service.sharesToEncRepLock.RLock()
+	service.sharesToEncReplies[reply.ReqID] <- reply
+	service.sharesToEncRepLock.RUnlock()
 	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return

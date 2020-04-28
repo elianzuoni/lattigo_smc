@@ -26,9 +26,9 @@ func (service *Service) HandleRotationQuery(query *messages.RotationQuery) (netw
 	req := &messages.RotationRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.RotationRepLock.Lock()
-	s.RotationReplies[reqID] = make(chan *messages.RotationReply)
-	s.RotationRepLock.Unlock()
+	service.rotationRepLock.Lock()
+	service.rotationReplies[reqID] = make(chan *messages.RotationReply)
+	service.rotationRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending RotationRequest to root:", query.CipherID)
@@ -41,17 +41,17 @@ func (service *Service) HandleRotationQuery(query *messages.RotationQuery) (netw
 
 	// Receive reply from channel
 	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.RotationRepLock.RLock()
-	replyChan := s.RotationReplies[reqID]
-	s.RotationRepLock.RUnlock()
+	service.rotationRepLock.RLock()
+	replyChan := service.rotationReplies[reqID]
+	service.rotationRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.RotationRepLock.Lock()
+	service.rotationRepLock.Lock()
 	close(replyChan)
-	delete(s.RotationReplies, reqID)
-	s.RotationRepLock.Unlock()
+	delete(service.rotationReplies, reqID)
+	service.rotationRepLock.Unlock()
 
 	log.Lvl4(service.ServerIdentity(), "Closed channel")
 
@@ -159,17 +159,10 @@ func (service *Service) processRotationReply(msg *network.Envelope) {
 
 	log.Lvl1(service.ServerIdentity(), "Received RotationReply:", reply.ReqID)
 
-	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(reply.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return
-	}
-
 	// Simply send reply through channel
-	s.RotationRepLock.RLock()
-	s.RotationReplies[reply.ReqID] <- reply
-	s.RotationRepLock.RUnlock()
+	service.rotationRepLock.RLock()
+	service.rotationReplies[reply.ReqID] <- reply
+	service.rotationRepLock.RUnlock()
 	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return

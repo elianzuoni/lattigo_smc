@@ -9,14 +9,14 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-func (serv *Service) HandleGenEvalKeyQuery(query *messages.GenEvalKeyQuery) (network.Message, error) {
-	log.Lvl1(serv.ServerIdentity(), "Received GenEvalKeyQuery")
+func (service *Service) HandleGenEvalKeyQuery(query *messages.GenEvalKeyQuery) (network.Message, error) {
+	log.Lvl1(service.ServerIdentity(), "Received GenEvalKeyQuery")
 
 	// Extract Session, if existent
-	s, ok := serv.sessions.GetSession(query.SessionID)
+	s, ok := service.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
-		log.Error(serv.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), err)
 		return nil, err
 	}
 
@@ -25,14 +25,14 @@ func (serv *Service) HandleGenEvalKeyQuery(query *messages.GenEvalKeyQuery) (net
 	req := &messages.GenEvalKeyRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.GenEvalKeyRepLock.Lock()
-	s.GenEvalKeyReplies[reqID] = make(chan *messages.GenEvalKeyReply)
-	s.GenEvalKeyRepLock.Unlock()
+	service.genEvalKeyRepLock.Lock()
+	service.genEvalKeyReplies[reqID] = make(chan *messages.GenEvalKeyReply)
+	service.genEvalKeyRepLock.Unlock()
 
 	// Send request to root
-	log.Lvl2(serv.ServerIdentity(), "Sending GenEvalKeyRequest to root:", reqID)
+	log.Lvl2(service.ServerIdentity(), "Sending GenEvalKeyRequest to root:", reqID)
 	tree := s.Roster.GenerateBinaryTree()
-	err := serv.SendRaw(tree.Root.ServerIdentity, req)
+	err := service.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Couldn't send GenEvalKeyRequest to root: " + err.Error())
 		log.Error(err)
@@ -40,46 +40,46 @@ func (serv *Service) HandleGenEvalKeyQuery(query *messages.GenEvalKeyQuery) (net
 	}
 
 	// Receive reply from channel
-	log.Lvl3(serv.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.GenEvalKeyRepLock.RLock()
-	replyChan := s.GenEvalKeyReplies[reqID]
-	s.GenEvalKeyRepLock.RUnlock()
+	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	service.genEvalKeyRepLock.RLock()
+	replyChan := service.genEvalKeyReplies[reqID]
+	service.genEvalKeyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
-	log.Lvl3(serv.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.GenEvalKeyRepLock.Lock()
+	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+	service.genEvalKeyRepLock.Lock()
 	close(replyChan)
-	delete(s.GenEvalKeyReplies, reqID)
-	s.GenEvalKeyRepLock.Unlock()
+	delete(service.genEvalKeyReplies, reqID)
+	service.genEvalKeyRepLock.Unlock()
 
-	log.Lvl4(serv.ServerIdentity(), "Closed channel")
+	log.Lvl4(service.ServerIdentity(), "Closed channel")
 
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't generate public key")
-		log.Error(serv.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	} else {
-		log.Lvl4(serv.ServerIdentity(), "Received valid reply from channel")
+		log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
 	}
 
 	return &messages.GenEvalKeyResponse{reply.Valid}, nil
 }
 
-func (serv *Service) processGenEvalKeyRequest(msg *network.Envelope) {
+func (service *Service) processGenEvalKeyRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.GenEvalKeyRequest)
 
-	log.Lvl1(serv.ServerIdentity(), "Root. Received GenEvalKeyRequest.")
+	log.Lvl1(service.ServerIdentity(), "Root. Received GenEvalKeyRequest.")
 
 	// Start by declaring reply with minimal fields.
 	reply := &messages.GenEvalKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent (actually, only check existence)
-	_, ok := serv.sessions.GetSession(req.SessionID)
+	_, ok := service.sessions.GetSession(req.SessionID)
 	if !ok {
-		log.Error(serv.ServerIdentity(), "Requested session does not exist")
+		log.Error(service.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := serv.SendRaw(msg.ServerIdentity, &reply)
+		err := service.SendRaw(msg.ServerIdentity, &reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}
@@ -87,41 +87,41 @@ func (serv *Service) processGenEvalKeyRequest(msg *network.Envelope) {
 	}
 
 	// Then, launch the genEvalKey protocol to get the MasterEvallicKey
-	log.Lvl2(serv.ServerIdentity(), "Generating Evaluation Key")
-	err := serv.genEvalKey(req.Query.SessionID, req.Query.Seed)
+	log.Lvl2(service.ServerIdentity(), "Generating Evaluation Key")
+	err := service.genEvalKey(req.Query.SessionID, req.Query.Seed)
 	if err != nil {
-		log.Error(serv.ServerIdentity(), "Could not generate evaluation key:", err)
-		err := serv.SendRaw(msg.ServerIdentity, reply)
+		log.Error(service.ServerIdentity(), "Could not generate evaluation key:", err)
+		err := service.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
-			log.Error(serv.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
 		return
 	}
 
-	log.Lvl3(serv.ServerIdentity(), "Successfully generated evallic key")
+	log.Lvl3(service.ServerIdentity(), "Successfully generated evallic key")
 
 	// Set fields in the reply
 	reply.Valid = true
 
 	// Send the positive reply to the server
-	log.Lvl2(serv.ServerIdentity(), "Replying (positively) to server")
-	err = serv.SendRaw(msg.ServerIdentity, reply)
+	log.Lvl2(service.ServerIdentity(), "Replying (positively) to server")
+	err = service.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
-		log.Error(serv.ServerIdentity(), "Could not reply (positively) to server")
+		log.Error(service.ServerIdentity(), "Could not reply (positively) to server")
 		return
 	}
 
 	return
 }
 
-func (serv *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) error {
-	log.Lvl1(serv.ServerIdentity(), "Root. Generating EvaluationKey")
+func (service *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) error {
+	log.Lvl1(service.ServerIdentity(), "Root. Generating EvaluationKey")
 
 	// Extract session
-	s, ok := serv.sessions.GetSession(SessionID)
+	s, ok := service.sessions.GetSession(SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
-		log.Error(serv.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), err)
 		return err
 	}
 
@@ -133,55 +133,55 @@ func (serv *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) error
 	defer s.EvalKeyLock.Unlock()
 	if s.EvalKey != nil {
 		err := errors.New("Evaluation key is already set")
-		log.Error(serv.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), err)
 		return err
 	}
 
 	// Create TreeNodeInstance as root
-	tree := s.Roster.GenerateNaryTreeWithRoot(2, serv.ServerIdentity())
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
 	if tree == nil {
 		err := errors.New("Could not create tree")
-		log.Error(serv.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), err)
 		return err
 	}
-	tni := serv.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
+	tni := service.NewTreeNodeInstance(tree, tree.Root, protocols.RelinearizationKeyProtocolName)
 
 	// Create configuration for the protocol instance
 	config := &messages.GenEvalKeyConfig{SessionID, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
-		log.Error(serv.ServerIdentity(), "Could not marshal protocol configuration:", err)
+		log.Error(service.ServerIdentity(), "Could not marshal protocol configuration:", err)
 		return err
 	}
 
 	// Instantiate protocol
-	log.Lvl3(serv.ServerIdentity(), "Instantiating EKG protocol")
-	protocol, err := serv.NewProtocol(tni, &onet.GenericConfig{data})
+	log.Lvl3(service.ServerIdentity(), "Instantiating EKG protocol")
+	protocol, err := service.NewProtocol(tni, &onet.GenericConfig{data})
 	if err != nil {
-		log.Error(serv.ServerIdentity(), "Could not instantiate EKG protocol", err)
+		log.Error(service.ServerIdentity(), "Could not instantiate EKG protocol", err)
 		return err
 	}
 	// Register protocol instance
-	log.Lvl3(serv.ServerIdentity(), "Registering EKG protocol instance")
-	err = serv.RegisterProtocolInstance(protocol)
+	log.Lvl3(service.ServerIdentity(), "Registering EKG protocol instance")
+	err = service.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.Error(serv.ServerIdentity(), "Could not register protocol instance:", err)
+		log.Error(service.ServerIdentity(), "Could not register protocol instance:", err)
 		return err
 	}
 
 	ekgp := protocol.(*protocols.RelinearizationKeyProtocol)
 
 	// Start the protocol
-	log.Lvl2(serv.ServerIdentity(), "Starting EKG protocol")
+	log.Lvl2(service.ServerIdentity(), "Starting EKG protocol")
 	err = ekgp.Start()
 	if err != nil {
-		log.Error(serv.ServerIdentity(), "Could not start EKG protocol:", err)
+		log.Error(service.ServerIdentity(), "Could not start EKG protocol:", err)
 		return err
 	}
 	// Call dispatch (the main logic)
 	err = ekgp.Dispatch()
 	if err != nil {
-		log.Error(serv.ServerIdentity(), "Could not dispatch EKG protocol:", err)
+		log.Error(service.ServerIdentity(), "Could not dispatch EKG protocol:", err)
 		return err
 	}
 
@@ -191,28 +191,21 @@ func (serv *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) error
 
 	// Retrieve EvaluationKey
 	s.EvalKey = ekgp.EvaluationKey
-	log.Lvl1(serv.ServerIdentity(), "Generated EvaluationKey!")
+	log.Lvl1(service.ServerIdentity(), "Generated EvaluationKey!")
 
 	return nil
 }
 
-func (serv *Service) processGenEvalKeyReply(msg *network.Envelope) {
+func (service *Service) processGenEvalKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*messages.GenEvalKeyReply)
 
-	log.Lvl1(serv.ServerIdentity(), "Received GenEvalKeyReply")
-
-	// Extract Session, if existent
-	s, ok := serv.sessions.GetSession(reply.SessionID)
-	if !ok {
-		log.Error(serv.ServerIdentity(), "Requested session does not exist")
-		return
-	}
+	log.Lvl1(service.ServerIdentity(), "Received GenEvalKeyReply")
 
 	// Simply send reply through channel
-	s.GenEvalKeyRepLock.RLock()
-	s.GenEvalKeyReplies[reply.ReqID] <- reply
-	s.GenEvalKeyRepLock.RUnlock()
-	log.Lvl4(serv.ServerIdentity(), "Sent reply through channel")
+	service.genEvalKeyRepLock.RLock()
+	service.genEvalKeyReplies[reply.ReqID] <- reply
+	service.genEvalKeyRepLock.RUnlock()
+	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return
 }

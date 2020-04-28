@@ -26,9 +26,9 @@ func (service *Service) HandleSumQuery(query *messages.SumQuery) (network.Messag
 	req := &messages.SumRequest{query.SessionID, reqID, query}
 
 	// Create channel before sending request to root.
-	s.SumRepLock.Lock()
-	s.SumReplies[reqID] = make(chan *messages.SumReply)
-	s.SumRepLock.Unlock()
+	service.sumRepLock.Lock()
+	service.sumReplies[reqID] = make(chan *messages.SumReply)
+	service.sumRepLock.Unlock()
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending SumRequest to root:", reqID)
@@ -42,17 +42,17 @@ func (service *Service) HandleSumQuery(query *messages.SumQuery) (network.Messag
 
 	// Receive reply from channel
 	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	s.SumRepLock.RLock()
-	replyChan := s.SumReplies[reqID]
-	s.SumRepLock.RUnlock()
+	service.sumRepLock.RLock()
+	replyChan := service.sumReplies[reqID]
+	service.sumRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	s.SumRepLock.Lock()
+	service.sumRepLock.Lock()
 	close(replyChan)
-	delete(s.SumReplies, reqID)
-	s.SumRepLock.Unlock()
+	delete(service.sumReplies, reqID)
+	service.sumRepLock.Unlock()
 
 	log.Lvl4(service.ServerIdentity(), "Closed channel")
 
@@ -144,17 +144,10 @@ func (service *Service) processSumReply(msg *network.Envelope) {
 
 	log.Lvl1(service.ServerIdentity(), "Received SumReply:", reply.ReqID)
 
-	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(reply.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return
-	}
-
 	// Simply send reply through channel
-	s.SumRepLock.RLock()
-	s.SumReplies[reply.ReqID] <- reply
-	s.SumRepLock.RUnlock()
+	service.sumRepLock.RLock()
+	service.sumReplies[reply.ReqID] <- reply
+	service.sumRepLock.RUnlock()
 	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return
