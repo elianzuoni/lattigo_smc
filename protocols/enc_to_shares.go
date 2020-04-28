@@ -33,6 +33,7 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"lattigo-smc/utils"
 )
 
 // This is a full-blown constructor. In every context (test, simulation, or deployment) it will have to
@@ -158,7 +159,7 @@ func (p *EncryptionToSharesProtocol) WaitDone() {
 var _ onet.ProtocolInstance = (*EncryptionToSharesProtocol)(nil)
 
 // NewE2SAccumFinaliser returns a finaliser which is recurrent in tests: it accumulates to the provided accumulator.
-func NewE2SAccumFinaliser(accum *dbfv.ConcurrentAdditiveShareAccum) func(share *dbfv.AdditiveShare) {
+func NewE2SAccumFinaliser(accum *utils.ConcurrentAdditiveShareAccum) func(share *dbfv.AdditiveShare) {
 	return func(share *dbfv.AdditiveShare) {
 		accum.Accumulate(share)
 	}

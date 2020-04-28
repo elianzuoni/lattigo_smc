@@ -7,7 +7,6 @@ package test
 import (
 	"fmt"
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/kyber/v3/suites"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -32,7 +31,7 @@ type e2sTestContext struct {
 
 	msg   []uint64
 	ct    *bfv.Ciphertext
-	accum *dbfv.ConcurrentAdditiveShareAccum
+	accum *utils.ConcurrentAdditiveShareAccum
 }
 
 var e2sTestGlobal = e2sTestContext{
@@ -154,7 +153,7 @@ func testE2S(t *testing.T, N int) {
 	log.Lvl1("Time elapsed : ", elapsed)
 
 	// Check for correctness.
-	if !e2sTestGlobal.accum.Equal(e2sTestGlobal.msg) {
+	if !e2sTestGlobal.accum.EqualSlice(e2sTestGlobal.msg) {
 		log.Fatal("Sharing failed")
 		t.Fail()
 	}

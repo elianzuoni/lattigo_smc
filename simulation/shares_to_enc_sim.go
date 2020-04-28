@@ -43,7 +43,7 @@ type s2eSimContext struct {
 	Params        *bfv.Parameters // TODO: needs to be exported? (probably not)
 	lt            *utils.LocalTest
 	crs           *ring.Poly
-	accum         *dbfv.ConcurrentAdditiveShareAccum
+	accum         *utils.ConcurrentAdditiveShareAccum
 }
 
 var s2eGlobal = s2eSimContext{storageDir: "tmp/"} // TODO: global variables are horrible
@@ -118,7 +118,7 @@ func news2eSimProtocolFactory(sim *SharesToEncSim) onet.NewProtocol {
 
 		// Create own AdditiveShare and accumulate it to the global accumulator
 		// (we can't do this in Node, because, when it is called, accum isn't yet defined).
-		addShare := sim.s2e.GenRandomAddShare()
+		addShare := dbfv.NewUniformAdditiveShare(s2eGlobal.Params.LogN, s2eGlobal.Params.T)
 		s2eGlobal.accum.Accumulate(addShare)
 
 		return protocols.NewSharesToEncryptionProtocol(tni, s2eGlobal.Params, s2eGlobal.sigmaSmudging, addShare, sk,
@@ -147,7 +147,7 @@ func (sim *SharesToEncSim) Run(config *onet.SimulationConfig) error {
 		// Setting global context.
 		log.Lvl4("Generating crs; allocating accumulator")
 		s2eGlobal.crs = s2eGlobal.lt.NewCipherCRS()
-		s2eGlobal.accum = dbfv.NewConcurrentAdditiveShareAccum(s2eGlobal.lt.Params, s2eGlobal.sigmaSmudging, size)
+		s2eGlobal.accum = utils.NewConcurrentAdditiveShareAccum(s2eGlobal.lt.Params, s2eGlobal.sigmaSmudging, size)
 
 		// Create the protocol.
 		log.Lvl3("Instantiating protocol")
@@ -184,7 +184,7 @@ func (sim *SharesToEncSim) Run(config *onet.SimulationConfig) error {
 		encoder := bfv.NewEncoder(s2eGlobal.Params)
 		msg := encoder.DecodeUint(plain)
 
-		if !s2eGlobal.accum.Equal(msg) {
+		if !s2eGlobal.accum.EqualSlice(msg) {
 			log.Fatal("Re-encryption error")
 		} else {
 			log.Lvl1("Re-encryption successful!")

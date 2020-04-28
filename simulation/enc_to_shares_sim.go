@@ -10,7 +10,6 @@ import (
 	"errors"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/protocols"
@@ -42,7 +41,7 @@ type e2sSimContext struct {
 	lt            *utils.LocalTest
 	msg           []uint64
 	ct            *bfv.Ciphertext
-	accum         *dbfv.ConcurrentAdditiveShareAccum
+	accum         *utils.ConcurrentAdditiveShareAccum
 }
 
 var e2sGlobal = e2sSimContext{storageDir: "tmp/"} // TODO: global variables are horrible
@@ -168,7 +167,7 @@ func (sim *EncToSharesSim) Run(config *onet.SimulationConfig) error {
 		//round.Record()
 
 		// Check for correctness.
-		if !e2sGlobal.accum.Equal(e2sGlobal.msg) {
+		if !e2sGlobal.accum.EqualSlice(e2sGlobal.msg) {
 			log.Fatal("Sharing error")
 		} else {
 			log.Lvl1("Sharing successful!")

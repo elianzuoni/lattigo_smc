@@ -31,7 +31,7 @@ type s2eTestContext struct {
 	roster    *onet.Roster
 	tree      *onet.Tree
 
-	accum *dbfv.ConcurrentAdditiveShareAccum
+	accum *utils.ConcurrentAdditiveShareAccum
 	crs   *ring.Poly
 }
 
@@ -64,7 +64,7 @@ func s2eTestGenGlobal(params *bfv.Parameters, N int, testType string) {
 	}
 
 	log.Lvl4("Allocating accumulator")
-	s2eTestGlobal.accum = dbfv.NewConcurrentAdditiveShareAccum(params, params.Sigma, N)
+	s2eTestGlobal.accum = utils.NewConcurrentAdditiveShareAccum(params, params.Sigma, N)
 	log.Lvl4("Generating crs")
 	crsGen := dbfv.NewCipherCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
 	s2eTestGlobal.crs = crsGen.ClockNew()
@@ -79,8 +79,7 @@ func s2eTestProtocolFactory(t *onet.TreeNodeInstance) (onet.ProtocolInstance, er
 
 	// It is easier to let nodes sample their own AdditiveShare in the protocol factory (instead
 	// of setting them in a global look-up map), and then add it to the global accumulator.
-	s2e := dbfv.NewS2EProtocol(s2eTestGlobal.params, sigmaSmudge)
-	addShare := s2e.GenRandomAddShare()
+	addShare := dbfv.NewUniformAdditiveShare(s2eTestGlobal.params.LogN, s2eTestGlobal.params.T)
 	s2eTestGlobal.accum.Accumulate(addShare)
 
 	return protocols.NewSharesToEncryptionProtocol(t, s2eTestGlobal.params, sigmaSmudge,
@@ -168,7 +167,7 @@ func testS2E(t *testing.T, N int) {
 	encoder := bfv.NewEncoder(s2eTestGlobal.params)
 	msg := encoder.DecodeUint(plain)
 
-	if !s2eTestGlobal.accum.Equal(msg) {
+	if !s2eTestGlobal.accum.EqualSlice(msg) {
 		log.Fatal("Re-encryption failed")
 		t.Fail()
 	} else {

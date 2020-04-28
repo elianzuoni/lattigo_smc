@@ -284,7 +284,7 @@ func Broadcast(s *onet.ServiceProcessor, el *onet.Roster, msg interface{}) error
 
 // GenMsgCtAccum is used for testing encryption-to-shares: it creates a random message and its encryption,
 // and allocates an AdditiveShare accumulator.
-func (lt *LocalTest) GenMsgCtAccum() (msg []uint64, ct *bfv.Ciphertext, accum *dbfv.ConcurrentAdditiveShareAccum) {
+func (lt *LocalTest) GenMsgCtAccum() (msg []uint64, ct *bfv.Ciphertext, accum *ConcurrentAdditiveShareAccum) {
 	contextT, _ := ring.NewContextWithParams(uint64(1<<lt.Params.LogN), []uint64{lt.Params.T})
 	poly := contextT.NewUniformPoly()
 	msg = poly.Coeffs[0]
@@ -295,7 +295,7 @@ func (lt *LocalTest) GenMsgCtAccum() (msg []uint64, ct *bfv.Ciphertext, accum *d
 	ct = bfv.NewCiphertext(lt.Params, 1)
 	encryptor.Encrypt(plain, ct)
 
-	accum = dbfv.NewConcurrentAdditiveShareAccum(lt.Params, lt.Params.Sigma, len(lt.Roster.List))
+	accum = NewConcurrentAdditiveShareAccum(lt.Params, lt.Params.Sigma, len(lt.Roster.List))
 	return
 }
 
