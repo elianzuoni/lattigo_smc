@@ -1,4 +1,4 @@
-package service
+package session
 
 import (
 	"errors"
@@ -9,14 +9,14 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-func (smc *Service) HandleGenRotKeyQuery(query *messages.GenRotKeyQuery) (network.Message, error) {
-	log.Lvl1(smc.ServerIdentity(), "Received GenRotKeyQuery")
+func (serv *Service) HandleGenRotKeyQuery(query *messages.GenRotKeyQuery) (network.Message, error) {
+	log.Lvl1(serv.ServerIdentity(), "Received GenRotKeyQuery")
 
 	// Extract Session, if existent
-	s, ok := smc.sessions.GetSession(query.SessionID)
+	s, ok := serv.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
-		log.Error(smc.ServerIdentity(), err)
+		log.Error(serv.ServerIdentity(), err)
 		return nil, err
 	}
 
@@ -30,9 +30,9 @@ func (smc *Service) HandleGenRotKeyQuery(query *messages.GenRotKeyQuery) (networ
 	s.GenRotKeyRepLock.Unlock()
 
 	// Send request to root
-	log.Lvl2(smc.ServerIdentity(), "Sending GenRotKeyRequest to root:", reqID)
+	log.Lvl2(serv.ServerIdentity(), "Sending GenRotKeyRequest to root:", reqID)
 	tree := s.Roster.GenerateBinaryTree()
-	err := smc.SendRaw(tree.Root.ServerIdentity, req)
+	err := serv.SendRaw(tree.Root.ServerIdentity, req)
 	if err != nil {
 		err = errors.New("Couldn't send GenRotKeyRequest to root: " + err.Error())
 		log.Error(err)
@@ -40,46 +40,46 @@ func (smc *Service) HandleGenRotKeyQuery(query *messages.GenRotKeyQuery) (networ
 	}
 
 	// Receive reply from channel
-	log.Lvl3(smc.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+	log.Lvl3(serv.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
 	s.GenRotKeyRepLock.RLock()
 	replyChan := s.GenRotKeyReplies[reqID]
 	s.GenRotKeyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
-	log.Lvl3(smc.ServerIdentity(), "Received reply from channel. Closing it.")
+	log.Lvl3(serv.ServerIdentity(), "Received reply from channel. Closing it.")
 	s.GenRotKeyRepLock.Lock()
 	close(replyChan)
 	delete(s.GenRotKeyReplies, reqID)
 	s.GenRotKeyRepLock.Unlock()
 
-	log.Lvl4(smc.ServerIdentity(), "Closed channel")
+	log.Lvl4(serv.ServerIdentity(), "Closed channel")
 
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: root couldn't generate public key")
-		log.Error(smc.ServerIdentity(), err)
+		log.Error(serv.ServerIdentity(), err)
 		// Respond with the reply, not nil, err
 	} else {
-		log.Lvl4(smc.ServerIdentity(), "Received valid reply from channel")
+		log.Lvl4(serv.ServerIdentity(), "Received valid reply from channel")
 	}
 
 	return &messages.GenRotKeyResponse{reply.Valid}, nil
 }
 
-func (smc *Service) processGenRotKeyRequest(msg *network.Envelope) {
+func (serv *Service) processGenRotKeyRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.GenRotKeyRequest)
 
-	log.Lvl1(smc.ServerIdentity(), "Root. Received GenRotKeyRequest.")
+	log.Lvl1(serv.ServerIdentity(), "Root. Received GenRotKeyRequest.")
 
 	// Start by declaring reply with minimal fields.
 	reply := &messages.GenRotKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Extract Session, if existent (actually, only check existence)
-	_, ok := smc.sessions.GetSession(req.SessionID)
+	_, ok := serv.sessions.GetSession(req.SessionID)
 	if !ok {
-		log.Error(smc.ServerIdentity(), "Requested session does not exist")
+		log.Error(serv.ServerIdentity(), "Requested session does not exist")
 		// Send negative response
-		err := smc.SendRaw(msg.ServerIdentity, &reply)
+		err := serv.SendRaw(msg.ServerIdentity, &reply)
 		if err != nil {
 			log.Error("Could not send reply : ", err)
 		}
@@ -87,41 +87,41 @@ func (smc *Service) processGenRotKeyRequest(msg *network.Envelope) {
 	}
 
 	// Then, launch the genRotKey protocol to get the MasterRotlicKey
-	log.Lvl2(smc.ServerIdentity(), "Generating Rotation Key")
-	err := smc.genRotKey(req.Query.SessionID, req.Query.RotIdx, req.Query.K, req.Query.Seed)
+	log.Lvl2(serv.ServerIdentity(), "Generating Rotation Key")
+	err := serv.genRotKey(req.Query.SessionID, req.Query.RotIdx, req.Query.K, req.Query.Seed)
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not generate rotation key:", err)
-		err := smc.SendRaw(msg.ServerIdentity, reply)
+		log.Error(serv.ServerIdentity(), "Could not generate rotation key:", err)
+		err := serv.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
-			log.Error(smc.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			log.Error(serv.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
 		return
 	}
 
-	log.Lvl3(smc.ServerIdentity(), "Successfully generated rotlic key")
+	log.Lvl3(serv.ServerIdentity(), "Successfully generated rotlic key")
 
 	// Set fields in the reply
 	reply.Valid = true
 
 	// Send the positive reply to the server
-	log.Lvl2(smc.ServerIdentity(), "Replying (positively) to server")
-	err = smc.SendRaw(msg.ServerIdentity, reply)
+	log.Lvl2(serv.ServerIdentity(), "Replying (positively) to server")
+	err = serv.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not reply (positively) to server")
+		log.Error(serv.ServerIdentity(), "Could not reply (positively) to server")
 		return
 	}
 
 	return
 }
 
-func (smc *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K uint64, Seed []byte) error {
-	log.Lvl1(smc.ServerIdentity(), "Root. Generating EvaluationKey")
+func (serv *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K uint64, Seed []byte) error {
+	log.Lvl1(serv.ServerIdentity(), "Root. Generating EvaluationKey")
 
 	// Extract session
-	s, ok := smc.sessions.GetSession(SessionID)
+	s, ok := serv.sessions.GetSession(SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
-		log.Error(smc.ServerIdentity(), err)
+		log.Error(serv.ServerIdentity(), err)
 		return err
 	}
 
@@ -133,50 +133,50 @@ func (smc *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K uint64
 	defer s.RotKeyLock.Unlock()
 
 	// Create TreeNodeInstance as root
-	tree := s.Roster.GenerateNaryTreeWithRoot(2, smc.ServerIdentity())
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, serv.ServerIdentity())
 	if tree == nil {
 		err := errors.New("Could not create tree")
-		log.Error(smc.ServerIdentity(), err)
+		log.Error(serv.ServerIdentity(), err)
 		return err
 	}
-	tni := smc.NewTreeNodeInstance(tree, tree.Root, protocols.RotationProtocolName)
+	tni := serv.NewTreeNodeInstance(tree, tree.Root, protocols.RotationProtocolName)
 
 	// Create configuration for the protocol instance
 	config := &messages.GenRotKeyConfig{SessionID, rotIdx, K, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not marshal protocol configuration:", err)
+		log.Error(serv.ServerIdentity(), "Could not marshal protocol configuration:", err)
 		return err
 	}
 
 	// Instantiate protocol
-	log.Lvl3(smc.ServerIdentity(), "Instantiating RKG protocol")
-	protocol, err := smc.NewProtocol(tni, &onet.GenericConfig{data})
+	log.Lvl3(serv.ServerIdentity(), "Instantiating RKG protocol")
+	protocol, err := serv.NewProtocol(tni, &onet.GenericConfig{data})
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not instantiate RKG protocol", err)
+		log.Error(serv.ServerIdentity(), "Could not instantiate RKG protocol", err)
 		return err
 	}
 	// Register protocol instance
-	log.Lvl3(smc.ServerIdentity(), "Registering RKG protocol instance")
-	err = smc.RegisterProtocolInstance(protocol)
+	log.Lvl3(serv.ServerIdentity(), "Registering RKG protocol instance")
+	err = serv.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not register protocol instance:", err)
+		log.Error(serv.ServerIdentity(), "Could not register protocol instance:", err)
 		return err
 	}
 
 	rkgp := protocol.(*protocols.RotationKeyProtocol)
 
 	// Start the protocol
-	log.Lvl2(smc.ServerIdentity(), "Starting RKG protocol")
+	log.Lvl2(serv.ServerIdentity(), "Starting RKG protocol")
 	err = rkgp.Start()
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not start RKG protocol:", err)
+		log.Error(serv.ServerIdentity(), "Could not start RKG protocol:", err)
 		return err
 	}
 	// Call dispatch (the main logic)
 	err = rkgp.Dispatch()
 	if err != nil {
-		log.Error(smc.ServerIdentity(), "Could not dispatch RKG protocol:", err)
+		log.Error(serv.ServerIdentity(), "Could not dispatch RKG protocol:", err)
 		return err
 	}
 
@@ -186,20 +186,20 @@ func (smc *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K uint64
 
 	// Retrieve RotationKey
 	s.RotationKey = &rkgp.RotKey
-	log.Lvl1(smc.ServerIdentity(), "Generated RotationKey!")
+	log.Lvl1(serv.ServerIdentity(), "Generated RotationKey!")
 
 	return nil
 }
 
-func (smc *Service) processGenRotKeyReply(msg *network.Envelope) {
+func (serv *Service) processGenRotKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*messages.GenRotKeyReply)
 
-	log.Lvl1(smc.ServerIdentity(), "Received GenRotKeyReply")
+	log.Lvl1(serv.ServerIdentity(), "Received GenRotKeyReply")
 
 	// Extract Session, if existent
-	s, ok := smc.sessions.GetSession(reply.SessionID)
+	s, ok := serv.sessions.GetSession(reply.SessionID)
 	if !ok {
-		log.Error(smc.ServerIdentity(), "Requested session does not exist")
+		log.Error(serv.ServerIdentity(), "Requested session does not exist")
 		return
 	}
 
@@ -207,7 +207,7 @@ func (smc *Service) processGenRotKeyReply(msg *network.Envelope) {
 	s.GenRotKeyRepLock.RLock()
 	s.GenRotKeyReplies[reply.ReqID] <- reply
 	s.GenRotKeyRepLock.RUnlock()
-	log.Lvl4(smc.ServerIdentity(), "Sent reply through channel")
+	log.Lvl4(serv.ServerIdentity(), "Sent reply through channel")
 
 	return
 }

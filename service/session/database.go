@@ -8,12 +8,35 @@ import (
 )
 
 // Retrieves a ciphertext from the database, given its id. Returns a boolean indicating success.
-// TODO: implement mechanism for remote retrieval.
 func (s *Session) GetCiphertext(id messages.CipherID) (ct *bfv.Ciphertext, ok bool) {
-	log.Lvl4("Retrieving ciphertext")
+	log.Lvl4(s.service.ServerIdentity(), "Retrieving ciphertext")
+
+	owner := id.GetServerIdentityOwner()
+
+	// Try locally
 	s.ciphertextsLock.RLock()
 	ct, ok = s.ciphertexts[id]
 	s.ciphertextsLock.RUnlock()
+
+	// If present, return (success)
+	if ok {
+		log.Lvl4(s.service.ServerIdentity(), "Found the ciphertext locally")
+		return
+	}
+
+	// If not present, and we are the owner, return (failure).
+	if owner.Equal(s.service.ServerIdentity()) {
+		log.Error(s.service.ServerIdentity(), "We are owner of ciphertext, but it is not present")
+		return
+	}
+
+	// Else, send a request to the owner
+	log.Lvl4(s.service.ServerIdentity(), "Ciphertext is remote")
+	ct, ok = s.service.RetrieveRemoteCiphertext(s.SessionID, id)
+	// Cache the ciphertext
+	if ok {
+		s.StoreCiphertext(id, ct)
+	}
 
 	return
 }

@@ -51,6 +51,9 @@ type MessageTypes struct {
 	MsgStoreReply    network.MessageTypeID
 	MsgStoreResponse network.MessageTypeID // Unused
 
+	MsgGetCipherRequest network.MessageTypeID
+	MsgGetCipherReply   network.MessageTypeID
+
 	MsgRetrieveQuery    network.MessageTypeID // Unused
 	MsgRetrieveRequest  network.MessageTypeID
 	MsgRetrieveReply    network.MessageTypeID
@@ -132,6 +135,9 @@ func init() {
 	MsgTypes.MsgStoreRequest = network.RegisterMessage(&StoreRequest{})
 	MsgTypes.MsgStoreReply = network.RegisterMessage(&StoreReply{})
 	MsgTypes.MsgStoreResponse = network.RegisterMessage(&StoreResponse{}) // Unused
+
+	MsgTypes.MsgGetCipherRequest = network.RegisterMessage(&GetCipherRequest{})
+	MsgTypes.MsgGetCipherReply = network.RegisterMessage(&GetCipherReply{})
 
 	MsgTypes.MsgRetrieveQuery = network.RegisterMessage(&RetrieveQuery{}) // Unused
 	MsgTypes.MsgRetrieveRequest = network.RegisterMessage(&RetrieveRequest{})
@@ -504,6 +510,30 @@ type StoreReply struct {
 type StoreResponse struct {
 	CipherID CipherID
 	Valid    bool
+}
+
+// Get Ciphertext
+
+type GetCipherRequestID uuid.UUID
+
+func NewGetCipherRequestID() GetCipherRequestID {
+	return GetCipherRequestID(uuid.NewV1())
+}
+func (id GetCipherRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type GetCipherRequest struct {
+	ReqID     GetCipherRequestID
+	SessionID SessionID
+	CipherID  CipherID
+}
+
+type GetCipherReply struct {
+	ReqID GetCipherRequestID
+
+	Ciphertext *bfv.Ciphertext
+	Valid      bool
 }
 
 // Retrieve

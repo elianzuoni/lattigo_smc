@@ -1037,6 +1037,96 @@ func (req *StoreRequest) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
+// Get Ciphertext
+
+func (id *GetCipherRequestID) MarshalBinary() ([]byte, error) {
+	return (*uuid.UUID)(id).MarshalBinary()
+}
+func (id *GetCipherRequestID) UnmarshalBinary(data []byte) error {
+	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
+func (req *GetCipherRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := req.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal CipherID
+	cidData, err := req.CipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+
+	return
+}
+func (req *GetCipherRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = req.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
 // Retrieve
 
 func (query *RetrieveQuery) MarshalBinary() (data []byte, err error) {

@@ -11,14 +11,17 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/circuit"
 	"lattigo-smc/service/messages"
+	"lattigo-smc/service/session"
 	"lattigo-smc/utils"
 )
 
 // Client represents a client. It is largely immutable: the only thing that can change after it has been
 // constructed is the session it is bound to, and only with an explicit call to CloseSession or UnbindFromSession.
 type Client struct {
-	*onet.Client
+	sessionClient *onet.Client
+	circuitClient *onet.Client
 
 	clientID string
 	// The server in the system that will always be contacted for queries (most likely the server side of this node).
@@ -48,7 +51,8 @@ func NewClient(entryPoint *network.ServerIdentity, clientID string, params *bfv.
 	log.Lvl1("Client constructor called for clientID:", clientID)
 
 	client := &Client{
-		Client: onet.NewClient(utils.SUITE, ServiceName),
+		sessionClient: onet.NewClient(utils.SUITE, session.ServiceName),
+		circuitClient: onet.NewClient(utils.SUITE, circuit.ServiceName),
 
 		clientID:   clientID,
 		entryPoint: entryPoint,
@@ -97,7 +101,7 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (messages.Sessi
 
 	// Send query
 	log.Lvl2(c, "Sending CreateSession query to entry point")
-	err := c.SendProtobuf(c.entryPoint, sessQuery, sessResp)
+	err := c.sessionClient.SendProtobuf(c.entryPoint, sessQuery, sessResp)
 	if err != nil {
 		log.Error(c, "CreateSession query returned error:", err)
 		return messages.NilSessionID, nil, err
@@ -117,7 +121,7 @@ func (c *Client) CreateSession(roster *onet.Roster, seed []byte) (messages.Sessi
 
 	// Send query
 	log.Lvl2(c, "Sending GenPubKey query to entry point")
-	err = c.SendProtobuf(c.entryPoint, pubKeyQuery, pubKeyResp)
+	err = c.sessionClient.SendProtobuf(c.entryPoint, pubKeyQuery, pubKeyResp)
 	if err != nil {
 		log.Error(c, "GenPubKey query returned error:", err)
 		return messages.NilSessionID, nil, err
@@ -174,7 +178,7 @@ func (c *Client) CloseSession() error {
 
 	// Send query
 	log.Lvl2(c, "Sending CloseSession query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.sessionClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "CloseSession query returned error:", err)
 		return err
@@ -233,7 +237,7 @@ func (c *Client) SendGenEvalKeyQuery(seed []byte) error {
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.sessionClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "GenEvalKey query returned error:", err)
 		return err
@@ -272,7 +276,7 @@ func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64, seed []byte) error {
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.sessionClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "GenRotKey query returned error:", err)
 		return err
@@ -299,7 +303,7 @@ func (c *Client) SendKeyQuery(getEvK, getRtK bool) (bool, bool, error) {
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, &query, &resp)
+	err := c.sessionClient.SendProtobuf(c.entryPoint, &query, &resp)
 	if err != nil {
 		log.Error(c, "Key query returned error:", err)
 		return false, false, err
@@ -337,7 +341,7 @@ func (c *Client) SendStoreQuery(data []uint64) (messages.CipherID, error) {
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.sessionClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Store query returned error:", err)
 		return messages.NilCipherID, err
@@ -371,7 +375,7 @@ func (c *Client) SendRetrieveQuery(cipherID messages.CipherID) ([]uint64, error)
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Retrieve query returned error:", err)
 		return nil, err
@@ -409,7 +413,7 @@ func (c *Client) SendSumQuery(cipherID1, cipherID2 messages.CipherID) (messages.
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Sum query returned error:", err)
 		return messages.NilCipherID, err
@@ -442,7 +446,7 @@ func (c *Client) SendMultiplyQuery(cipherID1, cipherID2 messages.CipherID) (mess
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Multiply query returned error:", err)
 		return messages.NilCipherID, err
@@ -475,7 +479,7 @@ func (c *Client) SendRelinQuery(cipherID messages.CipherID) (messages.CipherID, 
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Relinearisation query returned error:", err)
 		return messages.NilCipherID, err
@@ -508,7 +512,7 @@ func (c *Client) SendRotationQuery(cipherID messages.CipherID, rotIdx int, K uin
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Refresh query returned error:", err)
 		return messages.NilCipherID, err
@@ -542,7 +546,7 @@ func (c *Client) SendRefreshQuery(cipherID messages.CipherID, seed []byte) (mess
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Refresh query returned error:", err)
 		return messages.NilCipherID, err
@@ -575,7 +579,7 @@ func (c *Client) SendEncToSharesQuery(cipherID messages.CipherID) (messages.Shar
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Enc-to-shares query returned error:", err)
 		return messages.NilSharesID, err
@@ -609,7 +613,7 @@ func (c *Client) SendSharesToEncQuery(sharesID messages.SharesID, seed []byte) (
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.SendProtobuf(c.entryPoint, query, resp)
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Shares-to-enc query returned error:", err)
 		return messages.NilCipherID, err

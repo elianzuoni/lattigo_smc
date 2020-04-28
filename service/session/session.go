@@ -12,7 +12,8 @@ import (
 type Session struct {
 	SessionID messages.SessionID
 
-	Roster *onet.Roster
+	service *Service
+	Roster  *onet.Roster
 
 	// These variables are set upon construction.
 	Params  *bfv.Parameters
@@ -62,15 +63,20 @@ type Session struct {
 }
 
 type SessionStore struct {
+	// Useful to launch requests from the Session object
+	service *Service
+
 	sessionsLock sync.RWMutex
 	sessions     map[messages.SessionID]*Session
 }
 
 // Constructor of SessionStore
-func NewSessionStore() *SessionStore {
+func NewSessionStore(serv *Service) *SessionStore {
 	log.Lvl2("Creating new SessionStore")
 
 	return &SessionStore{
+		service: serv,
+
 		sessionsLock: sync.RWMutex{},
 		sessions:     make(map[messages.SessionID]*Session),
 	}
@@ -83,7 +89,8 @@ func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster
 	session := &Session{
 		SessionID: id,
 
-		Roster: roster,
+		service: store.service,
+		Roster:  roster,
 
 		Params: params,
 
