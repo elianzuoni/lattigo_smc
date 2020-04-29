@@ -31,8 +31,7 @@ func (service *Service) HandleGenPubKeyQuery(query *messages.GenPubKeyQuery) (ne
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending GenPubKeyRequest to root:", reqID)
-	tree := s.Roster.GenerateBinaryTree()
-	err := service.SendRaw(tree.Root.ServerIdentity, req)
+	err := service.SendRaw(s.Root, req)
 	if err != nil {
 		err = errors.New("Couldn't send GenPubKeyRequest to root: " + err.Error())
 		log.Error(err)
@@ -86,7 +85,7 @@ func (service *Service) processGenPubKeyRequest(msg *network.Envelope) {
 		return
 	}
 
-	// Then, launch the genPublicKey protocol to get the MasterPublicKey
+	// Then, launch the genPublicKey protocol to get the publicKey
 	log.Lvl2(service.ServerIdentity(), "Generating Public Key")
 	err := service.genPublicKey(req.Query.SessionID, req.Query.Seed)
 	if err != nil {
@@ -101,7 +100,7 @@ func (service *Service) processGenPubKeyRequest(msg *network.Envelope) {
 	log.Lvl3(service.ServerIdentity(), "Successfully generated public key")
 
 	// Set fields in the reply
-	reply.MasterPublicKey = s.MasterPublicKey // No need to lock pubKeyLock
+	reply.MasterPublicKey = s.publicKey // No need to lock pubKeyLock
 	reply.Valid = true
 
 	// Send the positive reply to the server
@@ -130,10 +129,10 @@ func (service *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) 
 	// We must hold the lock until the end, because only at the end the PubKey is generated
 	// We can do so, because no other lock is held by this goroutine, or any other which waits for this
 	// or for which this waits.
-	s.PubKeyLock.Lock()
-	defer s.PubKeyLock.Unlock()
-	if s.MasterPublicKey != nil {
-		err := errors.New("MasterPublicKey is already set")
+	s.pubKeyLock.Lock()
+	defer s.pubKeyLock.Unlock()
+	if s.publicKey != nil {
+		err := errors.New("publicKey is already set")
 		log.Error(service.ServerIdentity(), err)
 		return err
 	}
@@ -191,7 +190,7 @@ func (service *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) 
 	ckgp.WaitDone()
 
 	// Retrieve PublicKey
-	s.MasterPublicKey = ckgp.Pk
+	s.publicKey = ckgp.Pk
 	log.Lvl1(service.ServerIdentity(), "Generated PublicKey!")
 
 	return nil

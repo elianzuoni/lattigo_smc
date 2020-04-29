@@ -5,6 +5,7 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
 	"sync"
 )
@@ -14,17 +15,18 @@ type Session struct {
 
 	service *Service
 	Roster  *onet.Roster
+	Root    *network.ServerIdentity
 
 	// These variables are set upon construction.
 	Params  *bfv.Parameters
-	SkShard *bfv.SecretKey
+	skShard *bfv.SecretKey
 	// These variables have to be set via an explicit Query.
-	PubKeyLock      sync.RWMutex
-	MasterPublicKey *bfv.PublicKey
-	RotKeyLock      sync.RWMutex
-	RotationKey     *bfv.RotationKeys
-	EvalKeyLock     sync.RWMutex
-	EvalKey         *bfv.EvaluationKey
+	pubKeyLock  sync.RWMutex
+	publicKey   *bfv.PublicKey
+	rotKeyLock  sync.RWMutex
+	rotationKey *bfv.RotationKeys
+	evalKeyLock sync.RWMutex
+	evalKey     *bfv.EvaluationKey
 
 	// Stores ciphertexts.
 	ciphertextsLock sync.RWMutex
@@ -55,7 +57,8 @@ func NewSessionStore(serv *Service) *SessionStore {
 }
 
 // Constructor of Session. Already requires roster and bfv parameters.
-func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster, params *bfv.Parameters) {
+func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster, root *network.ServerIdentity,
+	params *bfv.Parameters) {
 	log.Lvl2("Session constructor started")
 
 	session := &Session{
@@ -63,6 +66,7 @@ func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster
 
 		service: store.service,
 		Roster:  roster,
+		Root:    root,
 
 		Params: params,
 
@@ -75,7 +79,7 @@ func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster
 	}
 
 	keygen := bfv.NewKeyGenerator(params)
-	session.SkShard = keygen.GenSecretKey()
+	session.skShard = keygen.GenSecretKey()
 
 	// Store new session
 	store.sessionsLock.Lock()

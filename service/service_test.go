@@ -86,7 +86,7 @@ func TestBindToSession(t *testing.T) {
 	// Create first client, and create session
 
 	client1ID := "TestBindToSession-1"
-	// Client1, SessionID, MasterPublicKey
+	// Client1, SessionID, publicKey
 	log.Lvl2("Going to create new session. Should not return error")
 	c1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, client1ID)
 	if err != nil {
@@ -107,7 +107,7 @@ func TestBindToSession(t *testing.T) {
 	// Try to re-create a session on c1: should return error because it is already bound
 
 	log.Lvl2("Going to create new session on Client 1. Should return error")
-	// Ignore SessionID and MasterPublicKey
+	// Ignore SessionID and publicKey
 	_, _, err = c1.CreateSession(roster, testDefaultSeed)
 	if err == nil {
 		t.Fatal("Second call to method CreateSession on Client 1 did not return error")
@@ -117,7 +117,7 @@ func TestBindToSession(t *testing.T) {
 	// Try to create a session on c2: should return error because it is already bound
 
 	log.Lvl2("Going to create new session on Client 2. Should return error")
-	// Ignore SessionID and MasterPublicKey
+	// Ignore SessionID and publicKey
 	_, _, err = c2.CreateSession(roster, testDefaultSeed)
 	if err == nil {
 		t.Fatal("Call to method CreateSession on Client 2 did not return error")
@@ -160,7 +160,7 @@ func TestCloseSession(t *testing.T) {
 
 	client1ID := "TestCloseSession-1"
 	log.Lvl2("Going to create new session on Client 1. Should not return error")
-	// Client1, SessionID, MasterPublicKey
+	// Client1, SessionID, publicKey
 	c1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, client1ID)
 	if err != nil {
 		t.Fatal("Method CreateSession on Client 1 returned error:", err)
@@ -211,7 +211,7 @@ func TestUnbindFromSession(t *testing.T) {
 
 	client1ID := "TestUnbindFromSession-1"
 	log.Lvl2("Going to create new session on Client 1. Should not return error")
-	// Client1, SessionID, MasterPublicKey
+	// Client1, SessionID, publicKey
 	c1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, client1ID)
 	if err != nil {
 		t.Fatal("Method CreateSession on Client 1 returned error:", err)

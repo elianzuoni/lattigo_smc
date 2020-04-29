@@ -98,7 +98,7 @@ func (service *Service) newProtoCKG(tn *onet.TreeNodeInstance, cfg *onet.Generic
 
 	// Finally, initialise the rest of the fields
 	log.Lvl3(service.ServerIdentity(), "Initialising protocol")
-	err = ckgp.Init(s.Params, s.SkShard, crp)
+	err = ckgp.Init(s.Params, s.skShard, crp)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol")
 		return nil, err
@@ -147,7 +147,7 @@ func (service *Service) newProtoEKG(tn *onet.TreeNodeInstance, cfg *onet.Generic
 
 	// Finally, initialise the rest of the fields
 	log.Lvl3(service.ServerIdentity(), "Initialising protocol")
-	err = ekgp.Init(*s.Params, *s.SkShard, crp)
+	err = ekgp.Init(*s.Params, *s.skShard, crp)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
@@ -197,8 +197,8 @@ func (service *Service) newProtoRKG(tn *onet.TreeNodeInstance, cfg *onet.Generic
 	// Finally, initialise the rest of the fields
 	log.Lvl3(service.ServerIdentity(), "Initialising protocol")
 	// No need to lock rotation key here. The root (which is the only one that uses it) has already locked it.
-	// TODO IMPORTANT: modify this when decentralising rotation key
-	err = rkgp.Init(s.Params, *s.SkShard, s.RotationKey, bfv.Rotation(config.RotIdx), config.K, crp)
+	// TODO IMPORTANT: modify this if allow rotation key generation at non-root
+	err = rkgp.Init(s.Params, *s.skShard, s.rotationKey, bfv.Rotation(config.RotIdx), config.K, crp)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
@@ -221,7 +221,8 @@ func (service *Service) newProtoCreateSession(tn *onet.TreeNodeInstance, cfg *on
 	}
 
 	// Then, create the protocol with the known parameters and the one just received
-	p, err := serviceProto.NewCreateSessionProtocol(tn, service.sessions, config.SessionID, config.Roster, config.Params)
+	p, err := serviceProto.NewCreateSessionProtocol(tn, service.sessions, config.SessionID, config.Roster,
+		config.Root, config.Params)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err

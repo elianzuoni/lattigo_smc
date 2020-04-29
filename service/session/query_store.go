@@ -35,8 +35,7 @@ func (service *Service) HandleStoreQuery(query *messages.StoreQuery) (network.Me
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending StoreRequest to the root")
-	tree := s.Roster.GenerateBinaryTree()
-	err := service.SendRaw(tree.Root.ServerIdentity, req)
+	err := service.SendRaw(s.Root, req)
 	if err != nil {
 		err = errors.New("Couldn't send StoreRequest to the root: " + err.Error())
 		log.Error(service.ServerIdentity(), err)

@@ -1,79 +1,71 @@
-// The goal of the CloseSession query is to close an existing Session
-
 package session
 
 import (
-	"errors"
-	"go.dedis.ch/onet/v3"
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
-	"lattigo-smc/service/protocols"
 )
 
-func (service *Service) HandleCloseSessionQuery(query *messages.CloseSessionQuery) (network.Message, error) {
-	log.Lvl1(service.ServerIdentity(), "Received CloseSessionQuery")
+func (service *Service) GetRemotePublicKey(sessionID messages.SessionID) (*bfv.PublicKey, bool) {
+	log.Lvl2(service.ServerIdentity(), "Retrieving remote public key")
 
 	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(query.SessionID)
+	s, ok := service.sessions.GetSession(sessionID)
 	if !ok {
-		err := errors.New("Requested session does not exist")
-		log.Error(service.ServerIdentity(), err)
-		return nil, err
+		log.Error(service.ServerIdentity(), "Requested session does not exist")
+		return nil, false
 	}
 
-	// Create CloseSessionRequest with its ID
-	reqID := messages.NewCloseSessionRequestID()
-	req := &messages.CloseSessionRequest{reqID, query.SessionID, query}
+	// Create GetPubKeyRequest with its ID
+	reqID := messages.NewGetPubKeyRequestID()
+	req := &messages.GetPubKeyRequest{reqID, sessionID}
 
 	// Create channel before sending request to root.
-	service.closeSessionRepLock.Lock()
-	service.closeSessionReplies[reqID] = make(chan *messages.CloseSessionReply)
-	service.closeSessionRepLock.Unlock()
+	service.getPubKeyRepLock.Lock()
+	service.getPubKeyReplies[reqID] = make(chan *messages.GetPubKeyReply)
+	service.getPubKeyRepLock.Unlock()
 
 	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending CloseSessionRequest to root")
+	log.Lvl2(service.ServerIdentity(), "Sending GetPubKeyRequest to root")
 	err := service.SendRaw(s.Root, req)
 	if err != nil {
-		err = errors.New("Couldn't send CloseSessionRequest to root: " + err.Error())
-		log.Error(err)
-		return nil, err
+		log.Error(service.ServerIdentity(), "Couldn't send GetPubKeyRequest to root:", err)
+		return nil, false
 	}
 
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root")
-
 	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Sent CloseSessionRequest to root. Waiting on channel to receive reply...")
-	service.closeSessionRepLock.RLock()
-	replyChan := service.closeSessionReplies[reqID]
-	service.closeSessionRepLock.RUnlock()
+	log.Lvl3(service.ServerIdentity(), "Sent GetPubKeyRequest to root. Waiting on channel to receive reply...")
+	service.getPubKeyRepLock.RLock()
+	replyChan := service.getPubKeyReplies[reqID]
+	service.getPubKeyRepLock.RUnlock()
 	reply := <-replyChan // TODO: timeout if root cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	service.closeSessionRepLock.Lock()
+	service.getPubKeyRepLock.Lock()
 	close(replyChan)
-	delete(service.closeSessionReplies, reqID)
-	service.closeSessionRepLock.Unlock()
+	delete(service.getPubKeyReplies, reqID)
+	service.getPubKeyRepLock.Unlock()
 
 	log.Lvl4(service.ServerIdentity(), "Closed channel, returning")
 
-	return &messages.CloseSessionResponse{reply.Valid}, nil
+	return reply.PublicKey, reply.Valid
 }
 
-func (service *Service) processCloseSessionRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*messages.CloseSessionRequest)
+func (service *Service) processGetPubKeyRequest(msg *network.Envelope) {
+	req := (msg.Msg).(*messages.GetPubKeyRequest)
 
-	log.Lvl1(service.ServerIdentity(), "Root. Received CloseSessionRequest.")
+	log.Lvl2(service.ServerIdentity(), "Root. Received GetPubKeyRequest.")
 
 	// Start by declaring reply with minimal fields.
-	reply := &messages.CloseSessionReply{ReqID: req.ReqID, Valid: false}
+	reply := &messages.GetPubKeyReply{req.ReqID, nil, false}
 
-	// Launch the CloseSession protocol, to delete the Session at all nodes
-	err := service.closeSession(req.Query.SessionID)
-	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not close session:", err)
-		err = service.SendRaw(msg.ServerIdentity, reply)
+	// Extract Session, if existent
+	s, ok := service.sessions.GetSession(req.SessionID)
+	if !ok {
+		log.Error(service.ServerIdentity(), "Requested session does not exist")
+		err := service.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
 		}
@@ -81,10 +73,24 @@ func (service *Service) processCloseSessionRequest(msg *network.Envelope) {
 		return
 	}
 
+	// Get Public Key
+	s.pubKeyLock.RLock()
+	pk := s.publicKey
+	s.pubKeyLock.RUnlock()
+
+	// Check existence
+	if pk == nil {
+		log.Error(service.ServerIdentity(), "Public key not generated")
+		reply.PublicKey = nil
+		reply.Valid = false
+	} else {
+		reply.PublicKey = pk
+		reply.Valid = false
+	}
+
 	// Send reply to server
-	reply.Valid = true
 	log.Lvl2(service.ServerIdentity(), "Sending reply to server")
-	err = service.SendRaw(msg.ServerIdentity, reply)
+	err := service.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
 		log.Error("Could not reply to server:", err)
 		return
@@ -94,6 +100,7 @@ func (service *Service) processCloseSessionRequest(msg *network.Envelope) {
 	return
 }
 
+/*
 func (service *Service) closeSession(SessionID messages.SessionID) error {
 	log.Lvl2(service.ServerIdentity(), "Closing a session")
 
@@ -163,17 +170,19 @@ func (service *Service) closeSession(SessionID messages.SessionID) error {
 	return nil
 }
 
-// This method is executed at the server when receiving the root's CloseSessionReply.
-// It simply sends the reply through the channel.
-func (service *Service) processCloseSessionReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*messages.CloseSessionReply)
+*/
 
-	log.Lvl1(service.ServerIdentity(), "Received CloseSessionReply:", reply.ReqID)
+// This method is executed at the server when receiving the root's GetPubKeyReply.
+// It simply sends the reply through the channel.
+func (service *Service) processGetPubKeyReply(msg *network.Envelope) {
+	reply := (msg.Msg).(*messages.GetPubKeyReply)
+
+	log.Lvl2(service.ServerIdentity(), "Received GetPubKeyReply:", reply.ReqID)
 
 	// Simply send reply through channel
-	service.closeSessionRepLock.RLock()
-	service.closeSessionReplies[reply.ReqID] <- reply
-	service.closeSessionRepLock.RUnlock()
+	service.getPubKeyRepLock.RLock()
+	service.getPubKeyReplies[reply.ReqID] <- reply
+	service.getPubKeyRepLock.RUnlock()
 	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return

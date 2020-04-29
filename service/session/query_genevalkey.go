@@ -31,8 +31,7 @@ func (service *Service) HandleGenEvalKeyQuery(query *messages.GenEvalKeyQuery) (
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending GenEvalKeyRequest to root:", reqID)
-	tree := s.Roster.GenerateBinaryTree()
-	err := service.SendRaw(tree.Root.ServerIdentity, req)
+	err := service.SendRaw(s.Root, req)
 	if err != nil {
 		err = errors.New("Couldn't send GenEvalKeyRequest to root: " + err.Error())
 		log.Error(err)
@@ -125,13 +124,13 @@ func (service *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) er
 		return err
 	}
 
-	// Check that EvalKey is not generated
-	// We must hold the lock until the end, because only at the end the EvalKey is generated
+	// Check that evalKey is not generated
+	// We must hold the lock until the end, because only at the end the evalKey is generated
 	// We can do so, because no other lock is held by this goroutine, or any other which waits for this
 	// or for which this waits.
-	s.EvalKeyLock.Lock()
-	defer s.EvalKeyLock.Unlock()
-	if s.EvalKey != nil {
+	s.evalKeyLock.Lock()
+	defer s.evalKeyLock.Unlock()
+	if s.evalKey != nil {
 		err := errors.New("Evaluation key is already set")
 		log.Error(service.ServerIdentity(), err)
 		return err
@@ -190,7 +189,7 @@ func (service *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) er
 	ekgp.WaitDone()
 
 	// Retrieve EvaluationKey
-	s.EvalKey = ekgp.EvaluationKey
+	s.evalKey = ekgp.EvaluationKey
 	log.Lvl1(service.ServerIdentity(), "Generated EvaluationKey!")
 
 	return nil

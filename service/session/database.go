@@ -32,7 +32,7 @@ func (s *Session) GetCiphertext(id messages.CipherID) (ct *bfv.Ciphertext, ok bo
 
 	// Else, send a request to the owner
 	log.Lvl4(s.service.ServerIdentity(), "Ciphertext is remote")
-	ct, ok = s.service.RetrieveRemoteCiphertext(s.SessionID, id)
+	ct, ok = s.service.GetRemoteCiphertext(s.SessionID, id)
 	// Cache the ciphertext
 	if ok {
 		s.StoreCiphertext(id, ct)

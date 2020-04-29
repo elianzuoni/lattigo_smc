@@ -88,7 +88,7 @@ func (service *Service) newProtoPCKS(tn *onet.TreeNodeInstance, cfg *onet.Generi
 
 	// Finally, initialise the rest of the fields
 	log.Lvl3(service.ServerIdentity(), "Initialising protocol")
-	err = pcks.Init(*s.Params, *config.PublicKey, *s.SkShard, config.Ciphertext)
+	err = pcks.Init(*s.Params, *config.PublicKey, *s.GetSecretKeyShare(), config.Ciphertext)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
@@ -131,7 +131,7 @@ func (service *Service) newProtoRefresh(tn *onet.TreeNodeInstance, cfg *onet.Gen
 	log.Lvl3(service.ServerIdentity(), "Initialising protocol")
 	crpGen := dbfv.NewCRPGenerator(s.Params, config.Seed)
 	crs := crpGen.ClockNew()
-	err = refresh.Init(*s.Params, s.SkShard, *config.Ciphertext, *crs)
+	err = refresh.Init(*s.Params, s.GetSecretKeyShare(), *config.Ciphertext, *crs)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
@@ -164,8 +164,8 @@ func (service *Service) newProtoE2S(tn *onet.TreeNodeInstance, cfg *onet.Generic
 	// Then, create the protocol with the known parameters and the ones received in config
 	log.Lvl3(service.ServerIdentity(), "Creating protocol")
 	sigmaSmudging := s.Params.Sigma // TODO: how to set?
-	e2sp, err := protocols.NewEncryptionToSharesProtocol(tn, s.Params, sigmaSmudging, s.SkShard, config.Ciphertext,
-		s.NewShareFinaliser(config.SharesID))
+	e2sp, err := protocols.NewEncryptionToSharesProtocol(tn, s.Params, sigmaSmudging, s.GetSecretKeyShare(),
+		config.Ciphertext, s.NewShareFinaliser(config.SharesID))
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err
@@ -209,7 +209,7 @@ func (service *Service) newProtoS2E(tn *onet.TreeNodeInstance, cfg *onet.Generic
 		return nil, err
 	}
 	// Actually construct the protocol
-	s2ep, err := protocols.NewSharesToEncryptionProtocol(tn, s.Params, sigmaSmudging, share, s.SkShard, crp)
+	s2ep, err := protocols.NewSharesToEncryptionProtocol(tn, s.Params, sigmaSmudging, share, s.GetSecretKeyShare(), crp)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err

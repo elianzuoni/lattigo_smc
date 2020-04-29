@@ -31,8 +31,7 @@ func (service *Service) HandleGenRotKeyQuery(query *messages.GenRotKeyQuery) (ne
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending GenRotKeyRequest to root:", reqID)
-	tree := s.Roster.GenerateBinaryTree()
-	err := service.SendRaw(tree.Root.ServerIdentity, req)
+	err := service.SendRaw(s.Root, req)
 	if err != nil {
 		err = errors.New("Couldn't send GenRotKeyRequest to root: " + err.Error())
 		log.Error(err)
@@ -129,8 +128,8 @@ func (service *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K ui
 	// We must hold the lock until the end, because only at the end is the RotKey generated.
 	// We can do so, because no other lock will be is held by this goroutine, or by any other one waiting for
 	// this or for which this waits.
-	s.RotKeyLock.Lock()
-	defer s.RotKeyLock.Unlock()
+	s.rotKeyLock.Lock()
+	defer s.rotKeyLock.Unlock()
 
 	// Create TreeNodeInstance as root
 	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
@@ -184,9 +183,9 @@ func (service *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K ui
 	log.Lvl2(rkgp.ServerIdentity(), "Waiting for RKG protocol to terminate...")
 	rkgp.WaitDone()
 
-	// Retrieve RotationKey
-	s.RotationKey = &rkgp.RotKey
-	log.Lvl1(service.ServerIdentity(), "Generated RotationKey!")
+	// Retrieve rotationKey
+	s.rotationKey = &rkgp.RotKey
+	log.Lvl1(service.ServerIdentity(), "Generated rotationKey!")
 
 	return nil
 }

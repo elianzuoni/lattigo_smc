@@ -7,7 +7,7 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-func (service *Service) RetrieveRemoteCiphertext(SessionID messages.SessionID,
+func (service *Service) GetRemoteCiphertext(SessionID messages.SessionID,
 	CipherID messages.CipherID) (*bfv.Ciphertext, bool) {
 	log.Lvl1(service.ServerIdentity(), "Retrieving remote ciphertext")
 
@@ -17,7 +17,7 @@ func (service *Service) RetrieveRemoteCiphertext(SessionID messages.SessionID,
 	req := &messages.GetCipherRequest{reqID, SessionID, CipherID}
 	service.getCipherRepLock.Unlock()
 
-	// Create channel before sending request to root.
+	// Create channel before sending request to owner.
 	service.getCipherReplies[reqID] = make(chan *messages.GetCipherReply)
 
 	// Send request to owner

@@ -15,46 +15,62 @@ import (
 func (service *Service) HandleCreateSessionQuery(query *messages.CreateSessionQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Received CreateSessionQuery")
 
-	// Create CreateSessionRequest with its ID
-	reqID := messages.NewCreateSessionRequestID()
-	req := &messages.CreateSessionRequest{reqID, query}
+	/*
+		// Create CreateSessionRequest with its ID
+		reqID := messages.NewCreateSessionRequestID()
+		req := &messages.CreateSessionRequest{reqID, query}
 
-	// Create channel before sending request to root.
-	service.createSessionRepLock.Lock()
-	service.createSessionReplies[reqID] = make(chan *messages.CreateSessionReply)
-	service.createSessionRepLock.Unlock()
+		// Create channel before sending request to root.
+		service.createSessionRepLock.Lock()
+		service.createSessionReplies[reqID] = make(chan *messages.CreateSessionReply)
+		service.createSessionRepLock.Unlock()
 
-	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending CreateSessionRequest to root")
-	tree := query.Roster.GenerateBinaryTree() // This way, the root is implied in the Roster itself. TODO: ok?
-	err := service.SendRaw(tree.Root.ServerIdentity, req)
+		// Send request to root
+		log.Lvl2(service.ServerIdentity(), "Sending CreateSessionRequest to root")
+		tree := query.Roster.GenerateBinaryTree() // This way, the root is implied in the Roster itself. TODO: ok?
+		err := service.SendRaw(tree.Root.ServerIdentity, req)
+		if err != nil {
+			err = errors.New("Couldn't send CreateSessionRequest to root: " + err.Error())
+			log.Error(err)
+			return nil, err
+		}
+
+		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root")
+
+		// Receive reply from channel
+		log.Lvl3(service.ServerIdentity(), "Sent CreateSessionRequest to root. Waiting on channel to receive reply...")
+		service.createSessionRepLock.RLock()
+		replyChan := service.createSessionReplies[reqID]
+		service.createSessionRepLock.RUnlock()
+		reply := <-replyChan // TODO: timeout if root cannot send reply
+
+		// Close channel
+		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+		service.createSessionRepLock.Lock()
+		close(replyChan)
+		delete(service.createSessionReplies, reqID)
+		service.createSessionRepLock.Unlock()
+
+		log.Lvl4(service.ServerIdentity(), "Closed channel, returning")
+
+		return &messages.CreateSessionResponse{reply.SessionID, reply.Valid}, nil
+
+	*/
+
+	// Decide the SessionID (it has to be uniquely identifying across the system, so we generate it here)
+	sessionID := messages.NewSessionID()
+
+	// Launch the CreateSession protocol, to create the Session at all nodes
+	err := service.createSession(sessionID, query.Roster, query.Params)
 	if err != nil {
-		err = errors.New("Couldn't send CreateSessionRequest to root: " + err.Error())
-		log.Error(err)
+		log.Error(service.ServerIdentity(), "Could not create session:", err)
 		return nil, err
 	}
 
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root")
-
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Sent CreateSessionRequest to root. Waiting on channel to receive reply...")
-	service.createSessionRepLock.RLock()
-	replyChan := service.createSessionReplies[reqID]
-	service.createSessionRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
-
-	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	service.createSessionRepLock.Lock()
-	close(replyChan)
-	delete(service.createSessionReplies, reqID)
-	service.createSessionRepLock.Unlock()
-
-	log.Lvl4(service.ServerIdentity(), "Closed channel, returning")
-
-	return &messages.CreateSessionResponse{reply.SessionID, reply.Valid}, nil
+	return &messages.CreateSessionResponse{sessionID, true}, nil
 }
 
+/*
 func (service *Service) processCreateSessionRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.CreateSessionRequest)
 
@@ -91,6 +107,9 @@ func (service *Service) processCreateSessionRequest(msg *network.Envelope) {
 	return
 }
 
+*/
+
+// Creates a session at all nodes, launching the CreateSession protocol (establishes itself as the root for the session).
 func (service *Service) createSession(SessionID messages.SessionID, roster *onet.Roster, params *bfv.Parameters) error {
 	log.Lvl2(service.ServerIdentity(), "Creating a session")
 
@@ -104,7 +123,7 @@ func (service *Service) createSession(SessionID messages.SessionID, roster *onet
 	tni := service.NewTreeNodeInstance(tree, tree.Root, CreateSessionProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &messages.CreateSessionConfig{SessionID, roster, params}
+	config := &messages.CreateSessionConfig{SessionID, roster, service.ServerIdentity(), params}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not marshal protocol configuration:", err)
@@ -152,6 +171,7 @@ func (service *Service) createSession(SessionID messages.SessionID, roster *onet
 	return nil
 }
 
+/*
 // This method is executed at the server when receiving the root's CreateSessionReply.
 // It simply sends the reply through the channel.
 func (service *Service) processCreateSessionReply(msg *network.Envelope) {
@@ -167,3 +187,5 @@ func (service *Service) processCreateSessionReply(msg *network.Envelope) {
 
 	return
 }
+
+*/

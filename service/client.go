@@ -292,6 +292,7 @@ func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64, seed []byte) error {
 	return nil
 }
 
+/*
 // SendKeyQuery sends a query to have the entry point retrieve the specified keys.
 func (c *Client) SendKeyQuery(getEvK, getRtK bool) (bool, bool, error) {
 	log.Lvl1(c, "Called to send a key query")
@@ -318,6 +319,8 @@ func (c *Client) SendKeyQuery(getEvK, getRtK bool) (bool, bool, error) {
 
 	return resp.EvalKeyObtained, resp.RotKeyObtained, nil
 }
+
+*/
 
 // SendStoreQuery sends a query to store in the system the provided vector. The vector is encrypted locally.
 func (c *Client) SendStoreQuery(data []uint64) (messages.CipherID, error) {

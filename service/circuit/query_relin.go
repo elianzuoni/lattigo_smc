@@ -104,11 +104,8 @@ func (service *Service) processRelinRequest(msg *network.Envelope) {
 	}
 	// Check existence of evaluation key
 	log.Lvl3(service.ServerIdentity(), "Checking existence of evaluation key")
-	// We don't need to hold the lock until the end.
-	s.EvalKeyLock.RLock()
-	evalKey := s.EvalKey // We can do this, since s.evalKey is unmodifiable.
-	s.EvalKeyLock.RUnlock()
-	if evalKey == nil {
+	evalKey, ok := s.GetEvaluationKey()
+	if !ok {
 		log.Error(service.ServerIdentity(), "Evaluation key not generated")
 		err := service.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {

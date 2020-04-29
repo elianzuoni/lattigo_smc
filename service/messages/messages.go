@@ -16,9 +16,12 @@ import (
 
 // MsgTypes contains the different message types.
 type MessageTypes struct {
-	MsgCreateSessionQuery    network.MessageTypeID // Unused
-	MsgCreateSessionRequest  network.MessageTypeID
-	MsgCreateSessionReply    network.MessageTypeID
+	MsgCreateSessionQuery network.MessageTypeID // Unused
+	/*
+		MsgCreateSessionRequest  network.MessageTypeID
+		MsgCreateSessionReply    network.MessageTypeID
+
+	*/
 	MsgCreateSessionResponse network.MessageTypeID // Unused
 
 	MsgCloseSessionQuery    network.MessageTypeID // Unused
@@ -41,10 +44,22 @@ type MessageTypes struct {
 	MsgGenRotKeyReply    network.MessageTypeID
 	MsgGenRotKeyResponse network.MessageTypeID // Unused
 
-	MsgKeyQuery    network.MessageTypeID // Unused
-	MsgKeyRequest  network.MessageTypeID
-	MsgKeyReply    network.MessageTypeID
-	MsgKeyResponse network.MessageTypeID // Unused
+	MsgGetPubKeyRequest network.MessageTypeID
+	MsgGetPubKeyReply   network.MessageTypeID
+
+	MsgGetEvalKeyRequest network.MessageTypeID
+	MsgGetEvalKeyReply   network.MessageTypeID
+
+	MsgGetRotKeyRequest network.MessageTypeID
+	MsgGetRotKeyReply   network.MessageTypeID
+
+	/*
+		MsgKeyQuery    network.MessageTypeID // Unused
+		MsgKeyRequest  network.MessageTypeID
+		MsgKeyReply    network.MessageTypeID
+		MsgKeyResponse network.MessageTypeID // Unused
+
+	*/
 
 	MsgStoreQuery    network.MessageTypeID // Unused
 	MsgStoreRequest  network.MessageTypeID
@@ -102,8 +117,11 @@ func init() {
 	log.Lvl1("Registering messages")
 
 	MsgTypes.MsgCreateSessionQuery = network.RegisterMessage(&CreateSessionQuery{}) // Unused
-	MsgTypes.MsgCreateSessionRequest = network.RegisterMessage(&CreateSessionRequest{})
-	MsgTypes.MsgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
+	/*
+		MsgTypes.MsgCreateSessionRequest = network.RegisterMessage(&CreateSessionRequest{})
+		MsgTypes.MsgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
+
+	*/
 	MsgTypes.MsgCreateSessionResponse = network.RegisterMessage(&CreateSessionResponse{}) // Unused
 
 	MsgTypes.MsgCloseSessionQuery = network.RegisterMessage(&CloseSessionQuery{}) // Unused
@@ -126,10 +144,22 @@ func init() {
 	MsgTypes.MsgGenRotKeyReply = network.RegisterMessage(&GenRotKeyReply{})
 	MsgTypes.MsgGenRotKeyResponse = network.RegisterMessage(&GenRotKeyResponse{}) // Unused
 
-	MsgTypes.MsgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
-	MsgTypes.MsgKeyRequest = network.RegisterMessage(&KeyRequest{})
-	MsgTypes.MsgKeyReply = network.RegisterMessage(&KeyReply{})
-	MsgTypes.MsgKeyResponse = network.RegisterMessage(&KeyResponse{}) // Unused
+	MsgTypes.MsgGetPubKeyRequest = network.RegisterMessage(&GetPubKeyRequest{})
+	MsgTypes.MsgGetPubKeyReply = network.RegisterMessage(&GetPubKeyReply{})
+
+	MsgTypes.MsgGetEvalKeyRequest = network.RegisterMessage(&GetEvalKeyRequest{})
+	MsgTypes.MsgGetEvalKeyReply = network.RegisterMessage(&GetEvalKeyReply{})
+
+	MsgTypes.MsgGetRotKeyRequest = network.RegisterMessage(&GetRotKeyRequest{})
+	MsgTypes.MsgGetRotKeyReply = network.RegisterMessage(&GetRotKeyReply{})
+
+	/*
+		MsgTypes.MsgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
+		MsgTypes.MsgKeyRequest = network.RegisterMessage(&KeyRequest{})
+		MsgTypes.MsgKeyReply = network.RegisterMessage(&KeyReply{})
+		MsgTypes.MsgKeyResponse = network.RegisterMessage(&KeyResponse{}) // Unused
+
+	*/
 
 	MsgTypes.MsgStoreQuery = network.RegisterMessage(&StoreQuery{}) // Unused
 	MsgTypes.MsgStoreRequest = network.RegisterMessage(&StoreRequest{})
@@ -237,6 +267,7 @@ type CreateSessionQuery struct {
 	Params *bfv.Parameters
 }
 
+/*
 type CreateSessionRequestID uuid.UUID
 
 func NewCreateSessionRequestID() CreateSessionRequestID {
@@ -251,18 +282,24 @@ type CreateSessionRequest struct {
 	Query *CreateSessionQuery
 }
 
+*/
+
 type CreateSessionConfig struct {
 	SessionID SessionID
 	Roster    *onet.Roster
+	Root      *network.ServerIdentity
 	Params    *bfv.Parameters
 }
 
+/*
 type CreateSessionReply struct {
 	ReqID CreateSessionRequestID
 
 	SessionID SessionID
 	Valid     bool
 }
+
+*/
 
 type CreateSessionResponse struct {
 	SessionID SessionID
@@ -425,6 +462,77 @@ type GenRotKeyResponse struct {
 	Valid bool
 }
 
+// Get Public Key
+
+type GetPubKeyRequestID uuid.UUID
+
+func NewGetPubKeyRequestID() GetPubKeyRequestID {
+	return GetPubKeyRequestID(uuid.NewV1())
+}
+func (id GetPubKeyRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type GetPubKeyRequest struct {
+	ReqID GetPubKeyRequestID
+
+	SessionID SessionID
+}
+
+type GetPubKeyReply struct {
+	ReqID GetPubKeyRequestID
+
+	PublicKey *bfv.PublicKey
+	Valid     bool
+}
+
+// Get Evaluation Key
+
+type GetEvalKeyRequestID uuid.UUID
+
+func NewGetEvalKeyRequestID() GetEvalKeyRequestID {
+	return GetEvalKeyRequestID(uuid.NewV1())
+}
+func (id GetEvalKeyRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type GetEvalKeyRequest struct {
+	ReqID     GetEvalKeyRequestID
+	SessionID SessionID
+}
+
+type GetEvalKeyReply struct {
+	ReqID GetEvalKeyRequestID
+
+	EvaluationKey *bfv.EvaluationKey
+	Valid         bool
+}
+
+// Get Rotation Key
+
+type GetRotKeyRequestID uuid.UUID
+
+func NewGetRotKeyRequestID() GetRotKeyRequestID {
+	return GetRotKeyRequestID(uuid.NewV1())
+}
+func (id GetRotKeyRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type GetRotKeyRequest struct {
+	ReqID     GetRotKeyRequestID
+	SessionID SessionID
+}
+
+type GetRotKeyReply struct {
+	ReqID GetRotKeyRequestID
+
+	RotationKey *bfv.RotationKeys
+	Valid       bool
+}
+
+/*
 // Key
 
 type KeyQuery struct {
@@ -470,6 +578,8 @@ type KeyResponse struct {
 
 	Valid bool
 }
+
+*/
 
 // Store
 

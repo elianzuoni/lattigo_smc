@@ -104,12 +104,9 @@ func (service *Service) processRotationRequest(msg *network.Envelope) {
 		return
 	}
 	log.Lvl3(service.ServerIdentity(), "Checking if rotation key was generated")
-	// We don't need to hold the lock
-	s.RotKeyLock.RLock()
 	// The rotation key is modifiable, but it is the pointer s.rotationKey itself that changes, not its content
-	rotKey := s.RotationKey
-	s.RotKeyLock.RUnlock()
-	if rotKey == nil {
+	rotKey, ok := s.GetRotationKey()
+	if !ok {
 		log.Error(service.ServerIdentity(), "Rotation key not generated")
 		err := service.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
