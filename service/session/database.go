@@ -50,6 +50,13 @@ func (s *Session) StoreCiphertext(id messages.CipherID, ct *bfv.Ciphertext) {
 	return
 }
 
+// Stores a ciphertext in a database, under a new ID (we are the owner).
+func (s *Session) StoreCiphertextNewID(ct *bfv.Ciphertext) messages.CipherID {
+	newCipherID := messages.NewCipherID(s.service.ServerIdentity())
+	s.StoreCiphertext(newCipherID, ct)
+	return newCipherID
+}
+
 // Retrieves an additive share from the database, given its id. Returns a boolean indicating success.
 func (s *Session) GetAdditiveShare(id messages.SharesID) (share *dbfv.AdditiveShare, ok bool) {
 	log.Lvl4("Retrieving additive share")

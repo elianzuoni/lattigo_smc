@@ -1,4 +1,4 @@
-// The goal of the Store Query is to store a new ciphertext into the system. The root decides its CipherID.
+// The goal of the Store Query is to store a new ciphertext into the system.
 
 package session
 
@@ -9,10 +9,9 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-// HandleStoreQuery is the handler registered for message type StoreQuery:
-// a client asks to store new data into the system.
-// The server forwards the request to the root, which stores the ciphertext and assigns it a CipherID which is returned
-// in the reply.
+// HandleStoreQuery is the handler registered for message type StoreQuery.
+// A client asks to store new (already encrypted) data into the system.
+// The data is stored locally, and assigned a new CipherID indicating the owner.
 func (service *Service) HandleStoreQuery(query *messages.StoreQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Received StoreRequest query")
 
@@ -24,50 +23,57 @@ func (service *Service) HandleStoreQuery(query *messages.StoreQuery) (network.Me
 		return nil, err
 	}
 
-	// Create SumRequest with its ID
-	reqID := messages.NewStoreRequestID()
-	req := &messages.StoreRequest{query.SessionID, reqID, query}
+	/*
+		// Create SumRequest with its ID
+		reqID := messages.NewStoreRequestID()
+		req := &messages.StoreRequest{query.SessionID, reqID, query}
 
-	// Create channel before sending request to root.
-	service.storeRepLock.Lock()
-	service.storeReplies[reqID] = make(chan *messages.StoreReply)
-	service.storeRepLock.Unlock()
+		// Create channel before sending request to root.
+		service.storeRepLock.Lock()
+		service.storeReplies[reqID] = make(chan *messages.StoreReply)
+		service.storeRepLock.Unlock()
 
-	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending StoreRequest to the root")
-	err := service.SendRaw(s.Root, req)
-	if err != nil {
-		err = errors.New("Couldn't send StoreRequest to the root: " + err.Error())
-		log.Error(service.ServerIdentity(), err)
-		return nil, err
-	}
+		// Send request to root
+		log.Lvl2(service.ServerIdentity(), "Sending StoreRequest to the root")
+		err := service.SendRaw(s.Root, req)
+		if err != nil {
+			err = errors.New("Couldn't send StoreRequest to the root: " + err.Error())
+			log.Error(service.ServerIdentity(), err)
+			return nil, err
+		}
 
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	service.storeRepLock.RLock()
-	replyChan := service.storeReplies[reqID]
-	service.storeRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+		// Receive reply from channel
+		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+		service.storeRepLock.RLock()
+		replyChan := service.storeReplies[reqID]
+		service.storeRepLock.RUnlock()
+		reply := <-replyChan // TODO: timeout if root cannot send reply
 
-	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	service.storeRepLock.Lock()
-	close(replyChan)
-	delete(service.storeReplies, reqID)
-	service.storeRepLock.Unlock()
+		// Close channel
+		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+		service.storeRepLock.Lock()
+		close(replyChan)
+		delete(service.storeReplies, reqID)
+		service.storeRepLock.Unlock()
 
-	log.Lvl4(service.ServerIdentity(), "Closed channel")
+		log.Lvl4(service.ServerIdentity(), "Closed channel")
 
-	if !reply.Valid {
-		err := errors.New("Received invalid reply: root couldn't store")
-		log.Error(service.ServerIdentity(), err)
-		// Respond with the reply, not nil, err
-	}
-	log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
+		if !reply.Valid {
+			err := errors.New("Received invalid reply: root couldn't store")
+			log.Error(service.ServerIdentity(), err)
+			// Respond with the reply, not nil, err
+		}
+		log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
 
-	return &messages.StoreResponse{reply.CipherID, reply.Valid}, nil
+	*/
+
+	// Store locally
+	newID := s.StoreCiphertextNewID(query.Ciphertext)
+
+	return &messages.StoreResponse{newID, true}, nil
 }
 
+/*
 // StoreRequest is received at root from server.
 // The ciphertext is stored under a fresh CipherID, which is returned in the reply.
 func (service *Service) processStoreRequest(msg *network.Envelope) {
@@ -121,3 +127,5 @@ func (service *Service) processStoreReply(msg *network.Envelope) {
 
 	return
 }
+
+*/

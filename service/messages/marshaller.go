@@ -1246,6 +1246,7 @@ func (query *StoreQuery) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
+/*
 func (id *StoreRequestID) MarshalBinary() ([]byte, error) {
 	return (*uuid.UUID)(id).MarshalBinary()
 }
@@ -1339,6 +1340,8 @@ func (req *StoreRequest) UnmarshalBinary(data []byte) (err error) {
 
 	return
 }
+
+*/
 
 // Get Ciphertext
 

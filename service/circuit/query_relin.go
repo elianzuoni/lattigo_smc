@@ -8,64 +8,116 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-// Handles the client's RelinQuery. Forwards the query to root, and waits for reply on a channel.
-// Either returns a valid or an invalid response, depending on what the root replied.
-func (service *Service) HandleRelinearisationQuery(query *messages.RelinQuery) (network.Message, error) {
+// Legacy query
+func (service *Service) HandleRelinQuery(query *messages.RelinQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Server. Received RelinQuery for ciphertext:", query.CipherID)
 
+	/*
+		// Extract Session, if existent
+		s, ok := service.GetSessionService().GetSession(query.SessionID)
+		if !ok {
+			err := errors.New("Requested session does not exist")
+			log.Error(service.ServerIdentity(), err)
+			return nil, err
+		}
+
+		// Create RelinRequest with its ID
+		reqID := messages.NewRelinRequestID()
+		req := &messages.RelinRequest{query.SessionID, reqID, query}
+
+		// Create channel before sending request to root.
+		service.relinRepLock.Lock()
+		service.relinReplies[reqID] = make(chan *messages.RelinReply)
+		service.relinRepLock.Unlock()
+
+		// Send request to root
+		log.Lvl2(service.ServerIdentity(), "Sending RelinRequest to root.")
+		tree := s.Roster.GenerateBinaryTree()
+		err := service.SendRaw(tree.Root.ServerIdentity, req)
+		if err != nil {
+			log.Error(service.ServerIdentity(), "Couldn't send RelinRequest to root: ", err)
+			return nil, err
+		}
+
+		// Receive reply from channel
+		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+		service.relinRepLock.RLock()
+		replyChan := service.relinReplies[reqID]
+		service.relinRepLock.RUnlock()
+		reply := <-replyChan // TODO: timeout if root cannot send reply
+
+		// Close channel
+		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+		service.relinRepLock.Lock()
+		close(replyChan)
+		delete(service.relinReplies, reqID)
+		service.relinRepLock.Unlock()
+
+		log.Lvl4(service.ServerIdentity(), "Closed channel")
+
+		if !reply.Valid {
+			err := errors.New("Received invalid reply: root couldn't perform relinearisation")
+			log.Error(service.ServerIdentity(), err)
+			// Respond with the reply, not nil, err
+		} else {
+			log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
+		}
+
+		return &messages.RelinResponse{reply.NewCipherID, reply.Valid}, nil
+
+	*/
+
+	relinID, err := service.relinCipher(query.SessionID, query.CipherID)
+	return &messages.RelinResponse{relinID, err == nil}, err
+}
+
+func (service *Service) relinCipher(sessionID messages.SessionID, cipherID messages.CipherID) (messages.CipherID, error) {
+	log.Lvl2(service.ServerIdentity(), "Relinearising ciphertext")
+
 	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(query.SessionID)
+	s, ok := service.GetSessionService().GetSession(sessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(service.ServerIdentity(), err)
-		return nil, err
+		return messages.NilCipherID, err
 	}
 
-	// Create RelinRequest with its ID
-	reqID := messages.NewRelinRequestID()
-	req := &messages.RelinRequest{query.SessionID, reqID, query}
-
-	// Create channel before sending request to root.
-	service.relinRepLock.Lock()
-	service.relinReplies[reqID] = make(chan *messages.RelinReply)
-	service.relinRepLock.Unlock()
-
-	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending RelinRequest to root.")
-	tree := s.Roster.GenerateBinaryTree()
-	err := service.SendRaw(tree.Root.ServerIdentity, req)
-	if err != nil {
-		log.Error(service.ServerIdentity(), "Couldn't send RelinRequest to root: ", err)
-		return nil, err
-	}
-
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	service.relinRepLock.RLock()
-	replyChan := service.relinReplies[reqID]
-	service.relinRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
-
-	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	service.relinRepLock.Lock()
-	close(replyChan)
-	delete(service.relinReplies, reqID)
-	service.relinRepLock.Unlock()
-
-	log.Lvl4(service.ServerIdentity(), "Closed channel")
-
-	if !reply.Valid {
-		err := errors.New("Received invalid reply: root couldn't perform relinearisation")
+	// Retrieve ciphertext
+	log.Lvl3(service.ServerIdentity(), "Retrieving ciphertext")
+	ct, ok := s.GetCiphertext(cipherID)
+	if !ok {
+		err := errors.New("Ciphertext does not exist.")
 		log.Error(service.ServerIdentity(), err)
-		// Respond with the reply, not nil, err
-	} else {
-		log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
+		return messages.NilCipherID, err
+	}
+	// Retrieving evaluation key
+	log.Lvl3(service.ServerIdentity(), "Retrieving evaluation key")
+	evalKey, ok := s.GetEvaluationKey()
+	if !ok {
+		err := errors.New("Could not retrieve evaluation key")
+		log.Error(service.ServerIdentity(), err)
+		return messages.NilCipherID, err
+	}
+	// Check that the ciphertext has the correct degree
+	log.Lvl3(service.ServerIdentity(), "Checking degree of ciphertext (cannot relinearise with degree >= 3)")
+	if ct.Degree() >= 3 {
+		err := errors.New("Cannot relinearise ciphertext of degree >= 3")
+		log.Error(service.ServerIdentity(), err)
+		return messages.NilCipherID, err
 	}
 
-	return &messages.RelinResponse{reply.NewCipherID, reply.Valid}, nil
+	// Relinearise
+	log.Lvl3(service.ServerIdentity(), "Relinearising ciphertext")
+	eval := bfv.NewEvaluator(s.Params)
+	ctRelin := eval.RelinearizeNew(ct, evalKey)
 
+	// Store locally
+	relinID := s.StoreCiphertextNewID(ctRelin)
+
+	return relinID, nil
 }
+
+// To be modified
 
 // This method is executed at the root when receiving a SumRequest.
 // It checks for feasibility (whether or not it possesses the two requested ciphertexts) and, based

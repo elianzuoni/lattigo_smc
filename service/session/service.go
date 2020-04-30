@@ -39,8 +39,11 @@ type Service struct {
 		keyReplies           map[messages.KeyRequestID]chan *messages.KeyReply
 
 	*/
-	storeRepLock     sync.RWMutex
-	storeReplies     map[messages.StoreRequestID]chan *messages.StoreReply
+	/*
+		storeRepLock     sync.RWMutex
+		storeReplies     map[messages.StoreRequestID]chan *messages.StoreReply
+
+	*/
 	getCipherRepLock sync.RWMutex
 	getCipherReplies map[messages.GetCipherRequestID]chan *messages.GetCipherReply
 }
@@ -75,7 +78,10 @@ func NewService(c *onet.Context) (onet.Service, error) {
 			keyReplies:           make(map[messages.KeyRequestID]chan *messages.KeyReply),
 
 		*/
-		storeReplies:     make(map[messages.StoreRequestID]chan *messages.StoreReply),
+		/*
+			storeReplies:     make(map[messages.StoreRequestID]chan *messages.StoreReply),
+
+		*/
 		getCipherReplies: make(map[messages.GetCipherRequestID]chan *messages.GetCipherReply),
 	}
 
@@ -171,8 +177,11 @@ func registerServerMsgHandler(c *onet.Context, serv *Service) {
 	c.RegisterProcessor(serv, messages.MsgTypes.MsgGetRotKeyReply)
 
 	// Store
-	c.RegisterProcessor(serv, messages.MsgTypes.MsgStoreRequest)
-	c.RegisterProcessor(serv, messages.MsgTypes.MsgStoreReply)
+	/*
+		c.RegisterProcessor(serv, messages.MsgTypes.MsgStoreRequest)
+		c.RegisterProcessor(serv, messages.MsgTypes.MsgStoreReply)
+
+	*/
 
 	// Get Ciphertext
 	c.RegisterProcessor(serv, messages.MsgTypes.MsgGetCipherRequest)
@@ -285,14 +294,17 @@ func (service *Service) Process(msg *network.Envelope) {
 	*/
 
 	// Store
-	if msg.MsgType.Equal(messages.MsgTypes.MsgStoreRequest) {
-		service.processStoreRequest(msg)
-		return
-	}
-	if msg.MsgType.Equal(messages.MsgTypes.MsgStoreReply) {
-		service.processStoreReply(msg)
-		return
-	}
+	/*
+		if msg.MsgType.Equal(messages.MsgTypes.MsgStoreRequest) {
+			service.processStoreRequest(msg)
+			return
+		}
+		if msg.MsgType.Equal(messages.MsgTypes.MsgStoreReply) {
+			service.processStoreReply(msg)
+			return
+		}
+
+	*/
 
 	// Get Cipher
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherRequest) {

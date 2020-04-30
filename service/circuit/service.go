@@ -84,7 +84,7 @@ func registerClientQueryHandlers(service *Service) error {
 	if err := service.RegisterHandler(service.HandleRetrieveQuery); err != nil {
 		return errors.New("Couldn't register HandleRetrieveQuery: " + err.Error())
 	}
-	if err := service.RegisterHandler(service.HandleRelinearisationQuery); err != nil {
+	if err := service.RegisterHandler(service.HandleRelinQuery); err != nil {
 		return errors.New("Couldn't register HandleRelinearizationquery: " + err.Error())
 	}
 	if err := service.RegisterHandler(service.HandleRefreshQuery); err != nil {

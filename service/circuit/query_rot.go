@@ -8,64 +8,122 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-// Handles the client's RotationQuery. Forwards the query to root, and waits for reply on a channel.
-// Either returns the new CipherID or an invalid response, depending on what the root replied.
+// Legacy query
 func (service *Service) HandleRotationQuery(query *messages.RotationQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Received RotationQuery for ciphertext:", query.CipherID)
 
+	/*
+		// Extract Session, if existent
+		s, ok := service.GetSessionService().GetSession(query.SessionID)
+		if !ok {
+			err := errors.New("Requested session does not exist")
+			log.Error(service.ServerIdentity(), err)
+			return nil, err
+		}
+
+		// Create request with its ID
+		reqID := messages.NewRotationRequestID()
+		req := &messages.RotationRequest{query.SessionID, reqID, query}
+
+		// Create channel before sending request to root.
+		service.rotationRepLock.Lock()
+		service.rotationReplies[reqID] = make(chan *messages.RotationReply)
+		service.rotationRepLock.Unlock()
+
+		// Send request to root
+		log.Lvl2(service.ServerIdentity(), "Sending RotationRequest to root:", query.CipherID)
+		tree := s.Roster.GenerateBinaryTree()
+		err := service.SendRaw(tree.Root.ServerIdentity, req)
+		if err != nil {
+			log.Error("Couldn't send RotationRequest to root:", err)
+			return nil, err
+		}
+
+		// Receive reply from channel
+		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+		service.rotationRepLock.RLock()
+		replyChan := service.rotationReplies[reqID]
+		service.rotationRepLock.RUnlock()
+		reply := <-replyChan // TODO: timeout if root cannot send reply
+
+		// Close channel
+		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+		service.rotationRepLock.Lock()
+		close(replyChan)
+		delete(service.rotationReplies, reqID)
+		service.rotationRepLock.Unlock()
+
+		log.Lvl4(service.ServerIdentity(), "Closed channel")
+
+		// Check validity
+		if !reply.Valid {
+			err := errors.New("Received invalid reply: root couldn't perform sum")
+			log.Error(service.ServerIdentity(), err)
+			// Respond with the reply, not nil, err
+		} else {
+			log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
+		}
+
+		return &messages.RotationResponse{reply.NewCipherID, reply.Valid}, nil
+
+	*/
+
+	rotID, err := service.rotateCipher(query.SessionID, query.CipherID, query.RotIdx, query.K)
+	return &messages.RotationResponse{rotID, err == nil}, err
+}
+
+func (service *Service) rotateCipher(sessionID messages.SessionID, cipherID messages.CipherID,
+	rotIdx int, k uint64) (messages.CipherID, error) {
+	log.Lvl2(service.ServerIdentity(), "Rotating ciphertext")
+
 	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(query.SessionID)
+	s, ok := service.GetSessionService().GetSession(sessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(service.ServerIdentity(), err)
-		return nil, err
+		return messages.NilCipherID, err
 	}
 
-	// Create request with its ID
-	reqID := messages.NewRotationRequestID()
-	req := &messages.RotationRequest{query.SessionID, reqID, query}
-
-	// Create channel before sending request to root.
-	service.rotationRepLock.Lock()
-	service.rotationReplies[reqID] = make(chan *messages.RotationReply)
-	service.rotationRepLock.Unlock()
-
-	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending RotationRequest to root:", query.CipherID)
-	tree := s.Roster.GenerateBinaryTree()
-	err := service.SendRaw(tree.Root.ServerIdentity, req)
-	if err != nil {
-		log.Error("Couldn't send RotationRequest to root:", err)
-		return nil, err
-	}
-
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	service.rotationRepLock.RLock()
-	replyChan := service.rotationReplies[reqID]
-	service.rotationRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
-
-	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	service.rotationRepLock.Lock()
-	close(replyChan)
-	delete(service.rotationReplies, reqID)
-	service.rotationRepLock.Unlock()
-
-	log.Lvl4(service.ServerIdentity(), "Closed channel")
-
-	// Check validity
-	if !reply.Valid {
-		err := errors.New("Received invalid reply: root couldn't perform sum")
+	// Retrieve ciphertext
+	log.Lvl3(service.ServerIdentity(), "Retrieving ciphertext")
+	ct, ok := s.GetCiphertext(cipherID)
+	if !ok {
+		err := errors.New("Ciphertext does not exist.")
 		log.Error(service.ServerIdentity(), err)
-		// Respond with the reply, not nil, err
-	} else {
-		log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
+		return messages.NilCipherID, err
+	}
+	// Retrieving rotation key
+	log.Lvl3(service.ServerIdentity(), "Checking if rotation key was generated")
+	// The rotation key is modifiable, but it is the pointer s.rotationKey itself that changes, not its content
+	rotKey, ok := s.GetRotationKey()
+	if !ok {
+		err := errors.New("Could not retrieve rotation key")
+		log.Error(service.ServerIdentity(), err)
+		return messages.NilCipherID, err
+	}
+	// TODO: refine check for specific rotation
+
+	// Rotate
+	log.Lvl3(service.ServerIdentity(), "Rotating the ciphertexts")
+	eval := bfv.NewEvaluator(s.Params)
+	var ctRot *bfv.Ciphertext
+	switch bfv.Rotation(rotIdx) {
+	case bfv.RotationRow:
+		ctRot = eval.RotateRowsNew(ct, rotKey)
+	// TODO: what? they are the same?
+	case bfv.RotationLeft:
+		ctRot = eval.RotateColumnsNew(ct, k, rotKey)
+	case bfv.RotationRight:
+		ctRot = eval.RotateColumnsNew(ct, k, rotKey)
 	}
 
-	return &messages.RotationResponse{reply.NewCipherID, reply.Valid}, nil
+	// Store locally
+	rotID := s.StoreCiphertextNewID(ctRot)
+
+	return rotID, nil
 }
+
+// To be modified
 
 // This method is executed at the root when receiving a RotationRequest.
 // It checks for feasibility (whether or not it possesses the requested ciphertext) and, based on the result,

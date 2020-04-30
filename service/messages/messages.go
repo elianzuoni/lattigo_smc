@@ -61,9 +61,12 @@ type MessageTypes struct {
 
 	*/
 
-	MsgStoreQuery    network.MessageTypeID // Unused
-	MsgStoreRequest  network.MessageTypeID
-	MsgStoreReply    network.MessageTypeID
+	MsgStoreQuery network.MessageTypeID // Unused
+	/*
+		MsgStoreRequest  network.MessageTypeID
+		MsgStoreReply    network.MessageTypeID
+
+	*/
 	MsgStoreResponse network.MessageTypeID // Unused
 
 	MsgGetCipherRequest network.MessageTypeID
@@ -162,8 +165,11 @@ func init() {
 	*/
 
 	MsgTypes.MsgStoreQuery = network.RegisterMessage(&StoreQuery{}) // Unused
-	MsgTypes.MsgStoreRequest = network.RegisterMessage(&StoreRequest{})
-	MsgTypes.MsgStoreReply = network.RegisterMessage(&StoreReply{})
+	/*
+		MsgTypes.MsgStoreRequest = network.RegisterMessage(&StoreRequest{})
+		MsgTypes.MsgStoreReply = network.RegisterMessage(&StoreReply{})
+
+	*/
 	MsgTypes.MsgStoreResponse = network.RegisterMessage(&StoreResponse{}) // Unused
 
 	MsgTypes.MsgGetCipherRequest = network.RegisterMessage(&GetCipherRequest{})
@@ -590,6 +596,7 @@ type StoreQuery struct {
 	Ciphertext *bfv.Ciphertext
 }
 
+/*
 type StoreRequestID uuid.UUID
 
 func NewStoreRequestID() StoreRequestID {
@@ -616,6 +623,8 @@ type StoreReply struct {
 	CipherID CipherID
 	Valid    bool
 }
+
+*/
 
 type StoreResponse struct {
 	CipherID CipherID
