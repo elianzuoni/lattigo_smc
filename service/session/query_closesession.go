@@ -14,53 +14,67 @@ import (
 func (service *Service) HandleCloseSessionQuery(query *messages.CloseSessionQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Received CloseSessionQuery")
 
-	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(query.SessionID)
-	if !ok {
-		err := errors.New("Requested session does not exist")
-		log.Error(service.ServerIdentity(), err)
-		return nil, err
-	}
+	/*
+		// Extract Session, if existent
+		s, ok := service.sessions.GetSession(query.SessionID)
+		if !ok {
+			err := errors.New("Requested session does not exist")
+			log.Error(service.ServerIdentity(), err)
+			return nil, err
+		}
 
-	// Create CloseSessionRequest with its ID
-	reqID := messages.NewCloseSessionRequestID()
-	req := &messages.CloseSessionRequest{reqID, query.SessionID, query}
+		// Create CloseSessionRequest with its ID
+		reqID := messages.NewCloseSessionRequestID()
+		req := &messages.CloseSessionRequest{reqID, query.SessionID, query}
 
-	// Create channel before sending request to root.
-	service.closeSessionRepLock.Lock()
-	service.closeSessionReplies[reqID] = make(chan *messages.CloseSessionReply)
-	service.closeSessionRepLock.Unlock()
+		// Create channel before sending request to root.
+		service.closeSessionRepLock.Lock()
+		service.closeSessionReplies[reqID] = make(chan *messages.CloseSessionReply)
+		service.closeSessionRepLock.Unlock()
 
-	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending CloseSessionRequest to root")
-	err := service.SendRaw(s.Root, req)
+		// Send request to root
+		log.Lvl2(service.ServerIdentity(), "Sending CloseSessionRequest to root")
+		err := service.SendRaw(s.Root, req)
+		if err != nil {
+			err = errors.New("Couldn't send CloseSessionRequest to root: " + err.Error())
+			log.Error(err)
+			return nil, err
+		}
+
+		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root")
+
+		// Receive reply from channel
+		log.Lvl3(service.ServerIdentity(), "Sent CloseSessionRequest to root. Waiting on channel to receive reply...")
+		service.closeSessionRepLock.RLock()
+		replyChan := service.closeSessionReplies[reqID]
+		service.closeSessionRepLock.RUnlock()
+		reply := <-replyChan // TODO: timeout if root cannot send reply
+
+		// Close channel
+		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+		service.closeSessionRepLock.Lock()
+		close(replyChan)
+		delete(service.closeSessionReplies, reqID)
+		service.closeSessionRepLock.Unlock()
+
+		log.Lvl4(service.ServerIdentity(), "Closed channel, returning")
+
+		return &messages.CloseSessionResponse{reply.Valid}, nil
+
+	*/
+
+	// Launch the CloseSession protocol, to delete the Session at all nodes
+	err := service.closeSession(query.SessionID)
 	if err != nil {
-		err = errors.New("Couldn't send CloseSessionRequest to root: " + err.Error())
-		log.Error(err)
+		log.Error(service.ServerIdentity(), "Could not close session:", err)
+
 		return nil, err
 	}
 
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root")
-
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Sent CloseSessionRequest to root. Waiting on channel to receive reply...")
-	service.closeSessionRepLock.RLock()
-	replyChan := service.closeSessionReplies[reqID]
-	service.closeSessionRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
-
-	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	service.closeSessionRepLock.Lock()
-	close(replyChan)
-	delete(service.closeSessionReplies, reqID)
-	service.closeSessionRepLock.Unlock()
-
-	log.Lvl4(service.ServerIdentity(), "Closed channel, returning")
-
-	return &messages.CloseSessionResponse{reply.Valid}, nil
+	return &messages.CloseSessionResponse{true}, nil
 }
 
+/*
 func (service *Service) processCloseSessionRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.CloseSessionRequest)
 
@@ -93,6 +107,8 @@ func (service *Service) processCloseSessionRequest(msg *network.Envelope) {
 
 	return
 }
+
+*/
 
 func (service *Service) closeSession(SessionID messages.SessionID) error {
 	log.Lvl2(service.ServerIdentity(), "Closing a session")
@@ -163,6 +179,7 @@ func (service *Service) closeSession(SessionID messages.SessionID) error {
 	return nil
 }
 
+/*
 // This method is executed at the server when receiving the root's CloseSessionReply.
 // It simply sends the reply through the channel.
 func (service *Service) processCloseSessionReply(msg *network.Envelope) {
@@ -178,3 +195,5 @@ func (service *Service) processCloseSessionReply(msg *network.Envelope) {
 
 	return
 }
+
+*/

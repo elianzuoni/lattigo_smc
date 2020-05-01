@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/network"
 	"go.dedis.ch/protobuf"
 	uuid "gopkg.in/satori/go.uuid.v1"
 )
@@ -227,109 +226,6 @@ func (query *CreateSessionQuery) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
-/*
-func (id *CreateSessionRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *CreateSessionRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
-
-*/
-
-/*
-func (req *CreateSessionRequest) MarshalBinary() (data []byte, err error) {
-	// Marshal RequestID
-	ridData, err := req.ReqID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	ridLen := len(ridData)
-
-	// Marshal Query
-	queryData := make([]byte, 0)
-	if req.Query != nil {
-		queryData, err = req.Query.MarshalBinary()
-		if err != nil {
-			return
-		}
-	}
-	queryLen := len(queryData)
-
-	// Marshal Root
-	rootData, err := protobuf.Encode(req.Root)
-	if err != nil {
-		return
-	}
-	rootLen := len(rootData)
-
-	// Build data as [<ridLen>, <queryLen>, <rootLen>, <RequestID>, <RetrieveQuery>, <Root>]
-	data = make([]byte, 3*8+ridLen+queryLen+rootLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(queryLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(rootLen))
-	ptr += 8
-	copy(data[ptr:ptr+ridLen], ridData)
-	ptr += ridLen
-	copy(data[ptr:ptr+queryLen], queryData)
-	ptr += queryLen
-	copy(data[ptr:ptr+rootLen], rootData)
-	ptr += rootLen
-
-	return
-}
-func (req *CreateSessionRequest) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	queryLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	rootLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read RequestID
-	if ridLen > 0 {
-		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
-		ptr += ridLen
-		if err != nil {
-			return
-		}
-	}
-
-	// Read Query
-	if queryLen > 0 {
-		if req.Query == nil {
-			req.Query = &CreateSessionQuery{}
-		}
-		err = req.Query.UnmarshalBinary(data[ptr : ptr+queryLen])
-		ptr += queryLen
-		if err != nil {
-			return
-		}
-	}
-
-	// Read Root
-	if rootLen > 0 {
-		if req.Root == nil {
-			req.Root = &network.ServerIdentity{}
-		}
-		err = protobuf.Decode(data[ptr:ptr+rootLen], req.Root)
-		ptr += rootLen
-		if err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-*/
-
 func (cfg *CreateSessionConfig) MarshalBinary() (data []byte, err error) {
 	// Marshal SessionID
 	sidData, err := cfg.SessionID.MarshalBinary()
@@ -345,13 +241,6 @@ func (cfg *CreateSessionConfig) MarshalBinary() (data []byte, err error) {
 	}
 	rosLen := len(rosData)
 
-	// Marshal Root
-	rootData, err := protobuf.Encode(cfg.Root)
-	if err != nil {
-		return
-	}
-	rootLen := len(rootData)
-
 	// Marshal Params
 	parData, err := cfg.Params.MarshalBinary()
 	if err != nil {
@@ -359,14 +248,12 @@ func (cfg *CreateSessionConfig) MarshalBinary() (data []byte, err error) {
 	}
 	parLen := len(parData)
 
-	// Build data as [<sidLen>, <rosLen>, <rootLen>, <parLen>, <SessionID>, <Roster>, <Root>, <Params>]
-	data = make([]byte, 4*8+sidLen+rosLen+rootLen+parLen)
+	// Build data as [<sidLen>, <rosLen>, <parLen>, <SessionID>, <Roster>, <Params>]
+	data = make([]byte, 3*8+sidLen+rosLen+parLen)
 	ptr := 0 // Used to index data
 	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
 	ptr += 8
 	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(rosLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(rootLen))
 	ptr += 8
 	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(parLen))
 	ptr += 8
@@ -374,8 +261,6 @@ func (cfg *CreateSessionConfig) MarshalBinary() (data []byte, err error) {
 	ptr += sidLen
 	copy(data[ptr:ptr+rosLen], rosData)
 	ptr += rosLen
-	copy(data[ptr:ptr+rootLen], rootData)
-	ptr += rootLen
 	copy(data[ptr:ptr+parLen], parData)
 	ptr += parLen
 
@@ -388,8 +273,6 @@ func (cfg *CreateSessionConfig) UnmarshalBinary(data []byte) (err error) {
 	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
 	ptr += 8
 	rosLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	rootLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
 	ptr += 8
 	parLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
 	ptr += 8
@@ -415,18 +298,6 @@ func (cfg *CreateSessionConfig) UnmarshalBinary(data []byte) (err error) {
 		}
 	}
 
-	// Read Root
-	if rootLen > 0 {
-		if cfg.Root == nil {
-			cfg.Root = &network.ServerIdentity{}
-		}
-		err = protobuf.Decode(data[ptr:ptr+rootLen], cfg.Root)
-		ptr += rootLen
-		if err != nil {
-			return
-		}
-	}
-
 	// Read CiphertextID
 	if parLen > 0 {
 		if cfg.Params == nil {
@@ -441,73 +312,6 @@ func (cfg *CreateSessionConfig) UnmarshalBinary(data []byte) (err error) {
 
 	return
 }
-
-/*
-func (reply *CreateSessionReply) MarshalBinary() (data []byte, err error) {
-	// Marshal RequestID
-	ridData, err := reply.ReqID.MarshalBinary()
-	if err != nil {
-		return
-	}
-	ridLen := len(ridData)
-
-	// Transform the rest to a Response, then marshal it
-	resp := &CreateSessionResponse{reply.SessionID, reply.Valid}
-	respData, err := resp.MarshalBinary()
-	if err != nil {
-		return
-	}
-	respLen := len(respData)
-
-	// Build data as [<ridLen>, <respLen>, <RequestID>, <CreateSessionResponse>]
-	data = make([]byte, 2*8+ridLen+respLen)
-	ptr := 0 // Used to index data
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
-	ptr += 8
-	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(respLen))
-	ptr += 8
-	copy(data[ptr:ptr+ridLen], ridData)
-	ptr += ridLen
-	copy(data[ptr:ptr+respLen], respData)
-	ptr += respLen
-
-	return
-}
-func (reply *CreateSessionReply) UnmarshalBinary(data []byte) (err error) {
-	ptr := 0 // Used to index data
-
-	// Read lengths
-	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-	respLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
-	ptr += 8
-
-	// Read RequestID
-	if ridLen > 0 {
-		err = reply.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
-		ptr += ridLen
-		if err != nil {
-			return
-		}
-	}
-
-	// Read Response
-	if respLen > 0 {
-		resp := &CreateSessionResponse{}
-		err = resp.UnmarshalBinary(data[ptr : ptr+respLen])
-		ptr += respLen
-		if err != nil {
-			return
-		}
-
-		reply.SessionID = resp.SessionID
-		reply.Valid = resp.Valid
-	}
-
-	return
-}
-
-*/
 
 func (resp *CreateSessionResponse) MarshalBinary() (data []byte, err error) {
 	// Marshal SessionID
@@ -552,13 +356,6 @@ func (resp *CreateSessionResponse) UnmarshalBinary(data []byte) (err error) {
 
 // Close Session
 
-func (id *CloseSessionRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *CloseSessionRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
-
 func (cfg *CloseSessionConfig) MarshalBinary() (data []byte, err error) {
 	// Marshal SessionID
 	sidData, err := cfg.SessionID.MarshalBinary()
@@ -598,12 +395,15 @@ func (cfg *CloseSessionConfig) UnmarshalBinary(data []byte) (err error) {
 
 // Generate Public Key
 
+/*
 func (id *GenPubKeyRequestID) MarshalBinary() ([]byte, error) {
 	return (*uuid.UUID)(id).MarshalBinary()
 }
 func (id *GenPubKeyRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
+
+*/
 
 func (cfg *GenPubKeyConfig) MarshalBinary() (data []byte, err error) {
 	// Marshal SessionID
@@ -655,6 +455,7 @@ func (cfg *GenPubKeyConfig) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
+/*
 func (reply *GenPubKeyReply) MarshalBinary() (data []byte, err error) {
 	// Marshal SessionID
 	sidData, err := reply.SessionID.MarshalBinary()
@@ -748,6 +549,8 @@ func (reply *GenPubKeyReply) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
+*/
+
 func (resp *GenPubKeyResponse) MarshalBinary() (data []byte, err error) {
 	// Marshal Public Key
 	pkData := make([]byte, 0)
@@ -799,12 +602,15 @@ func (resp *GenPubKeyResponse) UnmarshalBinary(data []byte) (err error) {
 
 // Generate evaluation key
 
+/*
 func (id *GenEvalKeyRequestID) MarshalBinary() ([]byte, error) {
 	return (*uuid.UUID)(id).MarshalBinary()
 }
 func (id *GenEvalKeyRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
+
+*/
 
 func (cfg *GenEvalKeyConfig) MarshalBinary() (data []byte, err error) {
 	// Marshal SessionID
@@ -858,12 +664,15 @@ func (cfg *GenEvalKeyConfig) UnmarshalBinary(data []byte) (err error) {
 
 // Generate rotation key
 
+/*
 func (id *GenRotKeyRequestID) MarshalBinary() ([]byte, error) {
 	return (*uuid.UUID)(id).MarshalBinary()
 }
 func (id *GenRotKeyRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
+
+*/
 
 func (cfg *GenRotKeyConfig) MarshalBinary() (data []byte, err error) {
 	// Marshal SessionID
@@ -1165,20 +974,6 @@ func (rep *GetRotKeyReply) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
-/*
-// Key
-
-func (id *KeyRequestID) MarshalBinary() ([]byte, error) {
-	return (*uuid.UUID)(id).MarshalBinary()
-}
-func (id *KeyRequestID) UnmarshalBinary(data []byte) error {
-	return (*uuid.UUID)(id).UnmarshalBinary(data)
-}
-
-// TODO: marshal KeyReply
-
-*/
-
 // Store
 
 func (query *StoreQuery) MarshalBinary() (data []byte, err error) {
@@ -1429,6 +1224,77 @@ func (req *GetCipherRequest) UnmarshalBinary(data []byte) (err error) {
 			return
 		}
 	}
+
+	return
+}
+
+func (req *GetCipherReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal Ciphertext
+	ctData := make([]byte, 0)
+	if req.Ciphertext != nil {
+		ctData, err = req.Ciphertext.MarshalBinary()
+		if err != nil {
+			return
+		}
+	}
+	ctLen := len(ctData)
+
+	// Build data as [<ridLen>, <ctLen>, <RequestID>, <Ciphertext>, <Valid>]
+	data = make([]byte, 2*8+ridLen+ctLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+ctLen], ctData)
+	ptr += ctLen
+	data[ptr] = marshBool(req.Valid)
+	ptr += 1
+
+	return
+}
+func (req *GetCipherReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	ctLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Ciphertext
+	if ctLen > 0 {
+		if req.Ciphertext == nil {
+			req.Ciphertext = &bfv.Ciphertext{}
+		}
+		err = req.Ciphertext.UnmarshalBinary(data[ptr : ptr+ctLen])
+		ptr += ctLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	req.Valid = unmarshBool(data[ptr])
+	ptr += 1
 
 	return
 }

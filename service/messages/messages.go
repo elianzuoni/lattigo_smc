@@ -16,32 +16,34 @@ import (
 
 // MsgTypes contains the different message types.
 type MessageTypes struct {
-	MsgCreateSessionQuery network.MessageTypeID // Unused
-	/*
-		MsgCreateSessionRequest  network.MessageTypeID
-		MsgCreateSessionReply    network.MessageTypeID
-
-	*/
+	MsgCreateSessionQuery    network.MessageTypeID // Unused
 	MsgCreateSessionResponse network.MessageTypeID // Unused
 
 	MsgCloseSessionQuery    network.MessageTypeID // Unused
-	MsgCloseSessionRequest  network.MessageTypeID
-	MsgCloseSessionReply    network.MessageTypeID
 	MsgCloseSessionResponse network.MessageTypeID // Unused
 
-	MsgGenPubKeyQuery    network.MessageTypeID // Unused
-	MsgGenPubKeyRequest  network.MessageTypeID
-	MsgGenPubKeyReply    network.MessageTypeID
+	MsgGenPubKeyQuery network.MessageTypeID // Unused
+	/*
+		MsgGenPubKeyRequest  network.MessageTypeID
+		MsgGenPubKeyReply    network.MessageTypeID
+
+	*/
 	MsgGenPubKeyResponse network.MessageTypeID // Unused
 
-	MsgGenEvalKeyQuery    network.MessageTypeID // Unused
-	MsgGenEvalKeyRequest  network.MessageTypeID
-	MsgGenEvalKeyReply    network.MessageTypeID
+	MsgGenEvalKeyQuery network.MessageTypeID // Unused
+	/*
+		MsgGenEvalKeyRequest  network.MessageTypeID
+		MsgGenEvalKeyReply    network.MessageTypeID
+
+	*/
 	MsgGenEvalKeyResponse network.MessageTypeID // Unused
 
-	MsgGenRotKeyQuery    network.MessageTypeID // Unused
-	MsgGenRotKeyRequest  network.MessageTypeID
-	MsgGenRotKeyReply    network.MessageTypeID
+	MsgGenRotKeyQuery network.MessageTypeID // Unused
+	/*
+		MsgGenRotKeyRequest  network.MessageTypeID
+		MsgGenRotKeyReply    network.MessageTypeID
+
+	*/
 	MsgGenRotKeyResponse network.MessageTypeID // Unused
 
 	MsgGetPubKeyRequest network.MessageTypeID
@@ -53,20 +55,7 @@ type MessageTypes struct {
 	MsgGetRotKeyRequest network.MessageTypeID
 	MsgGetRotKeyReply   network.MessageTypeID
 
-	/*
-		MsgKeyQuery    network.MessageTypeID // Unused
-		MsgKeyRequest  network.MessageTypeID
-		MsgKeyReply    network.MessageTypeID
-		MsgKeyResponse network.MessageTypeID // Unused
-
-	*/
-
-	MsgStoreQuery network.MessageTypeID // Unused
-	/*
-		MsgStoreRequest  network.MessageTypeID
-		MsgStoreReply    network.MessageTypeID
-
-	*/
+	MsgStoreQuery    network.MessageTypeID // Unused
 	MsgStoreResponse network.MessageTypeID // Unused
 
 	MsgGetCipherRequest network.MessageTypeID
@@ -119,32 +108,19 @@ var MsgTypes = MessageTypes{}
 func init() {
 	log.Lvl1("Registering messages")
 
-	MsgTypes.MsgCreateSessionQuery = network.RegisterMessage(&CreateSessionQuery{}) // Unused
-	/*
-		MsgTypes.MsgCreateSessionRequest = network.RegisterMessage(&CreateSessionRequest{})
-		MsgTypes.MsgCreateSessionReply = network.RegisterMessage(&CreateSessionReply{})
-
-	*/
+	MsgTypes.MsgCreateSessionQuery = network.RegisterMessage(&CreateSessionQuery{})       // Unused
 	MsgTypes.MsgCreateSessionResponse = network.RegisterMessage(&CreateSessionResponse{}) // Unused
 
-	MsgTypes.MsgCloseSessionQuery = network.RegisterMessage(&CloseSessionQuery{}) // Unused
-	MsgTypes.MsgCloseSessionRequest = network.RegisterMessage(&CloseSessionRequest{})
-	MsgTypes.MsgCloseSessionReply = network.RegisterMessage(&CloseSessionReply{})
+	MsgTypes.MsgCloseSessionQuery = network.RegisterMessage(&CloseSessionQuery{})       // Unused
 	MsgTypes.MsgCloseSessionResponse = network.RegisterMessage(&CloseSessionResponse{}) // Unused
 
-	MsgTypes.MsgGenPubKeyQuery = network.RegisterMessage(&GenPubKeyQuery{}) // Unused
-	MsgTypes.MsgGenPubKeyRequest = network.RegisterMessage(&GenPubKeyRequest{})
-	MsgTypes.MsgGenPubKeyReply = network.RegisterMessage(&GenPubKeyReply{})
+	MsgTypes.MsgGenPubKeyQuery = network.RegisterMessage(&GenPubKeyQuery{})       // Unused
 	MsgTypes.MsgGenPubKeyResponse = network.RegisterMessage(&GenPubKeyResponse{}) // Unused
 
-	MsgTypes.MsgGenEvalKeyQuery = network.RegisterMessage(&GenEvalKeyQuery{}) // Unused
-	MsgTypes.MsgGenEvalKeyRequest = network.RegisterMessage(&GenEvalKeyRequest{})
-	MsgTypes.MsgGenEvalKeyReply = network.RegisterMessage(&GenEvalKeyReply{})
+	MsgTypes.MsgGenEvalKeyQuery = network.RegisterMessage(&GenEvalKeyQuery{})       // Unused
 	MsgTypes.MsgGenEvalKeyResponse = network.RegisterMessage(&GenEvalKeyResponse{}) // Unused
 
-	MsgTypes.MsgGenRotKeyQuery = network.RegisterMessage(&GenRotKeyQuery{}) // Unused
-	MsgTypes.MsgGenRotKeyRequest = network.RegisterMessage(&GenRotKeyRequest{})
-	MsgTypes.MsgGenRotKeyReply = network.RegisterMessage(&GenRotKeyReply{})
+	MsgTypes.MsgGenRotKeyQuery = network.RegisterMessage(&GenRotKeyQuery{})       // Unused
 	MsgTypes.MsgGenRotKeyResponse = network.RegisterMessage(&GenRotKeyResponse{}) // Unused
 
 	MsgTypes.MsgGetPubKeyRequest = network.RegisterMessage(&GetPubKeyRequest{})
@@ -156,20 +132,7 @@ func init() {
 	MsgTypes.MsgGetRotKeyRequest = network.RegisterMessage(&GetRotKeyRequest{})
 	MsgTypes.MsgGetRotKeyReply = network.RegisterMessage(&GetRotKeyReply{})
 
-	/*
-		MsgTypes.MsgKeyQuery = network.RegisterMessage(&KeyQuery{}) // Unused
-		MsgTypes.MsgKeyRequest = network.RegisterMessage(&KeyRequest{})
-		MsgTypes.MsgKeyReply = network.RegisterMessage(&KeyReply{})
-		MsgTypes.MsgKeyResponse = network.RegisterMessage(&KeyResponse{}) // Unused
-
-	*/
-
-	MsgTypes.MsgStoreQuery = network.RegisterMessage(&StoreQuery{}) // Unused
-	/*
-		MsgTypes.MsgStoreRequest = network.RegisterMessage(&StoreRequest{})
-		MsgTypes.MsgStoreReply = network.RegisterMessage(&StoreReply{})
-
-	*/
+	MsgTypes.MsgStoreQuery = network.RegisterMessage(&StoreQuery{})       // Unused
 	MsgTypes.MsgStoreResponse = network.RegisterMessage(&StoreResponse{}) // Unused
 
 	MsgTypes.MsgGetCipherRequest = network.RegisterMessage(&GetCipherRequest{})
@@ -273,39 +236,11 @@ type CreateSessionQuery struct {
 	Params *bfv.Parameters
 }
 
-/*
-type CreateSessionRequestID uuid.UUID
-
-func NewCreateSessionRequestID() CreateSessionRequestID {
-	return CreateSessionRequestID(uuid.NewV1())
-}
-func (id CreateSessionRequestID) String() string {
-	return (uuid.UUID)(id).String()
-}
-
-type CreateSessionRequest struct {
-	ReqID CreateSessionRequestID
-	Query *CreateSessionQuery
-}
-
-*/
-
 type CreateSessionConfig struct {
 	SessionID SessionID
 	Roster    *onet.Roster
-	Root      *network.ServerIdentity
 	Params    *bfv.Parameters
 }
-
-/*
-type CreateSessionReply struct {
-	ReqID CreateSessionRequestID
-
-	SessionID SessionID
-	Valid     bool
-}
-
-*/
 
 type CreateSessionResponse struct {
 	SessionID SessionID
@@ -318,29 +253,8 @@ type CloseSessionQuery struct {
 	SessionID SessionID
 }
 
-type CloseSessionRequestID uuid.UUID
-
-func NewCloseSessionRequestID() CloseSessionRequestID {
-	return CloseSessionRequestID(uuid.NewV1())
-}
-func (id CloseSessionRequestID) String() string {
-	return (uuid.UUID)(id).String()
-}
-
-type CloseSessionRequest struct {
-	ReqID     CloseSessionRequestID
-	SessionID SessionID
-	Query     *CloseSessionQuery
-}
-
 type CloseSessionConfig struct {
 	SessionID SessionID
-}
-
-type CloseSessionReply struct {
-	ReqID CloseSessionRequestID
-
-	Valid bool
 }
 
 type CloseSessionResponse struct {
@@ -354,6 +268,7 @@ type GenPubKeyQuery struct {
 	Seed      []byte
 }
 
+/*
 type GenPubKeyRequestID uuid.UUID
 
 func NewGenPubKeyRequestID() GenPubKeyRequestID {
@@ -369,11 +284,14 @@ type GenPubKeyRequest struct {
 	Query     *GenPubKeyQuery
 }
 
+*/
+
 type GenPubKeyConfig struct {
 	SessionID SessionID
 	Seed      []byte
 }
 
+/*
 type GenPubKeyReply struct {
 	SessionID SessionID
 	ReqID     GenPubKeyRequestID
@@ -381,6 +299,8 @@ type GenPubKeyReply struct {
 	MasterPublicKey *bfv.PublicKey
 	Valid           bool
 }
+
+*/
 
 type GenPubKeyResponse struct {
 	MasterPublicKey *bfv.PublicKey
@@ -394,6 +314,7 @@ type GenEvalKeyQuery struct {
 	Seed      []byte
 }
 
+/*
 type GenEvalKeyRequestID uuid.UUID
 
 func NewGenEvalKeyRequestID() GenEvalKeyRequestID {
@@ -409,17 +330,22 @@ type GenEvalKeyRequest struct {
 	Query     *GenEvalKeyQuery
 }
 
+*/
+
 type GenEvalKeyConfig struct {
 	SessionID SessionID
 	Seed      []byte
 }
 
+/*
 type GenEvalKeyReply struct {
 	SessionID SessionID
 	ReqID     GenEvalKeyRequestID
 
 	Valid bool
 }
+
+*/
 
 type GenEvalKeyResponse struct {
 	Valid bool
@@ -434,6 +360,7 @@ type GenRotKeyQuery struct {
 	Seed      []byte
 }
 
+/*
 type GenRotKeyRequestID uuid.UUID
 
 func NewGenRotKeyRequestID() GenRotKeyRequestID {
@@ -443,11 +370,14 @@ func (id GenRotKeyRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
 
+
 type GenRotKeyRequest struct {
 	SessionID SessionID
 	ReqID     GenRotKeyRequestID
 	Query     *GenRotKeyQuery
 }
+
+*/
 
 type GenRotKeyConfig struct {
 	SessionID SessionID
@@ -457,12 +387,15 @@ type GenRotKeyConfig struct {
 	Seed   []byte
 }
 
+/*
 type GenRotKeyReply struct {
 	SessionID SessionID
 	ReqID     GenRotKeyRequestID
 
 	Valid bool
 }
+
+*/
 
 type GenRotKeyResponse struct {
 	Valid bool
@@ -538,55 +471,6 @@ type GetRotKeyReply struct {
 	Valid       bool
 }
 
-/*
-// Key
-
-type KeyQuery struct {
-	SessionID SessionID
-
-	EvaluationKey bool
-	RotationKey   bool
-}
-
-type KeyRequestID uuid.UUID
-
-func NewKeyRequestID() KeyRequestID {
-	return KeyRequestID(uuid.NewV1())
-}
-func (id KeyRequestID) String() string {
-	return (uuid.UUID)(id).String()
-}
-
-type KeyRequest struct {
-	SessionID SessionID
-
-	ReqID KeyRequestID
-	Query *KeyQuery
-}
-
-// KeyReply is sent by root to server, in response to KeyQuery.
-// Contains the requested keys, if they exist.
-type KeyReply struct {
-	SessionID SessionID
-
-	ReqID KeyRequestID
-
-	EvalKey *bfv.EvaluationKey
-	RotKeys *bfv.RotationKeys
-	RotIdx  int
-
-	Valid bool
-}
-
-type KeyResponse struct {
-	EvalKeyObtained bool
-	RotKeyObtained  bool
-
-	Valid bool
-}
-
-*/
-
 // Store
 
 // StoreQuery contains the data to store.
@@ -595,36 +479,6 @@ type StoreQuery struct {
 
 	Ciphertext *bfv.Ciphertext
 }
-
-/*
-type StoreRequestID uuid.UUID
-
-func NewStoreRequestID() StoreRequestID {
-	return StoreRequestID(uuid.NewV1())
-}
-func (id StoreRequestID) String() string {
-	return (uuid.UUID)(id).String()
-}
-
-// StoreRequest is sent by server to root.
-// Contains New ciphertext to store.
-type StoreRequest struct {
-	SessionID SessionID
-
-	ReqID StoreRequestID
-	Query *StoreQuery
-}
-
-type StoreReply struct {
-	SessionID SessionID
-
-	ReqID StoreRequestID
-
-	CipherID CipherID
-	Valid    bool
-}
-
-*/
 
 type StoreResponse struct {
 	CipherID CipherID

@@ -12,59 +12,83 @@ import (
 func (service *Service) HandleGenEvalKeyQuery(query *messages.GenEvalKeyQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Received GenEvalKeyQuery")
 
-	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(query.SessionID)
+	/*
+		// Extract Session, if existent
+		s, ok := service.sessions.GetSession(query.SessionID)
+		if !ok {
+			err := errors.New("Requested session does not exist")
+			log.Error(service.ServerIdentity(), err)
+			return nil, err
+		}
+
+		// Create GenEvalKeyRequest with its ID
+		reqID := messages.NewGenEvalKeyRequestID()
+		req := &messages.GenEvalKeyRequest{query.SessionID, reqID, query}
+
+		// Create channel before sending request to root.
+		service.genEvalKeyRepLock.Lock()
+		service.genEvalKeyReplies[reqID] = make(chan *messages.GenEvalKeyReply)
+		service.genEvalKeyRepLock.Unlock()
+
+		// Send request to root
+		log.Lvl2(service.ServerIdentity(), "Sending GenEvalKeyRequest to root:", reqID)
+		err := service.SendRaw(s.Root, req)
+		if err != nil {
+			err = errors.New("Couldn't send GenEvalKeyRequest to root: " + err.Error())
+			log.Error(err)
+			return nil, err
+		}
+
+		// Receive reply from channel
+		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+		service.genEvalKeyRepLock.RLock()
+		replyChan := service.genEvalKeyReplies[reqID]
+		service.genEvalKeyRepLock.RUnlock()
+		reply := <-replyChan // TODO: timeout if root cannot send reply
+
+		// Close channel
+		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+		service.genEvalKeyRepLock.Lock()
+		close(replyChan)
+		delete(service.genEvalKeyReplies, reqID)
+		service.genEvalKeyRepLock.Unlock()
+
+		log.Lvl4(service.ServerIdentity(), "Closed channel")
+
+		if !reply.Valid {
+			err := errors.New("Received invalid reply: root couldn't generate public key")
+			log.Error(service.ServerIdentity(), err)
+			// Respond with the reply, not nil, err
+		} else {
+			log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
+		}
+
+		return &messages.GenEvalKeyResponse{reply.Valid}, nil
+
+	*/
+
+	// Extract Session, if existent (actually, only check existence)
+	_, ok := service.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(service.ServerIdentity(), err)
 		return nil, err
 	}
 
-	// Create GenEvalKeyRequest with its ID
-	reqID := messages.NewGenEvalKeyRequestID()
-	req := &messages.GenEvalKeyRequest{query.SessionID, reqID, query}
-
-	// Create channel before sending request to root.
-	service.genEvalKeyRepLock.Lock()
-	service.genEvalKeyReplies[reqID] = make(chan *messages.GenEvalKeyReply)
-	service.genEvalKeyRepLock.Unlock()
-
-	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending GenEvalKeyRequest to root:", reqID)
-	err := service.SendRaw(s.Root, req)
+	// Then, launch the genEvalKey protocol to generate the EvaluationKey
+	log.Lvl2(service.ServerIdentity(), "Generating Evaluation Key")
+	err := service.genEvalKey(query.SessionID, query.Seed)
 	if err != nil {
-		err = errors.New("Couldn't send GenEvalKeyRequest to root: " + err.Error())
-		log.Error(err)
+		log.Error(service.ServerIdentity(), "Could not generate evaluation key:", err)
 		return nil, err
 	}
 
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	service.genEvalKeyRepLock.RLock()
-	replyChan := service.genEvalKeyReplies[reqID]
-	service.genEvalKeyRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+	log.Lvl3(service.ServerIdentity(), "Successfully generated evaluation key")
 
-	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	service.genEvalKeyRepLock.Lock()
-	close(replyChan)
-	delete(service.genEvalKeyReplies, reqID)
-	service.genEvalKeyRepLock.Unlock()
-
-	log.Lvl4(service.ServerIdentity(), "Closed channel")
-
-	if !reply.Valid {
-		err := errors.New("Received invalid reply: root couldn't generate public key")
-		log.Error(service.ServerIdentity(), err)
-		// Respond with the reply, not nil, err
-	} else {
-		log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
-	}
-
-	return &messages.GenEvalKeyResponse{reply.Valid}, nil
+	return &messages.GenEvalKeyResponse{true}, nil
 }
 
+/*
 func (service *Service) processGenEvalKeyRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.GenEvalKeyRequest)
 
@@ -97,7 +121,7 @@ func (service *Service) processGenEvalKeyRequest(msg *network.Envelope) {
 		return
 	}
 
-	log.Lvl3(service.ServerIdentity(), "Successfully generated evallic key")
+	log.Lvl3(service.ServerIdentity(), "Successfully generated evaluation key")
 
 	// Set fields in the reply
 	reply.Valid = true
@@ -112,6 +136,8 @@ func (service *Service) processGenEvalKeyRequest(msg *network.Envelope) {
 
 	return
 }
+
+*/
 
 func (service *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) error {
 	log.Lvl1(service.ServerIdentity(), "Root. Generating EvaluationKey")
@@ -195,6 +221,7 @@ func (service *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) er
 	return nil
 }
 
+/*
 func (service *Service) processGenEvalKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*messages.GenEvalKeyReply)
 
@@ -208,3 +235,5 @@ func (service *Service) processGenEvalKeyReply(msg *network.Envelope) {
 
 	return
 }
+
+*/

@@ -29,8 +29,9 @@ func testNewClientCreateSession(roster *onet.Roster, paramsIdx int, clientID str
 	return client, sid, pk, err
 }
 
-func testNewClientBindToSession(roster *onet.Roster, paramsIdx int, clientID string, sid messages.SessionID, mpk *bfv.PublicKey) (*Client, error) {
-	client := NewClient(roster.List[1], clientID, bfv.DefaultParams[paramsIdx])
+func testNewClientBindToSession(roster *onet.Roster, srvIdx int, paramsIdx int, clientID string,
+	sid messages.SessionID, mpk *bfv.PublicKey) (*Client, error) {
+	client := NewClient(roster.List[srvIdx], clientID, bfv.DefaultParams[paramsIdx])
 
 	log.Lvl2(client, "Binding to session")
 	err := client.BindToSession(sid, mpk)
@@ -98,7 +99,7 @@ func TestBindToSession(t *testing.T) {
 
 	client2ID := "TestBindToSession-2"
 	log.Lvl2("Going to bind to session. Should not return error")
-	c2, err := testNewClientBindToSession(roster, paramsIdx, client2ID, sid, mpk)
+	c2, err := testNewClientBindToSession(roster, 1, paramsIdx, client2ID, sid, mpk)
 	if err != nil {
 		t.Fatal("Method BindToSession returned error:", err)
 	}
@@ -171,7 +172,7 @@ func TestCloseSession(t *testing.T) {
 
 	client2ID := "TestCloseSession-2"
 	log.Lvl2("Going to bind to session on Client 2. Should not return error")
-	c2, err := testNewClientBindToSession(roster, paramsIdx, client2ID, sid, mpk)
+	c2, err := testNewClientBindToSession(roster, 1, paramsIdx, client2ID, sid, mpk)
 	if err != nil {
 		t.Fatal("Method BindToSession on Client 2 returned error:", err)
 	}
@@ -222,7 +223,7 @@ func TestUnbindFromSession(t *testing.T) {
 
 	client2ID := "TestUnbindFromSession-2"
 	log.Lvl2("Going to bind to session on Client 2. Should not return error")
-	c2, err := testNewClientBindToSession(roster, paramsIdx, client2ID, sid, mpk)
+	c2, err := testNewClientBindToSession(roster, 1, paramsIdx, client2ID, sid, mpk)
 	if err != nil {
 		t.Fatal("Method BindToSession on Client 2 returned error:", err)
 	}
@@ -341,8 +342,6 @@ func TestGenRotKeyQuery(t *testing.T) {
 	return
 }
 
-// TODO: why is KeyQuery even needed?
-
 func TestStoreRetrieveQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing Store and Retrieve queries")
@@ -354,9 +353,9 @@ func TestStoreRetrieveQuery(t *testing.T) {
 	// Create session
 
 	paramsIdx := 0
-	clientID := "TestStoreRetrieve"
+	clientID1 := "TestStoreRetrieve-1"
 	log.Lvl2("Going to create new session. Should not return error")
-	c, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
+	c1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, clientID1)
 	if err != nil {
 		t.Fatal("Method CreateSession returned error:", err)
 	}
@@ -376,16 +375,26 @@ func TestStoreRetrieveQuery(t *testing.T) {
 
 	log.Lvl2("Going to store data. Should not return error")
 	origData := p.Coeffs[0] // Only one modulus exists
-	cid, err := c.SendStoreQuery(origData)
+	cid, err := c1.SendStoreQuery(origData)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery correctly returned no error")
 
-	// Retrieve the data
+	// Create second client
 
-	log.Lvl2("Going to retrieve data. Should not return error")
-	retrData, err := c.SendRetrieveQuery(cid)
+	client2ID := "TestStoreRetrieve-2"
+	log.Lvl2("Going to bind to session on Client 2. Should not return error")
+	c2, err := testNewClientBindToSession(roster, 1, paramsIdx, client2ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 2 correctly returned no error")
+
+	// Retrieve the data from second client
+
+	log.Lvl2("Going to retrieve data from second client. Should not return error")
+	retrData, err := c2.SendRetrieveQuery(cid)
 	if err != nil {
 		t.Fatal("Method SendRetrieveQuery returned error:", err)
 	}
@@ -406,16 +415,16 @@ func TestSumQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing Sum query")
 
-	size := 3
+	size := 4
 	roster, localTest := genLocalTestRoster(size)
 	defer localTest.CloseAll()
 
 	// Create session
 
 	paramsIdx := 0
-	clientID := "TestSumQuery"
+	clientID1 := "TestSumQuery-1"
 	log.Lvl2("Going to create new session. Should not return error")
-	c, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
+	c1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, clientID1)
 	if err != nil {
 		t.Fatal("Method CreateSession returned error:", err)
 	}
@@ -430,30 +439,50 @@ func TestSumQuery(t *testing.T) {
 	}
 	log.Lvl2("Successfully generated random data")
 
-	// Store the first vector
+	// Store the first vector from first client
 
 	log.Lvl2("Going to store first vector. Should not return error")
 	data1 := p.Coeffs[0] // Only one modulus exists
-	cid1, err := c.SendStoreQuery(data1)
+	cid1, err := c1.SendStoreQuery(data1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for first vector returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for first vector correctly returned no error")
 
-	// Store the second vector
+	// Create second client
 
-	log.Lvl2("Going to store second vector. Should not return error")
+	client2ID := "TestSumQuery-2"
+	log.Lvl2("Going to bind to session on Client 2. Should not return error")
+	c2, err := testNewClientBindToSession(roster, 1, paramsIdx, client2ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 2 correctly returned no error")
+
+	// Store the second vector from second client
+
+	log.Lvl2("Going to store second vector from second client. Should not return error")
 	data2 := q.Coeffs[0] // Only one modulus exists
-	cid2, err := c.SendStoreQuery(data2)
+	cid2, err := c2.SendStoreQuery(data2)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for second vector returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for second vector correctly returned no error")
 
-	// Sum the vectors remotely
+	// Create third client
 
-	log.Lvl2("Going to sum the two vectors remotely. Should not return error")
-	cidSum, err := c.SendSumQuery(cid1, cid2)
+	client3ID := "TestSumQuery-3"
+	log.Lvl2("Going to bind to session on Client 3. Should not return error")
+	c3, err := testNewClientBindToSession(roster, 2, paramsIdx, client3ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 3 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 3 correctly returned no error")
+
+	// Sum the vectors remotely from third client
+
+	log.Lvl2("Going to sum the two vectors remotely from third client. Should not return error")
+	cidSum, err := c3.SendSumQuery(cid1, cid2)
 	if err != nil {
 		t.Fatal("Method SendSumQuery returned error:", err)
 	}
@@ -465,10 +494,20 @@ func TestSumQuery(t *testing.T) {
 	ctx.Add(p, q, sum)
 	origSum := sum.Coeffs[0] // Only one modulus is present
 
-	// Retrieve the remote sum
+	// Create fourth client
 
-	log.Lvl2("Going to retrieve the remote sum. Should not return error")
-	retrSum, err := c.SendRetrieveQuery(cidSum)
+	client4ID := "TestSumQuery-4"
+	log.Lvl2("Going to bind to session on Client 4. Should not return error")
+	c4, err := testNewClientBindToSession(roster, 3, paramsIdx, client4ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 4 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 4 correctly returned no error")
+
+	// Retrieve the remote sum from fourth client
+
+	log.Lvl2("Going to retrieve the remote sum from fourth client. Should not return error")
+	retrSum, err := c4.SendRetrieveQuery(cidSum)
 	if err != nil {
 		t.Fatal("Method SendRetrieveQuery returned error:", err)
 	}
@@ -489,25 +528,25 @@ func TestMultiplyRelinQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing Multiply and Relin query")
 
-	size := 3
+	size := 5
 	roster, localTest := genLocalTestRoster(size)
 	defer localTest.CloseAll()
 
 	// Create session
 
 	paramsIdx := 1
-	clientID := "TestMultiplyRelinQuery"
+	clientID1 := "TestMultiplyRelinQuery-1"
 	log.Lvl2("Going to create new session. Should not return error")
-	c, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
+	c1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, clientID1)
 	if err != nil {
 		t.Fatal("Method CreateSession returned error:", err)
 	}
 	log.Lvl2("Method CreateSession correctly returned no error")
 
-	// Generate evaluation key
+	// Generate evaluation key from first client
 
 	log.Lvl2("Going to generate evaluation key. Should not return error")
-	err = c.SendGenEvalKeyQuery(nil)
+	err = c1.SendGenEvalKeyQuery(nil)
 	if err != nil {
 		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
 	}
@@ -522,39 +561,69 @@ func TestMultiplyRelinQuery(t *testing.T) {
 	}
 	log.Lvl2("Successfully generated random data")
 
-	// Store the first vector
+	// Store the first vector from first client
 
 	log.Lvl2("Going to store first vector. Should not return error")
 	data1 := p.Coeffs[0] // Only one modulus exists
-	cid1, err := c.SendStoreQuery(data1)
+	cid1, err := c1.SendStoreQuery(data1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for first vector returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for first vector correctly returned no error")
 
-	// Store the second vector
+	// Create second client
+
+	client2ID := "TestMultiplyRelin-2"
+	log.Lvl2("Going to bind to session on Client 2. Should not return error")
+	c2, err := testNewClientBindToSession(roster, 1, paramsIdx, client2ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 2 correctly returned no error")
+
+	// Store the second vector from second client
 
 	log.Lvl2("Going to store second vector. Should not return error")
 	data2 := q.Coeffs[0] // Only one modulus exists
-	cid2, err := c.SendStoreQuery(data2)
+	cid2, err := c2.SendStoreQuery(data2)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for second vector returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for second vector correctly returned no error")
 
-	// Multiply the vectors remotely
+	// Create third client
+
+	client3ID := "TestMultiplyRelin-3"
+	log.Lvl2("Going to bind to session on Client 3. Should not return error")
+	c3, err := testNewClientBindToSession(roster, 2, paramsIdx, client3ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 3 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 3 correctly returned no error")
+
+	// Multiply the vectors remotely from third client
 
 	log.Lvl2("Going to multiply the two vectors remotely. Should not return error")
-	cidMul, err := c.SendMultiplyQuery(cid1, cid2)
+	cidMul, err := c3.SendMultiplyQuery(cid1, cid2)
 	if err != nil {
 		t.Fatal("Method SendMultiplyQuery returned error:", err)
 	}
 	log.Lvl2("Method SendMultiplyQuery correctly returned no error")
 
+	// Create fourth client
+
+	client4ID := "TestMultiplyRelin-4"
+	log.Lvl2("Going to bind to session on Client 4. Should not return error")
+	c4, err := testNewClientBindToSession(roster, 3, paramsIdx, client4ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 4 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 4 correctly returned no error")
+
 	// Relinearise the remote product (remotely)
 
 	log.Lvl2("Going to relinearise the remote product (remotely). Should not return error")
-	cidMul, err = c.SendRelinQuery(cidMul) // The CipherID changes
+	cidMul, err = c4.SendRelinQuery(cidMul) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery returned error:", err)
 	}
@@ -566,10 +635,20 @@ func TestMultiplyRelinQuery(t *testing.T) {
 	ctx.MulCoeffs(p, q, mul)
 	origMul := mul.Coeffs[0] // Only one modulus is present
 
+	// Create fifth client
+
+	client5ID := "TestMultiplyRelin-5"
+	log.Lvl2("Going to bind to session on Client 5. Should not return error")
+	c5, err := testNewClientBindToSession(roster, 4, paramsIdx, client5ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 5 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 5 correctly returned no error")
+
 	// Retrieve the remote product
 
 	log.Lvl2("Going to retrieve the remote product. Should not return error")
-	retrMul, err := c.SendRetrieveQuery(cidMul)
+	retrMul, err := c5.SendRetrieveQuery(cidMul)
 	if err != nil {
 		t.Fatal("Method SendRetrieveQuery returned error:", err)
 	}
@@ -601,25 +680,25 @@ func TestRefreshQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing Refresh query")
 
-	size := 3
+	size := 4
 	roster, localTest := genLocalTestRoster(size)
 	defer localTest.CloseAll()
 
 	// Create session
 
 	paramsIdx := 1
-	clientID := "TestRefreshQuery"
+	clientID1 := "TestRefreshQuery-1"
 	log.Lvl2("Going to create new session. Should not return error")
-	client, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
+	client1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, clientID1)
 	if err != nil {
 		t.Fatal("Method CreateSession returned error:", err)
 	}
 	log.Lvl2("Method CreateSession correctly returned no error")
 
-	// Generate evaluation key
+	// Generate evaluation key from first client
 
 	log.Lvl2("Going to generate evaluation key. Should not return error")
-	err = client.SendGenEvalKeyQuery(nil)
+	err = client1.SendGenEvalKeyQuery(nil)
 	if err != nil {
 		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
 	}
@@ -634,46 +713,56 @@ func TestRefreshQuery(t *testing.T) {
 	}
 	log.Lvl2("Successfully generated a and b")
 
-	// Store a
+	// Store a from first client
 
 	log.Lvl2("Going to store \"a\". Should not return error")
-	cidA, err := client.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
+	cidA, err := client1.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"a\" returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for \"a\" correctly returned no error")
 
-	// Store b
+	// Create second client
+
+	client2ID := "TestRefreshQuery-2"
+	log.Lvl2("Going to bind to session on Client 2. Should not return error")
+	client2, err := testNewClientBindToSession(roster, 1, paramsIdx, client2ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 2 correctly returned no error")
+
+	// Store b from second client
 
 	log.Lvl2("Going to store \"b\". Should not return error")
-	cidB, err := client.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
+	cidB, err := client2.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"b\" returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for \"b\" correctly returned no error")
 
-	// Multiply a and b remotely
+	// Multiply a and b remotely from first client
 
 	log.Lvl2("Going to multiply \"a\" and \"b\" remotely. Should not return error")
-	cidAB, err := client.SendMultiplyQuery(cidA, cidB)
+	cidAB, err := client1.SendMultiplyQuery(cidA, cidB)
 	if err != nil {
 		t.Fatal("Method SendMultiplyQuery for\"a\" and \"b\" returned error:", err)
 	}
 	log.Lvl2("Method SendMultiplyQuery for \"a\" and \"b\" correctly returned no error")
 
-	// Relinearise the remote ab (remotely)
+	// Relinearise the remote ab (remotely) from the second client
 
 	log.Lvl2("Going to relinearise \"ab\" (remotely). Should not return error")
-	cidAB, err = client.SendRelinQuery(cidAB) // The CipherID changes
+	cidAB, err = client2.SendRelinQuery(cidAB) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"ab\" returned error:", err)
 	}
 	log.Lvl2("Method SendRelinQuery for \"ab\" correctly returned no error")
 
-	// Refresh the remote ab
+	// Refresh the remote ab from the first client
 
 	log.Lvl2("Going to refresh \"ab\" (remotely). Should not return error")
-	cidAB, err = client.SendRefreshQuery(cidAB, nil) // The CipherID changes
+	cidAB, err = client1.SendRefreshQuery(cidAB, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
 	}
@@ -693,46 +782,66 @@ func TestRefreshQuery(t *testing.T) {
 	}
 	log.Lvl2("Successfully generated c and d")
 
-	// Store c
+	// Create third client
+
+	client3ID := "TestRefreshQuery-3"
+	log.Lvl2("Going to bind to session on Client 3. Should not return error")
+	client3, err := testNewClientBindToSession(roster, 2, paramsIdx, client3ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 3 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 3 correctly returned no error")
+
+	// Store c from third client
 
 	log.Lvl2("Going to store \"c\". Should not return error")
-	cidC, err := client.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
+	cidC, err := client3.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"c\" returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for \"c\" correctly returned no error")
 
-	// Store d
+	// Create fourth client
+
+	client4ID := "TestRotationQuery-4"
+	log.Lvl2("Going to bind to session on Client 4. Should not return error")
+	client4, err := testNewClientBindToSession(roster, 3, paramsIdx, client4ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 4 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 4 correctly returned no error")
+
+	// Store d from the fourth client
 
 	log.Lvl2("Going to store \"d\". Should not return error")
-	cidD, err := client.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
+	cidD, err := client4.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"d\" returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for \"d\" correctly returned no error")
 
-	// Multiply c and d remotely
+	// Multiply c and d remotely from the third client
 
 	log.Lvl2("Going to multiply \"c\" and \"d\" remotely. Should not return error")
-	cidCD, err := client.SendMultiplyQuery(cidC, cidD)
+	cidCD, err := client3.SendMultiplyQuery(cidC, cidD)
 	if err != nil {
 		t.Fatal("Method SendMultiplyQuery for\"c\" and \"d\" returned error:", err)
 	}
 	log.Lvl2("Method SendMultiplyQuery for \"c\" and \"d\" correctly returned no error")
 
-	// Relinearise the remote cd (remotely)
+	// Relinearise the remote cd (remotely) from the fourth client
 
 	log.Lvl2("Going to relinearise \"cd\" (remotely). Should not return error")
-	cidCD, err = client.SendRelinQuery(cidCD) // The CipherID changes
+	cidCD, err = client4.SendRelinQuery(cidCD) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"cd\" returned error:", err)
 	}
 	log.Lvl2("Method SendRelinQuery for \"cd\" correctly returned no error")
 
-	// Refresh the remote cd
+	// Refresh the remote cd from the third client
 
 	log.Lvl2("Going to refresh \"cd\" (remotely). Should not return error")
-	cidCD, err = client.SendRefreshQuery(cidCD, nil) // The CipherID changes
+	cidCD, err = client3.SendRefreshQuery(cidCD, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"cd\" returned error:", err)
 	}
@@ -743,28 +852,28 @@ func TestRefreshQuery(t *testing.T) {
 	cd := ctx.NewPoly()
 	ctx.MulCoeffs(c, d, cd)
 
-	// Multiply ab and cd remotely
+	// Multiply ab and cd remotely from first client
 
 	log.Lvl2("Going to multiply \"ab\" and \"cd\" remotely. Should not return error")
-	cidABCD, err := client.SendMultiplyQuery(cidAB, cidCD)
+	cidABCD, err := client1.SendMultiplyQuery(cidAB, cidCD)
 	if err != nil {
 		t.Fatal("Method SendMultiplyQuery for\"ab\" and \"cd\" returned error:", err)
 	}
 	log.Lvl2("Method SendMultiplyQuery for \"ab\" and \"cd\" correctly returned no error")
 
-	// Relinearise the remote abcd (remotely)
+	// Relinearise the remote abcd (remotely) from fourth client
 
 	log.Lvl2("Going to relinearise \"abcd\" (remotely). Should not return error")
-	cidABCD, err = client.SendRelinQuery(cidABCD) // The CipherID changes
+	cidABCD, err = client4.SendRelinQuery(cidABCD) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"abcd\" returned error:", err)
 	}
 	log.Lvl2("Method SendRelinQuery for \"abcd\" correctly returned no error")
 
-	// Refresh the remote abcd
+	// Refresh the remote abcd from second client
 
 	log.Lvl2("Going to refresh \"abcd\" (remotely). Should not return error")
-	cidABCD, err = client.SendRefreshQuery(cidABCD, nil) // The CipherID changes
+	cidABCD, err = client2.SendRefreshQuery(cidABCD, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"abcd\" returned error:", err)
 	}
@@ -775,10 +884,10 @@ func TestRefreshQuery(t *testing.T) {
 	abcd := ctx.NewPoly()
 	ctx.MulCoeffs(ab, cd, abcd)
 
-	// Retrieve the remote abcd
+	// Retrieve the remote abcd from third client
 
 	log.Lvl2("Going to retrieve the remote \"abcd\". Should not return error")
-	retr, err := client.SendRetrieveQuery(cidABCD)
+	retr, err := client3.SendRetrieveQuery(cidABCD)
 	if err != nil {
 		t.Fatal("Method SendRetrieveQuery for \"abcd\" returned error:", err)
 	}
@@ -799,41 +908,33 @@ func TestRotationQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing Rotation query")
 
-	size := 3
+	size := 5
 	roster, localTest := genLocalTestRoster(size)
 	defer localTest.CloseAll()
 
 	// Create session
 
 	paramsIdx := 0
-	clientID := "TestRotationQuery"
+	clientID1 := "TestRotationQuery-1"
 	log.Lvl2("Going to create new session. Should not return error")
-	c, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
+	c1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, clientID1)
 	if err != nil {
 		t.Fatal("Method CreateSession returned error:", err)
 	}
 	log.Lvl2("Method CreateSession correctly returned no error")
 
-	// Generate first rotation key
+	// Generate rotation key from first client
 
 	log.Lvl2("Going to generate first rotation key. Should not return error")
 	rotIdx := bfv.RotationLeft
-	k1 := uint64(770)
-	err = c.SendGenRotKeyQuery(rotIdx, k1, nil)
+	k := uint64(770)
+	err = c1.SendGenRotKeyQuery(rotIdx, k, nil)
 	if err != nil {
 		t.Fatal("First call to method SendGenRotKeyQuery returned error:", err)
 	}
 	log.Lvl2("First call to method SendGenRotKeyQuery correctly returned no error")
 
-	// Generate second rotation key
-
-	log.Lvl2("Going to second first rotation key. Should not return error")
-	k2 := uint64(9)
-	err = c.SendGenRotKeyQuery(rotIdx, k2, nil)
-	if err != nil {
-		t.Fatal("Second call to method SendGenRotKeyQuery returned error:", err)
-	}
-	log.Lvl2("Second call to method SendGenRotKeyQuery correctly returned no error")
+	// TODO: allow for multiple rotation key generations
 
 	// Generate data
 
@@ -844,33 +945,44 @@ func TestRotationQuery(t *testing.T) {
 	}
 	log.Lvl2("Successfully generated random data")
 
-	// Store the vector
+	// Create third client
+
+	client3ID := "TestRotationQuery-3"
+	log.Lvl2("Going to bind to session on Client 3. Should not return error")
+	c3, err := testNewClientBindToSession(roster, 2, paramsIdx, client3ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 3 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 3 correctly returned no error")
+
+	// Store the vector from third client
 
 	log.Lvl2("Going to store vector. Should not return error")
 	data := p.Coeffs[0] // Only one modulus exists
-	cid, err := c.SendStoreQuery(data)
+	cid, err := c3.SendStoreQuery(data)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery correctly returned no error")
 
-	// Rotate the vector remotely with the first key
+	// Create fourth client
+
+	client4ID := "TestRotationQuery-4"
+	log.Lvl2("Going to bind to session on Client 4. Should not return error")
+	c4, err := testNewClientBindToSession(roster, 3, paramsIdx, client4ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 4 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 4 correctly returned no error")
+
+	// Rotate the vector remotely from the fourth client
 
 	log.Lvl2("Going to rotate the vector remotely with the first key. Should not return error")
-	cidRot, err := c.SendRotationQuery(cid, rotIdx, k1)
+	cidRot, err := c4.SendRotationQuery(cid, rotIdx, k)
 	if err != nil {
 		t.Fatal("First call to method SendRotationQuery returned error:", err)
 	}
 	log.Lvl2("First call to method SendRotationQuery correctly returned no error")
-
-	// Rotate the (already rotated) vector remotely with the second key
-
-	log.Lvl2("Going to rotate the (already rotated) vector remotely with the second key. Should not return error")
-	cidRot, err = c.SendRotationQuery(cidRot, rotIdx, k2)
-	if err != nil {
-		t.Fatal("Second call to method SendRotationQuery returned error:", err)
-	}
-	log.Lvl2("Second call to method SendRotationQuery correctly returned no error")
 
 	// Rotate the vector locally
 
@@ -880,7 +992,7 @@ func TestRotationQuery(t *testing.T) {
 	rowRot := dataRot[:len(dataRot)/2]
 	for i := range row {
 		// Rotation to the left (combines the two rotations)
-		j := (i + int(k1+k2)) % len(row)
+		j := (i + int(k)) % len(row)
 		rowRot[i] = row[j]
 	}
 	// Rotate second row
@@ -888,15 +1000,25 @@ func TestRotationQuery(t *testing.T) {
 	rowRot = dataRot[len(dataRot)/2:]
 	for i := range row {
 		// Rotation to the left (combines the two rotations)
-		j := (i + int(k1+k2)) % len(row)
+		j := (i + int(k)) % len(row)
 		rowRot[i] = row[j]
 	}
 
-	// Retrieve the remote product
+	// Create fifth client
+
+	client5ID := "TestRotationQuery-5"
+	log.Lvl2("Going to bind to session on Client 5. Should not return error")
+	c5, err := testNewClientBindToSession(roster, 4, paramsIdx, client5ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 5 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 5 correctly returned no error")
+
+	// Retrieve the rotated ciphertext from fifth client
 
 	log.Lvl2("Going to retrieve the remote rotated vector. Should not return error")
 	var retrRot []uint64
-	retrRot, err = c.SendRetrieveQuery(cidRot)
+	retrRot, err = c5.SendRetrieveQuery(cidRot)
 	if err != nil {
 		t.Fatal("Method SendRetrieveQuery returned error:", err)
 	}
@@ -918,25 +1040,25 @@ func TestEncSharesQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing enc-to-shares and shares-to-enc query")
 
-	size := 3
+	size := 4
 	roster, localTest := genLocalTestRoster(size)
 	defer localTest.CloseAll()
 
 	// Create session
 
 	paramsIdx := 1
-	clientID := "TestEncSharesQuery"
+	clientID1 := "TestEncSharesQuery-1"
 	log.Lvl2("Going to create new session. Should not return error")
-	client, _, _, err := testNewClientCreateSession(roster, paramsIdx, clientID) // We don't use the session
+	client1, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, clientID1)
 	if err != nil {
 		t.Fatal("Method CreateSession returned error:", err)
 	}
 	log.Lvl2("Method CreateSession correctly returned no error")
 
-	// Generate evaluation key
+	// Generate evaluation key from first client
 
 	log.Lvl2("Going to generate evaluation key. Should not return error")
-	err = client.SendGenEvalKeyQuery(nil)
+	err = client1.SendGenEvalKeyQuery(nil)
 	if err != nil {
 		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
 	}
@@ -951,55 +1073,65 @@ func TestEncSharesQuery(t *testing.T) {
 	}
 	log.Lvl2("Successfully generated a and b")
 
-	// Store a
+	// Store a from first client
 
 	log.Lvl2("Going to store \"a\". Should not return error")
-	cidA, err := client.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
+	cidA, err := client1.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"a\" returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for \"a\" correctly returned no error")
 
-	// Store b
+	// Create second client
+
+	client2ID := "TestEncSharesQuery-2"
+	log.Lvl2("Going to bind to session on Client 2. Should not return error")
+	client2, err := testNewClientBindToSession(roster, 1, paramsIdx, client2ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 2 correctly returned no error")
+
+	// Store b from second client
 
 	log.Lvl2("Going to store \"b\". Should not return error")
-	cidB, err := client.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
+	cidB, err := client2.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"b\" returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for \"b\" correctly returned no error")
 
-	// Multiply a and b remotely
+	// Multiply a and b remotely from first client
 
 	log.Lvl2("Going to multiply \"a\" and \"b\" remotely. Should not return error")
-	cidAB, err := client.SendMultiplyQuery(cidA, cidB)
+	cidAB, err := client1.SendMultiplyQuery(cidA, cidB)
 	if err != nil {
 		t.Fatal("Method SendMultiplyQuery for\"a\" and \"b\" returned error:", err)
 	}
 	log.Lvl2("Method SendMultiplyQuery for \"a\" and \"b\" correctly returned no error")
 
-	// Relinearise the remote ab (remotely)
+	// Relinearise the remote ab (remotely) from first client
 
 	log.Lvl2("Going to relinearise \"ab\" (remotely). Should not return error")
-	cidAB, err = client.SendRelinQuery(cidAB) // The CipherID changes
+	cidAB, err = client1.SendRelinQuery(cidAB) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"ab\" returned error:", err)
 	}
 	log.Lvl2("Method SendRelinQuery for \"ab\" correctly returned no error")
 
-	// Share the remote ab
+	// Share the remote ab from second client
 
 	log.Lvl2("Going to share \"ab\" (remotely). Should not return error")
-	shidAB, err := client.SendEncToSharesQuery(cidAB)
+	shidAB, err := client2.SendEncToSharesQuery(cidAB)
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
 	}
 	log.Lvl2("Method SendEncToSharesQuery for \"ab\" correctly returned no error")
 
-	// Re-encrypt the remote ab
+	// Re-encrypt the remote ab from first client
 
 	log.Lvl2("Going to re-encrypt \"ab\" (remotely). Should not return error")
-	cidAB, err = client.SendSharesToEncQuery(shidAB, nil) // The CipherID changes
+	cidAB, err = client1.SendSharesToEncQuery(shidAB, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
 	}
@@ -1019,55 +1151,75 @@ func TestEncSharesQuery(t *testing.T) {
 	}
 	log.Lvl2("Successfully generated c and d")
 
-	// Store c
+	// Create third client
+
+	client3ID := "TestEncSharesQuery-3"
+	log.Lvl2("Going to bind to session on Client 3. Should not return error")
+	client3, err := testNewClientBindToSession(roster, 2, paramsIdx, client3ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 3 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 3 correctly returned no error")
+
+	// Store c fro third client
 
 	log.Lvl2("Going to store \"c\". Should not return error")
-	cidC, err := client.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
+	cidC, err := client3.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"c\" returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for \"c\" correctly returned no error")
 
-	// Store d
+	// Create fourth client
+
+	client4ID := "TestEncSharesQuery-4"
+	log.Lvl2("Going to bind to session on Client 4. Should not return error")
+	client4, err := testNewClientBindToSession(roster, 3, paramsIdx, client4ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 4 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 4 correctly returned no error")
+
+	// Store d from fourth client
 
 	log.Lvl2("Going to store \"d\". Should not return error")
-	cidD, err := client.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
+	cidD, err := client4.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"d\" returned error:", err)
 	}
 	log.Lvl2("Method SendStoreQuery for \"d\" correctly returned no error")
 
-	// Multiply c and d remotely
+	// Multiply c and d remotely from third client
 
 	log.Lvl2("Going to multiply \"c\" and \"d\" remotely. Should not return error")
-	cidCD, err := client.SendMultiplyQuery(cidC, cidD)
+	cidCD, err := client3.SendMultiplyQuery(cidC, cidD)
 	if err != nil {
 		t.Fatal("Method SendMultiplyQuery for\"c\" and \"d\" returned error:", err)
 	}
 	log.Lvl2("Method SendMultiplyQuery for \"c\" and \"d\" correctly returned no error")
 
-	// Relinearise the remote cd (remotely)
+	// Relinearise the remote cd (remotely) from third client
 
 	log.Lvl2("Going to relinearise \"cd\" (remotely). Should not return error")
-	cidCD, err = client.SendRelinQuery(cidCD) // The CipherID changes
+	cidCD, err = client3.SendRelinQuery(cidCD) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"cd\" returned error:", err)
 	}
 	log.Lvl2("Method SendRelinQuery for \"cd\" correctly returned no error")
 
-	// Share the remote cd
+	// Share the remote cd from third client
 
 	log.Lvl2("Going to share \"cd\" (remotely). Should not return error")
-	shidCD, err := client.SendEncToSharesQuery(cidCD)
+	shidCD, err := client3.SendEncToSharesQuery(cidCD)
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
 	}
 	log.Lvl2("Method SendEncToSharesQuery for \"cd\" correctly returned no error")
 
-	// Re-encrypt the remote cd
+	// Re-encrypt the remote cd from the fourth client
 
 	log.Lvl2("Going to re-encrypt \"cd\" (remotely). Should not return error")
-	cidCD, err = client.SendSharesToEncQuery(shidCD, nil) // The CipherID changes
+	cidCD, err = client4.SendSharesToEncQuery(shidCD, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
 	}
@@ -1078,37 +1230,37 @@ func TestEncSharesQuery(t *testing.T) {
 	cd := ctx.NewPoly()
 	ctx.MulCoeffs(c, d, cd)
 
-	// Multiply ab and cd remotely
+	// Multiply ab and cd remotely from first client
 
 	log.Lvl2("Going to multiply \"ab\" and \"cd\" remotely. Should not return error")
-	cidABCD, err := client.SendMultiplyQuery(cidAB, cidCD)
+	cidABCD, err := client1.SendMultiplyQuery(cidAB, cidCD)
 	if err != nil {
 		t.Fatal("Method SendMultiplyQuery for\"ab\" and \"cd\" returned error:", err)
 	}
 	log.Lvl2("Method SendMultiplyQuery for \"ab\" and \"cd\" correctly returned no error")
 
-	// Relinearise the remote abcd (remotely)
+	// Relinearise the remote abcd (remotely) from first client
 
 	log.Lvl2("Going to relinearise \"abcd\" (remotely). Should not return error")
-	cidABCD, err = client.SendRelinQuery(cidABCD) // The CipherID changes
+	cidABCD, err = client1.SendRelinQuery(cidABCD) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRelinQuery for \"abcd\" returned error:", err)
 	}
 	log.Lvl2("Method SendRelinQuery for \"abcd\" correctly returned no error")
 
-	// Share the remote abcd
+	// Share the remote abcd from first client
 
 	log.Lvl2("Going to share \"abcd\" (remotely). Should not return error")
-	shidABCD, err := client.SendEncToSharesQuery(cidABCD)
+	shidABCD, err := client1.SendEncToSharesQuery(cidABCD)
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
 	}
 	log.Lvl2("Method SendEncToSharesQuery for \"abcd\" correctly returned no error")
 
-	// Re-encrypt the remote abcd
+	// Re-encrypt the remote abcd from fourth client
 
 	log.Lvl2("Going to re-encrypt \"abcd\" (remotely). Should not return error")
-	cidABCD, err = client.SendSharesToEncQuery(shidABCD, nil) // The CipherID changes
+	cidABCD, err = client4.SendSharesToEncQuery(shidABCD, nil) // The CipherID changes
 	if err != nil {
 		t.Fatal("Method SendRefreshQuery for \"ab\" returned error:", err)
 	}
@@ -1119,10 +1271,10 @@ func TestEncSharesQuery(t *testing.T) {
 	abcd := ctx.NewPoly()
 	ctx.MulCoeffs(ab, cd, abcd)
 
-	// Retrieve the remote abcd
+	// Retrieve the remote abcd from second client
 
 	log.Lvl2("Going to retrieve the remote \"abcd\". Should not return error")
-	retr, err := client.SendRetrieveQuery(cidABCD)
+	retr, err := client2.SendRetrieveQuery(cidABCD)
 	if err != nil {
 		t.Fatal("Method SendRetrieveQuery for \"abcd\" returned error:", err)
 	}

@@ -7,15 +7,8 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-func (service *Service) GetRemoteEvalKey(sessionID messages.SessionID) (*bfv.EvaluationKey, bool) {
+func (service *Service) GetRemoteEvalKey(sessionID messages.SessionID, owner *network.ServerIdentity) (*bfv.EvaluationKey, bool) {
 	log.Lvl2(service.ServerIdentity(), "Retrieving remote evaluation key")
-
-	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(sessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return nil, false
-	}
 
 	// Create GetEvalKeyRequest with its ID
 	reqID := messages.NewGetEvalKeyRequestID()
@@ -27,8 +20,8 @@ func (service *Service) GetRemoteEvalKey(sessionID messages.SessionID) (*bfv.Eva
 	service.getEvalKeyRepLock.Unlock()
 
 	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending GetEvalKeyRequest to root")
-	err := service.SendRaw(s.Root, req)
+	log.Lvl2(service.ServerIdentity(), "Sending GetEvalKeyRequest to owner")
+	err := service.SendRaw(owner, req)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Couldn't send GetEvalKeyRequest to root:", err)
 		return nil, false
@@ -39,7 +32,7 @@ func (service *Service) GetRemoteEvalKey(sessionID messages.SessionID) (*bfv.Eva
 	service.getEvalKeyRepLock.RLock()
 	replyChan := service.getEvalKeyReplies[reqID]
 	service.getEvalKeyRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+	reply := <-replyChan // TODO: timeout if owner cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
@@ -85,7 +78,7 @@ func (service *Service) processGetEvalKeyRequest(msg *network.Envelope) {
 		reply.Valid = false
 	} else {
 		reply.EvaluationKey = evk
-		reply.Valid = false
+		reply.Valid = true
 	}
 
 	// Send reply to server

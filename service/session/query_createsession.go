@@ -123,7 +123,7 @@ func (service *Service) createSession(SessionID messages.SessionID, roster *onet
 	tni := service.NewTreeNodeInstance(tree, tree.Root, CreateSessionProtocolName)
 
 	// Create configuration for the protocol instance
-	config := &messages.CreateSessionConfig{SessionID, roster, service.ServerIdentity(), params}
+	config := &messages.CreateSessionConfig{SessionID, roster, params}
 	data, err := config.MarshalBinary()
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not marshal protocol configuration:", err)

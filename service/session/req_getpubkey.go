@@ -7,15 +7,8 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-func (service *Service) GetRemotePublicKey(sessionID messages.SessionID) (*bfv.PublicKey, bool) {
+func (service *Service) GetRemotePublicKey(sessionID messages.SessionID, owner *network.ServerIdentity) (*bfv.PublicKey, bool) {
 	log.Lvl2(service.ServerIdentity(), "Retrieving remote public key")
-
-	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(sessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return nil, false
-	}
 
 	// Create GetPubKeyRequest with its ID
 	reqID := messages.NewGetPubKeyRequestID()
@@ -28,7 +21,7 @@ func (service *Service) GetRemotePublicKey(sessionID messages.SessionID) (*bfv.P
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending GetPubKeyRequest to root")
-	err := service.SendRaw(s.Root, req)
+	err := service.SendRaw(owner, req)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Couldn't send GetPubKeyRequest to root:", err)
 		return nil, false
@@ -39,7 +32,7 @@ func (service *Service) GetRemotePublicKey(sessionID messages.SessionID) (*bfv.P
 	service.getPubKeyRepLock.RLock()
 	replyChan := service.getPubKeyReplies[reqID]
 	service.getPubKeyRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+	reply := <-replyChan // TODO: timeout if owner cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
@@ -85,7 +78,7 @@ func (service *Service) processGetPubKeyRequest(msg *network.Envelope) {
 		reply.Valid = false
 	} else {
 		reply.PublicKey = pk
-		reply.Valid = false
+		reply.Valid = true
 	}
 
 	// Send reply to server

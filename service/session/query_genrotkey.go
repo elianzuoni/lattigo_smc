@@ -12,59 +12,83 @@ import (
 func (service *Service) HandleGenRotKeyQuery(query *messages.GenRotKeyQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Received GenRotKeyQuery")
 
-	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(query.SessionID)
+	/*
+		// Extract Session, if existent
+		s, ok := service.sessions.GetSession(query.SessionID)
+		if !ok {
+			err := errors.New("Requested session does not exist")
+			log.Error(service.ServerIdentity(), err)
+			return nil, err
+		}
+
+		// Create GenRotKeyRequest with its ID
+		reqID := messages.NewGenRotKeyRequestID()
+		req := &messages.GenRotKeyRequest{query.SessionID, reqID, query}
+
+		// Create channel before sending request to root.
+		service.genRotKeyRepLock.Lock()
+		service.genRotKeyReplies[reqID] = make(chan *messages.GenRotKeyReply)
+		service.genRotKeyRepLock.Unlock()
+
+		// Send request to root
+		log.Lvl2(service.ServerIdentity(), "Sending GenRotKeyRequest to root:", reqID)
+		err := service.SendRaw(s.Root, req)
+		if err != nil {
+			err = errors.New("Couldn't send GenRotKeyRequest to root: " + err.Error())
+			log.Error(err)
+			return nil, err
+		}
+
+		// Receive reply from channel
+		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
+		service.genRotKeyRepLock.RLock()
+		replyChan := service.genRotKeyReplies[reqID]
+		service.genRotKeyRepLock.RUnlock()
+		reply := <-replyChan // TODO: timeout if root cannot send reply
+
+		// Close channel
+		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+		service.genRotKeyRepLock.Lock()
+		close(replyChan)
+		delete(service.genRotKeyReplies, reqID)
+		service.genRotKeyRepLock.Unlock()
+
+		log.Lvl4(service.ServerIdentity(), "Closed channel")
+
+		if !reply.Valid {
+			err := errors.New("Received invalid reply: root couldn't generate public key")
+			log.Error(service.ServerIdentity(), err)
+			// Respond with the reply, not nil, err
+		} else {
+			log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
+		}
+
+		return &messages.GenRotKeyResponse{reply.Valid}, nil
+
+	*/
+
+	// Extract Session, if existent (actually, only check existence)
+	_, ok := service.sessions.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(service.ServerIdentity(), err)
 		return nil, err
 	}
 
-	// Create GenRotKeyRequest with its ID
-	reqID := messages.NewGenRotKeyRequestID()
-	req := &messages.GenRotKeyRequest{query.SessionID, reqID, query}
-
-	// Create channel before sending request to root.
-	service.genRotKeyRepLock.Lock()
-	service.genRotKeyReplies[reqID] = make(chan *messages.GenRotKeyReply)
-	service.genRotKeyRepLock.Unlock()
-
-	// Send request to root
-	log.Lvl2(service.ServerIdentity(), "Sending GenRotKeyRequest to root:", reqID)
-	err := service.SendRaw(s.Root, req)
+	// Then, launch the genRotKey protocol to generate the RotationKey
+	log.Lvl2(service.ServerIdentity(), "Generating Rotation Key")
+	err := service.genRotKey(query.SessionID, query.RotIdx, query.K, query.Seed)
 	if err != nil {
-		err = errors.New("Couldn't send GenRotKeyRequest to root: " + err.Error())
-		log.Error(err)
+		log.Error(service.ServerIdentity(), "Could not generate rotation key:", err)
 		return nil, err
 	}
 
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-	service.genRotKeyRepLock.RLock()
-	replyChan := service.genRotKeyReplies[reqID]
-	service.genRotKeyRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+	log.Lvl3(service.ServerIdentity(), "Successfully generated rotation key")
 
-	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-	service.genRotKeyRepLock.Lock()
-	close(replyChan)
-	delete(service.genRotKeyReplies, reqID)
-	service.genRotKeyRepLock.Unlock()
-
-	log.Lvl4(service.ServerIdentity(), "Closed channel")
-
-	if !reply.Valid {
-		err := errors.New("Received invalid reply: root couldn't generate public key")
-		log.Error(service.ServerIdentity(), err)
-		// Respond with the reply, not nil, err
-	} else {
-		log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
-	}
-
-	return &messages.GenRotKeyResponse{reply.Valid}, nil
+	return &messages.GenRotKeyResponse{true}, nil
 }
 
+/*
 func (service *Service) processGenRotKeyRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.GenRotKeyRequest)
 
@@ -112,6 +136,8 @@ func (service *Service) processGenRotKeyRequest(msg *network.Envelope) {
 
 	return
 }
+
+*/
 
 func (service *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K uint64, Seed []byte) error {
 	log.Lvl1(service.ServerIdentity(), "Root. Generating EvaluationKey")
@@ -190,6 +216,7 @@ func (service *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K ui
 	return nil
 }
 
+/*
 func (service *Service) processGenRotKeyReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*messages.GenRotKeyReply)
 
@@ -203,3 +230,5 @@ func (service *Service) processGenRotKeyReply(msg *network.Envelope) {
 
 	return
 }
+
+*/

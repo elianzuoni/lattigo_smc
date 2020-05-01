@@ -83,6 +83,11 @@ func (service *Service) newProtoCKG(tn *onet.TreeNodeInstance, cfg *onet.Generic
 		return nil, err
 	}
 
+	// Set the root of the tree (protocol initiator) as the key owner
+	s.pubKeyOwnerLock.Lock()
+	s.pubKeyOwner = tn.Root().ServerIdentity
+	s.pubKeyOwnerLock.Unlock()
+
 	// Instantiate protocol with incomplete constructor
 	log.Lvl2(service.ServerIdentity(), "Instantiating protocol with incomplete constructor")
 	protocol, err := protocols.NewCollectiveKeyGeneration(tn)
@@ -127,6 +132,11 @@ func (service *Service) newProtoEKG(tn *onet.TreeNodeInstance, cfg *onet.Generic
 		log.Error(service.ServerIdentity(), err)
 		return nil, err
 	}
+
+	// Set the root of the tree (protocol initiator) as the key owner
+	s.evalKeyOwnerLock.Lock()
+	s.evalKeyOwner = tn.Root().ServerIdentity
+	s.evalKeyOwnerLock.Unlock()
 
 	// Instantiate protocol with incomplete constructor
 	log.Lvl2(service.ServerIdentity(), "Instantiating protocol with incomplete constructor")
@@ -177,6 +187,11 @@ func (service *Service) newProtoRKG(tn *onet.TreeNodeInstance, cfg *onet.Generic
 		return nil, err
 	}
 
+	// Set the root of the tree (protocol initiator) as the key owner
+	s.rotKeyOwnerLock.Lock()
+	s.rotKeyOwner = tn.Root().ServerIdentity
+	s.rotKeyOwnerLock.Unlock()
+
 	// Instantiate protocol with incomplete constructor
 	log.Lvl2(service.ServerIdentity(), "Instantiating protocol with incomplete constructor")
 	protocol, err := protocols.NewRotationKey(tn)
@@ -221,8 +236,7 @@ func (service *Service) newProtoCreateSession(tn *onet.TreeNodeInstance, cfg *on
 	}
 
 	// Then, create the protocol with the known parameters and the one just received
-	p, err := serviceProto.NewCreateSessionProtocol(tn, service.sessions, config.SessionID, config.Roster,
-		config.Root, config.Params)
+	p, err := serviceProto.NewCreateSessionProtocol(tn, service.sessions, config.SessionID, config.Roster, config.Params)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
 		return nil, err

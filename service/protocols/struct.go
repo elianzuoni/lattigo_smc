@@ -3,7 +3,6 @@ package protocols
 import (
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
 	"sync"
 )
@@ -11,7 +10,7 @@ import (
 // This interface is implemented by the SessionStore struct. It extrapolates the behaviour required to run the
 // CreateSession and CloseSession protocols.
 type AbstractSessionStore interface {
-	NewSession(id messages.SessionID, roster *onet.Roster, root *network.ServerIdentity, params *bfv.Parameters)
+	NewSession(id messages.SessionID, roster *onet.Roster, params *bfv.Parameters)
 	DeleteSession(id messages.SessionID)
 }
 
@@ -21,7 +20,6 @@ type CreateSessionProtocol struct {
 	store     AbstractSessionStore
 	SessionID messages.SessionID
 	roster    *onet.Roster
-	root      *network.ServerIdentity
 	params    *bfv.Parameters
 
 	// Channels to receive from other nodes.

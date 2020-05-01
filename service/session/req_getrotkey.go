@@ -7,15 +7,8 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-func (service *Service) GetRemoteRotationKey(sessionID messages.SessionID) (*bfv.RotationKeys, bool) {
+func (service *Service) GetRemoteRotationKey(sessionID messages.SessionID, owner *network.ServerIdentity) (*bfv.RotationKeys, bool) {
 	log.Lvl2(service.ServerIdentity(), "Retrieving remote rotation key")
-
-	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(sessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		return nil, false
-	}
 
 	// Create GetRotKeyRequest with its ID
 	reqID := messages.NewGetRotKeyRequestID()
@@ -28,7 +21,7 @@ func (service *Service) GetRemoteRotationKey(sessionID messages.SessionID) (*bfv
 
 	// Send request to root
 	log.Lvl2(service.ServerIdentity(), "Sending GetRotKeyRequest to root")
-	err := service.SendRaw(s.Root, req)
+	err := service.SendRaw(owner, req)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Couldn't send GetRotKeyRequest to root:", err)
 		return nil, false
@@ -39,7 +32,7 @@ func (service *Service) GetRemoteRotationKey(sessionID messages.SessionID) (*bfv
 	service.getRotKeyRepLock.RLock()
 	replyChan := service.getRotKeyReplies[reqID]
 	service.getRotKeyRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+	reply := <-replyChan // TODO: timeout if owner cannot send reply
 
 	// Close channel
 	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
@@ -85,7 +78,7 @@ func (service *Service) processGetRotKeyRequest(msg *network.Envelope) {
 		reply.Valid = false
 	} else {
 		reply.RotationKey = rotk
-		reply.Valid = false
+		reply.Valid = true
 	}
 
 	// Send reply to server

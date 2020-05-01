@@ -15,18 +15,23 @@ type Session struct {
 
 	service *Service
 	Roster  *onet.Roster
-	Root    *network.ServerIdentity
 
 	// These variables are set upon construction.
 	Params  *bfv.Parameters
 	skShard *bfv.SecretKey
 	// These variables have to be set via an explicit Query.
-	pubKeyLock  sync.RWMutex
-	publicKey   *bfv.PublicKey
-	rotKeyLock  sync.RWMutex
-	rotationKey *bfv.RotationKeys
-	evalKeyLock sync.RWMutex
-	evalKey     *bfv.EvaluationKey
+	pubKeyLock       sync.RWMutex
+	publicKey        *bfv.PublicKey
+	pubKeyOwnerLock  sync.RWMutex
+	pubKeyOwner      *network.ServerIdentity
+	rotKeyLock       sync.RWMutex
+	rotationKey      *bfv.RotationKeys
+	rotKeyOwnerLock  sync.RWMutex
+	rotKeyOwner      *network.ServerIdentity
+	evalKeyLock      sync.RWMutex
+	evalKey          *bfv.EvaluationKey
+	evalKeyOwnerLock sync.RWMutex
+	evalKeyOwner     *network.ServerIdentity
 
 	// Stores ciphertexts.
 	ciphertextsLock sync.RWMutex
@@ -57,8 +62,7 @@ func NewSessionStore(serv *Service) *SessionStore {
 }
 
 // Constructor of Session. Already requires roster and bfv parameters.
-func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster, root *network.ServerIdentity,
-	params *bfv.Parameters) {
+func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster, params *bfv.Parameters) {
 	log.Lvl2("Session constructor started")
 
 	session := &Session{
@@ -66,7 +70,6 @@ func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster
 
 		service: store.service,
 		Roster:  roster,
-		Root:    root,
 
 		Params: params,
 

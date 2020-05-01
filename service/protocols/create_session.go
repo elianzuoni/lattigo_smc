@@ -4,7 +4,6 @@ import (
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
-	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
 )
 
@@ -28,13 +27,12 @@ import (
 // be encapsulated in a proper protocol factory, that only takes the TreeNodeInstance as an argument
 // and somehow supplies the rest of the parameters on its own.
 func NewCreateSessionProtocol(t *onet.TreeNodeInstance, store AbstractSessionStore, SessionID messages.SessionID,
-	roster *onet.Roster, root *network.ServerIdentity, params *bfv.Parameters) (*CreateSessionProtocol, error) {
+	roster *onet.Roster, params *bfv.Parameters) (*CreateSessionProtocol, error) {
 	proto := &CreateSessionProtocol{
 		TreeNodeInstance: t,
 		store:            store,
 		SessionID:        SessionID,
 		roster:           roster,
-		root:             root,
 		params:           params,
 		// No need to initialise the Mutex
 	}
@@ -78,7 +76,7 @@ func (p *CreateSessionProtocol) Dispatch() error {
 
 	// Step 3: create session
 	log.Lvl3(p.ServerIdentity(), "Creating session")
-	p.store.NewSession(p.SessionID, p.roster, p.root, p.params)
+	p.store.NewSession(p.SessionID, p.roster, p.params)
 
 	// Step 4: send the Done message
 	log.Lvl3(p.ServerIdentity(), "Sending the Done message")
