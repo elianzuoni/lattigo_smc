@@ -11,6 +11,11 @@ import (
 func (s *Session) GetCiphertext(id messages.CipherID) (ct *bfv.Ciphertext, ok bool) {
 	log.Lvl4(s.service.ServerIdentity(), "Retrieving ciphertext")
 
+	if id == messages.NilCipherID {
+		log.Error(s.service.ServerIdentity(), "Queried on NilCipherID")
+		return nil, false
+	}
+
 	owner := id.GetServerIdentityOwner()
 
 	// Try locally
