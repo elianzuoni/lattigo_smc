@@ -323,7 +323,7 @@ func (c *Client) SendKeyQuery(getEvK, getRtK bool) (bool, bool, error) {
 */
 
 // SendStoreQuery sends a query to store in the system the provided vector. The vector is encrypted locally.
-func (c *Client) SendStoreQuery(data []uint64) (messages.CipherID, error) {
+func (c *Client) SendStoreQuery(name string, data []uint64) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a store query")
 
 	// Check that the client is bound
@@ -339,7 +339,7 @@ func (c *Client) SendStoreQuery(data []uint64) (messages.CipherID, error) {
 	cipher := c.encryptor.EncryptNew(plain)
 
 	// Craft query and prepare response
-	query := &messages.StoreQuery{c.sessionID, cipher}
+	query := &messages.StoreQuery{c.sessionID, name, cipher}
 	resp := &messages.StoreResponse{}
 
 	// Send query

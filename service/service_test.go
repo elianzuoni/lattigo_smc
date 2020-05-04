@@ -375,7 +375,7 @@ func TestStoreRetrieveQuery(t *testing.T) {
 
 	log.Lvl2("Going to store data. Should not return error")
 	origData := p.Coeffs[0] // Only one modulus exists
-	cid, err := c1.SendStoreQuery(origData)
+	cid, err := c1.SendStoreQuery("a", origData)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery returned error:", err)
 	}
@@ -443,7 +443,7 @@ func TestSumQuery(t *testing.T) {
 
 	log.Lvl2("Going to store first vector. Should not return error")
 	data1 := p.Coeffs[0] // Only one modulus exists
-	cid1, err := c1.SendStoreQuery(data1)
+	cid1, err := c1.SendStoreQuery("a", data1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for first vector returned error:", err)
 	}
@@ -463,7 +463,7 @@ func TestSumQuery(t *testing.T) {
 
 	log.Lvl2("Going to store second vector from second client. Should not return error")
 	data2 := q.Coeffs[0] // Only one modulus exists
-	cid2, err := c2.SendStoreQuery(data2)
+	cid2, err := c2.SendStoreQuery("b", data2)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for second vector returned error:", err)
 	}
@@ -565,7 +565,7 @@ func TestMultiplyRelinQuery(t *testing.T) {
 
 	log.Lvl2("Going to store first vector. Should not return error")
 	data1 := p.Coeffs[0] // Only one modulus exists
-	cid1, err := c1.SendStoreQuery(data1)
+	cid1, err := c1.SendStoreQuery("a", data1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for first vector returned error:", err)
 	}
@@ -585,7 +585,7 @@ func TestMultiplyRelinQuery(t *testing.T) {
 
 	log.Lvl2("Going to store second vector. Should not return error")
 	data2 := q.Coeffs[0] // Only one modulus exists
-	cid2, err := c2.SendStoreQuery(data2)
+	cid2, err := c2.SendStoreQuery("b", data2)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for second vector returned error:", err)
 	}
@@ -716,7 +716,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Store a from first client
 
 	log.Lvl2("Going to store \"a\". Should not return error")
-	cidA, err := client1.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
+	cidA, err := client1.SendStoreQuery("a", a.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"a\" returned error:", err)
 	}
@@ -735,7 +735,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Store b from second client
 
 	log.Lvl2("Going to store \"b\". Should not return error")
-	cidB, err := client2.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
+	cidB, err := client2.SendStoreQuery("b", b.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"b\" returned error:", err)
 	}
@@ -795,7 +795,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Store c from third client
 
 	log.Lvl2("Going to store \"c\". Should not return error")
-	cidC, err := client3.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
+	cidC, err := client3.SendStoreQuery("c", c.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"c\" returned error:", err)
 	}
@@ -814,7 +814,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Store d from the fourth client
 
 	log.Lvl2("Going to store \"d\". Should not return error")
-	cidD, err := client4.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
+	cidD, err := client4.SendStoreQuery("d", d.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"d\" returned error:", err)
 	}
@@ -959,7 +959,7 @@ func TestRotationQuery(t *testing.T) {
 
 	log.Lvl2("Going to store vector. Should not return error")
 	data := p.Coeffs[0] // Only one modulus exists
-	cid, err := c3.SendStoreQuery(data)
+	cid, err := c3.SendStoreQuery("a", data)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery returned error:", err)
 	}
@@ -1076,7 +1076,7 @@ func TestEncSharesQuery(t *testing.T) {
 	// Store a from first client
 
 	log.Lvl2("Going to store \"a\". Should not return error")
-	cidA, err := client1.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
+	cidA, err := client1.SendStoreQuery("a", a.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"a\" returned error:", err)
 	}
@@ -1095,7 +1095,7 @@ func TestEncSharesQuery(t *testing.T) {
 	// Store b from second client
 
 	log.Lvl2("Going to store \"b\". Should not return error")
-	cidB, err := client2.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
+	cidB, err := client2.SendStoreQuery("b", b.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"b\" returned error:", err)
 	}
@@ -1164,7 +1164,7 @@ func TestEncSharesQuery(t *testing.T) {
 	// Store c fro third client
 
 	log.Lvl2("Going to store \"c\". Should not return error")
-	cidC, err := client3.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
+	cidC, err := client3.SendStoreQuery("c", c.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"c\" returned error:", err)
 	}
@@ -1183,7 +1183,7 @@ func TestEncSharesQuery(t *testing.T) {
 	// Store d from fourth client
 
 	log.Lvl2("Going to store \"d\". Should not return error")
-	cidD, err := client4.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
+	cidD, err := client4.SendStoreQuery("d", d.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"d\" returned error:", err)
 	}

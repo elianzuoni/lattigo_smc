@@ -62,6 +62,22 @@ func (s *Session) StoreCiphertextNewID(ct *bfv.Ciphertext) messages.CipherID {
 	return newCipherID
 }
 
+// Retrieves a CipherID given its name
+func (s *Session) GetCipherID(name string) (messages.CipherID, bool) {
+	s.cipherIDsLock.RLock()
+	id, ok := s.cipherIDs[name]
+	s.cipherIDsLock.RUnlock()
+
+	return id, ok
+}
+
+// Stores a new CipherID under the given name
+func (s *Session) StoreCipherID(name string, id messages.CipherID) {
+	s.cipherIDsLock.Lock()
+	s.cipherIDs[name] = id
+	s.cipherIDsLock.Unlock()
+}
+
 // Retrieves an additive share from the database, given its id. Returns a boolean indicating success.
 func (s *Session) GetAdditiveShare(id messages.SharesID) (share *dbfv.AdditiveShare, ok bool) {
 	log.Lvl4("Retrieving additive share")

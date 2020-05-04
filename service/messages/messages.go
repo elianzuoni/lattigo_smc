@@ -477,6 +477,7 @@ type GetRotKeyReply struct {
 type StoreQuery struct {
 	SessionID SessionID
 
+	Name       string
 	Ciphertext *bfv.Ciphertext
 }
 
