@@ -104,7 +104,7 @@ func (service *Service) rotateCipher(sessionID messages.SessionID, cipherID mess
 	// TODO: refine check for specific rotation
 
 	// Rotate
-	log.Lvl3(service.ServerIdentity(), "Rotating the ciphertexts")
+	log.Lvl3(service.ServerIdentity(), "Rotating the ciphertext")
 	eval := bfv.NewEvaluator(s.Params)
 	var ctRot *bfv.Ciphertext
 	switch bfv.Rotation(rotIdx) {

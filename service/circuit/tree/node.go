@@ -6,22 +6,31 @@ import "lattigo-smc/service/messages"
 type Action func(n *Node)
 
 type Node struct {
-	Val string // Contains the variable name at leaves
-
 	Parent   *Node
 	Children []*Node
+
+	// Optional fields
+	Name string // Contains the variable name at leaves
+	// Rotation parameters
+	RotIdx int
+	K      uint64
 
 	Action Action
 	Output chan messages.CipherID
 }
 
-func NewNode(val string, parent *Node, nChildren int, action Action) *Node {
-	return &Node{val, parent, make([]*Node, 0, nChildren), action,
+func NewNode(name string, parent *Node, nChildren int) *Node {
+	return &Node{parent, make([]*Node, 0, nChildren), name, -1, 0, nil,
 		make(chan messages.CipherID, 1)}
 }
 
-func (n *Node) SetVal(val string) {
-	n.Val = val
+func (n *Node) SetName(name string) {
+	n.Name = name
+}
+
+func (n *Node) SetRot(rotIdx int, k uint64) {
+	n.RotIdx = rotIdx
+	n.K = k
 }
 
 func (n *Node) SetAction(action Action) {

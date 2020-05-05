@@ -88,57 +88,6 @@ func (service *Service) HandleGenEvalKeyQuery(query *messages.GenEvalKeyQuery) (
 	return &messages.GenEvalKeyResponse{true}, nil
 }
 
-/*
-func (service *Service) processGenEvalKeyRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*messages.GenEvalKeyRequest)
-
-	log.Lvl1(service.ServerIdentity(), "Root. Received GenEvalKeyRequest.")
-
-	// Start by declaring reply with minimal fields.
-	reply := &messages.GenEvalKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
-
-	// Extract Session, if existent (actually, only check existence)
-	_, ok := service.sessions.GetSession(req.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		// Send negative response
-		err := service.SendRaw(msg.ServerIdentity, &reply)
-		if err != nil {
-			log.Error("Could not send reply : ", err)
-		}
-		return
-	}
-
-	// Then, launch the genEvalKey protocol to get the MasterEvallicKey
-	log.Lvl2(service.ServerIdentity(), "Generating Evaluation Key")
-	err := service.genEvalKey(req.Query.SessionID, req.Query.Seed)
-	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not generate evaluation key:", err)
-		err := service.SendRaw(msg.ServerIdentity, reply)
-		if err != nil {
-			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
-		}
-		return
-	}
-
-	log.Lvl3(service.ServerIdentity(), "Successfully generated evaluation key")
-
-	// Set fields in the reply
-	reply.Valid = true
-
-	// Send the positive reply to the server
-	log.Lvl2(service.ServerIdentity(), "Replying (positively) to server")
-	err = service.SendRaw(msg.ServerIdentity, reply)
-	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not reply (positively) to server")
-		return
-	}
-
-	return
-}
-
-*/
-
 func (service *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) error {
 	log.Lvl1(service.ServerIdentity(), "Root. Generating EvaluationKey")
 
@@ -220,20 +169,3 @@ func (service *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) er
 
 	return nil
 }
-
-/*
-func (service *Service) processGenEvalKeyReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*messages.GenEvalKeyReply)
-
-	log.Lvl1(service.ServerIdentity(), "Received GenEvalKeyReply")
-
-	// Simply send reply through channel
-	service.genEvalKeyRepLock.RLock()
-	service.genEvalKeyReplies[reply.ReqID] <- reply
-	service.genEvalKeyRepLock.RUnlock()
-	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
-
-	return
-}
-
-*/

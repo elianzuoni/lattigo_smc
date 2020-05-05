@@ -95,58 +95,6 @@ func (service *Service) HandleGenPubKeyQuery(query *messages.GenPubKeyQuery) (ne
 	return &messages.GenPubKeyResponse{pk, true}, nil
 }
 
-/*
-func (service *Service) processGenPubKeyRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*messages.GenPubKeyRequest)
-
-	log.Lvl1(service.ServerIdentity(), "Root. Received GenPubKeyRequest.")
-
-	// Start by declaring reply with minimal fields.
-	reply := &messages.GenPubKeyReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
-
-	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(req.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		// Send negative response
-		err := service.SendRaw(msg.ServerIdentity, reply)
-		if err != nil {
-			log.Error("Could not send reply : ", err)
-		}
-		return
-	}
-
-	// Then, launch the genPublicKey protocol to get the publicKey
-	log.Lvl2(service.ServerIdentity(), "Generating Public Key")
-	err := service.genPublicKey(req.Query.SessionID, req.Query.Seed)
-	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not generate public key:", err)
-		err := service.SendRaw(msg.ServerIdentity, reply)
-		if err != nil {
-			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
-		}
-		return
-	}
-
-	log.Lvl3(service.ServerIdentity(), "Successfully generated public key")
-
-	// Set fields in the reply
-	reply.MasterPublicKey = s.publicKey // No need to lock pubKeyLock
-	reply.Valid = true
-
-	// Send the positive reply to the server
-	log.Lvl2(service.ServerIdentity(), "Replying (positively) to server")
-	err = service.SendRaw(msg.ServerIdentity, reply)
-	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not reply (positively) to server")
-		return
-	}
-
-	return
-}
-
-*/
-
 func (service *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) error {
 	log.Lvl1(service.ServerIdentity(), "Root. Generating PublicKey")
 
@@ -228,20 +176,3 @@ func (service *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) 
 
 	return nil
 }
-
-/*
-func (service *Service) processGenPubKeyReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*messages.GenPubKeyReply)
-
-	log.Lvl1(service.ServerIdentity(), "Received GenPubKeyReply")
-
-	// Simply send reply through channel
-	service.genPubKeyRepLock.RLock()
-	service.genPubKeyReplies[reply.ReqID] <- reply
-	service.genPubKeyRepLock.RUnlock()
-	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
-
-	return
-}
-
-*/

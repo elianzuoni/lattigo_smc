@@ -4,6 +4,7 @@ package tree
 
 import (
 	"errors"
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/service/messages"
 	"strconv"
@@ -11,7 +12,7 @@ import (
 )
 
 type BinaryOperation func(id1 messages.CipherID, id2 messages.CipherID) (messages.CipherID, error)
-type UnaryOperation func(id messages.CipherID) (messages.CipherID, error)
+type RotOperation func(id messages.CipherID, rotIdx int, k uint64) (messages.CipherID, error)
 type Supplier func(name string) (messages.CipherID, error)
 
 type Tree struct {
@@ -26,9 +27,9 @@ type Tree struct {
 	Rot Action
 }
 
-func NewTree(BF int, get Supplier, add, mul BinaryOperation, rot UnaryOperation) *Tree {
+func NewTree(BF int, get Supplier, add, mul BinaryOperation, rot RotOperation) *Tree {
 	actGet := func(n *Node) {
-		id, err := get(n.Val)
+		id, err := get(n.Name)
 		if err != nil {
 			log.Error("Could not resolve:", err)
 			n.Output <- messages.NilCipherID
@@ -83,7 +84,7 @@ func NewTree(BF int, get Supplier, add, mul BinaryOperation, rot UnaryOperation)
 		}
 
 		id := n.Children[0].GetOutput()
-		idRot, err := rot(id)
+		idRot, err := rot(id, n.RotIdx, n.K)
 		if err != nil {
 			log.Error("Could not rotate:", err)
 			n.Output <- messages.NilCipherID
@@ -97,7 +98,7 @@ func NewTree(BF int, get Supplier, add, mul BinaryOperation, rot UnaryOperation)
 	return &Tree{nil, BF, actGet, actAdd, actMul, actRot}
 }
 
-func NewBinaryTree(Get Supplier, Add, Mul BinaryOperation, Rot UnaryOperation) *Tree {
+func NewBinaryTree(Get Supplier, Add, Mul BinaryOperation, Rot RotOperation) *Tree {
 	return NewTree(2, Get, Add, Mul, Rot)
 }
 
@@ -129,8 +130,8 @@ const (
 // TREE = VAL | OP (LEFT TREE RIGHT)+
 // LEFT = '('
 // RIGHT = ')'
-// OP = '+' |  '*' | 'R'
-// VAL = 'v' <space> <alphaNum> '@' 'n' <number>
+// OP = '+' |  '*' | "R[" <space>* ('R' | "CL" | "CR") <space>* ',' <space>* <number> ']'
+// VAL = 'v' <space>+ <alphaNum> '@' <number>
 //
 // lastSeen is the state, indicating the last symbol that was seen.
 // currNode is the current node in the tree that is being created.
@@ -144,7 +145,7 @@ func (t *Tree) ParseFromRPN(desc string) error {
 	ptr := 0
 	// When the description begins, it's as if we had just seen a left.
 	lastSeen := LEFT
-	t.Root = NewNode("", nil, t.BF, nil)
+	t.Root = NewNode("", nil, t.BF)
 	currNode := t.Root
 
 	// Read the description
@@ -158,7 +159,7 @@ func (t *Tree) ParseFromRPN(desc string) error {
 				return err
 			}
 			// New child
-			child := NewNode("", currNode, t.BF, nil)
+			child := NewNode("", currNode, t.BF)
 			currNode.AddChild(child)
 			currNode = child
 			// Update lastSeen
@@ -213,6 +214,16 @@ func (t *Tree) ParseFromRPN(desc string) error {
 			}
 			// Set the Rot action
 			currNode.SetAction(t.Rot)
+			// Extract the rotation parameters, and set them in currNode
+			rotIdx, k, lenParams, err := extractRotParams(desc[ptr:])
+			if err != nil {
+				err = errors.New("Could not extract rotation parameters from index ptr = " + strconv.Itoa(ptr) + ": " + err.Error())
+				return err
+			}
+			currNode.SetRot(rotIdx, k)
+			// Adjust the pointer
+			ptr += lenParams
+			ptr-- // Compensate the ++ of the for loop
 			// Update lastSeen
 			lastSeen = OP
 
@@ -224,15 +235,15 @@ func (t *Tree) ParseFromRPN(desc string) error {
 				return err
 			}
 			// Extract the name, set it in currNode, and set the Get action
-			name, err := extractName(desc[ptr:])
+			name, totLen, err := extractName(desc[ptr:])
 			if err != nil {
 				err = errors.New("Could not extract variable name from index ptr = " + strconv.Itoa(ptr) + ": " + err.Error())
 				return err
 			}
-			currNode.SetVal(name)
+			currNode.SetName(name)
 			currNode.SetAction(t.Get)
 			// Adjust the pointer
-			ptr += len(name)
+			ptr += totLen
 			ptr-- // Compensate the ++ of the for loop
 			// Update lastSeen
 			lastSeen = VAL
@@ -246,24 +257,125 @@ func (t *Tree) ParseFromRPN(desc string) error {
 	return nil
 }
 
+// Extracts the rotation parameters from the beginning of desc
+func extractRotParams(desc string) (int, uint64, int, error) {
+	ptr := 0 // Used to access desc
+
+	// Skip 'R'
+	ptr++
+
+	// Check that there is a '['
+	if desc[ptr] != '[' {
+		err := errors.New("Syntax error in variable name at position ptr = " + strconv.Itoa(ptr) +
+			": parameters do not begin with '['")
+		return 0, 0, 0, err
+	}
+	ptr++
+
+	// Skip spaces
+	for ; desc[ptr] == ' '; ptr++ {
+	}
+
+	// Read RotIdx
+	var rotIdx int
+	switch desc[ptr] {
+	case 'R':
+		// Row
+		rotIdx = bfv.RotationRow
+		ptr++
+	case 'C':
+		// Column
+		ptr++
+		// Left or Right?
+		switch desc[ptr] {
+		case 'R':
+			// Right
+			rotIdx = bfv.RotationRight
+			ptr++
+		case 'L':
+			// Left
+			rotIdx = bfv.RotationLeft
+			ptr++
+		default:
+			// Unknown
+			err := errors.New("Syntax error in variable name at position ptr = " + strconv.Itoa(ptr) +
+				": unknown column rotation '" + string(desc[ptr]) + "'")
+			return 0, 0, 0, err
+		}
+	default:
+		// Unknown
+		err := errors.New("Syntax error in variable name at position ptr = " + strconv.Itoa(ptr) +
+			": unknown rotation idx '" + string(desc[ptr]) + "'")
+		return 0, 0, 0, err
+	}
+
+	// Skip spaces
+	for ; desc[ptr] == ' '; ptr++ {
+	}
+
+	// Check that there is a comma
+	if desc[ptr] != ',' {
+		err := errors.New("Syntax error in variable name at position ptr = " + strconv.Itoa(ptr) +
+			": parameters are not separated by comma")
+		return 0, 0, 0, err
+	}
+	ptr++
+
+	// Skip spaces
+	for ; desc[ptr] == ' '; ptr++ {
+	}
+
+	// K begins here
+	kBase := ptr
+	// Fast forward as long as we see digits
+	for ; unicode.IsDigit(rune(desc[ptr])); ptr++ {
+	}
+	// Read K
+	k, err := strconv.ParseUint(desc[kBase:ptr], 10, 64)
+	if err != nil {
+		err = errors.New("Could not parse K: " + err.Error())
+		return 0, 0, 0, err
+	}
+
+	// Skip spaces
+	for ; desc[ptr] == ' '; ptr++ {
+	}
+
+	// Check that there is a ']'
+	if desc[ptr] != ']' {
+		err := errors.New("Syntax error in variable name at position ptr = " + strconv.Itoa(ptr) +
+			": parameters do not end with ']'")
+		return 0, 0, 0, err
+	}
+	ptr++
+
+	return rotIdx, k, ptr, nil
+}
+
 // Extracts the variable name from the beginning of desc.
-func extractName(desc string) (string, error) {
+func extractName(desc string) (string, int, error) {
 	ptr := 0 // Used to access desc
 
 	// Check that first character is 'v'
 	if desc[ptr] != 'v' {
 		err := errors.New("Syntax error in variable name at position ptr = " + strconv.Itoa(ptr) +
 			": first part of name does not begin with 'v'")
-		return "", err
+		return "", 0, err
 	}
 	ptr++
 	// Check that second character is space
 	if desc[ptr] != ' ' {
 		err := errors.New("Syntax error in variable name at position ptr = " + strconv.Itoa(ptr) +
 			": no space after 'v'")
-		return "", err
+		return "", 0, err
 	}
 	ptr++
+	// Skip spaces
+	for ; desc[ptr] == ' '; ptr++ {
+	}
+
+	// Name begins here
+	base := ptr
 	// Fast forward as long as we don't see '@'
 	for ; desc[ptr] != '@'; ptr++ {
 	}
@@ -271,7 +383,7 @@ func extractName(desc string) (string, error) {
 	if desc[ptr] != '@' {
 		err := errors.New("Syntax error in variable name at position ptr = " + strconv.Itoa(ptr) +
 			": second part of name does not begin with '@'")
-		return "", err
+		return "", 0, err
 	}
 	ptr++
 	// Fast forward as long as we see digits
@@ -279,8 +391,8 @@ func extractName(desc string) (string, error) {
 	}
 
 	// Do a copy
-	name := make([]uint8, ptr)
-	copy(name, desc[:ptr])
+	name := make([]uint8, ptr-base)
+	copy(name, desc[base:ptr])
 
-	return string(name), nil
+	return string(name), ptr, nil
 }
