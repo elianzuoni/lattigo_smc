@@ -462,6 +462,8 @@ func (id GetRotKeyRequestID) String() string {
 type GetRotKeyRequest struct {
 	ReqID     GetRotKeyRequestID
 	SessionID SessionID
+	RotIdx    int
+	K         uint64
 }
 
 type GetRotKeyReply struct {

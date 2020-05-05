@@ -32,6 +32,8 @@ github.com/ldsec/lattigo v1.3.1-0.20200428155452-e87fca68e93c h1:NMBj7khvfcjykYR
 github.com/ldsec/lattigo v1.3.1-0.20200428155452-e87fca68e93c/go.mod h1:JTNJimZeKD0QeWwmQUFjxUs2nfz/3aG+LAUTKshw+Yg=
 github.com/ldsec/lattigo v1.3.1-0.20200428162654-c1d059ba901c h1:znDhWXYm9wI+UtrQjOEIuXfWnfElV1gYr8SGC0tsv90=
 github.com/ldsec/lattigo v1.3.1-0.20200428162654-c1d059ba901c/go.mod h1:JTNJimZeKD0QeWwmQUFjxUs2nfz/3aG+LAUTKshw+Yg=
+github.com/ldsec/lattigo v1.3.1-0.20200505135144-ea718aa4ef84 h1:PlvUQJFOs+IAcOhdZzCb8zE/FmektLGm6SK+3GQ/cjc=
+github.com/ldsec/lattigo v1.3.1-0.20200505135144-ea718aa4ef84/go.mod h1:JTNJimZeKD0QeWwmQUFjxUs2nfz/3aG+LAUTKshw+Yg=
 github.com/montanaflynn/stats v0.5.0 h1:2EkzeTSqBB4V4bJwWrt5gIIrZmpJBcoIRGS2kWLgzmk=
 github.com/montanaflynn/stats v0.5.0/go.mod h1:wL8QJuTMNUDYhXwkmfOly8iTdp5TEcJFWZD2D7SIkUc=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

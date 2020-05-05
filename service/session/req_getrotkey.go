@@ -7,12 +7,13 @@ import (
 	"lattigo-smc/service/messages"
 )
 
-func (service *Service) GetRemoteRotationKey(sessionID messages.SessionID, owner *network.ServerIdentity) (*bfv.RotationKeys, bool) {
+func (service *Service) GetRemoteRotationKey(sessionID messages.SessionID, rotIdx int, k uint64,
+	owner *network.ServerIdentity) (*bfv.RotationKeys, bool) {
 	log.Lvl2(service.ServerIdentity(), "Retrieving remote rotation key")
 
 	// Create GetRotKeyRequest with its ID
 	reqID := messages.NewGetRotKeyRequestID()
-	req := &messages.GetRotKeyRequest{reqID, sessionID}
+	req := &messages.GetRotKeyRequest{reqID, sessionID, rotIdx, k}
 
 	// Create channel before sending request to root.
 	service.getRotKeyRepLock.Lock()
@@ -66,14 +67,31 @@ func (service *Service) processGetRotKeyRequest(msg *network.Envelope) {
 		return
 	}
 
+	// Reduce K modulo n/2 (each row is long n/2)
+	req.K &= (1 << (s.Params.LogN - 1)) - 1
+
+	// Only left-rotation is available. If right-rotation is requested, transform it into a left-rotation.
+	if req.RotIdx == bfv.RotationRight {
+		req.RotIdx = bfv.RotationLeft
+		req.K = (1 << (s.Params.LogN - 1)) - req.K
+	}
+
 	// Get Rotation Key
 	s.rotKeyLock.RLock()
 	rotk := s.rotationKey
 	s.rotKeyLock.RUnlock()
 
-	// Check existence
+	// Check existence, and set fields in the reply
 	if rotk == nil {
 		log.Error(service.ServerIdentity(), "Rotation key not generated")
+		reply.RotationKey = nil
+		reply.Valid = false
+	} else if req.RotIdx == bfv.RotationRow && !rotk.CanRotateRows() {
+		log.Error(service.ServerIdentity(), "Cannot rotate rows")
+		reply.RotationKey = nil
+		reply.Valid = false
+	} else if req.RotIdx == bfv.RotationLeft && !rotk.CanRotateLeft(req.K, uint64(1<<s.Params.LogN)) {
+		log.Error(service.ServerIdentity(), "Cannot rotate columns of specified amount")
 		reply.RotationKey = nil
 		reply.Valid = false
 	} else {

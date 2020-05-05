@@ -926,7 +926,7 @@ func TestRotationQuery(t *testing.T) {
 	// Generate rotation key from first client
 
 	log.Lvl2("Going to generate first rotation key. Should not return error")
-	rotIdx := bfv.RotationLeft
+	rotIdx := bfv.RotationRight
 	k := uint64(770)
 	err = c1.SendGenRotKeyQuery(rotIdx, k, nil)
 	if err != nil {
@@ -982,7 +982,7 @@ func TestRotationQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal("First call to method SendRotationQuery returned error:", err)
 	}
-	log.Lvl2("First call to method SendRotationQuery correctly returned no error")
+	log.Lvl2("Call to method SendRotationQuery correctly returned no error")
 
 	// Rotate the vector locally
 
@@ -991,16 +991,16 @@ func TestRotationQuery(t *testing.T) {
 	row := data[:len(data)/2]
 	rowRot := dataRot[:len(dataRot)/2]
 	for i := range row {
-		// Rotation to the left (combines the two rotations)
-		j := (i + int(k)) % len(row)
+		// Rotation to the right
+		j := (i - int(k) + len(row)) % len(row)
 		rowRot[i] = row[j]
 	}
 	// Rotate second row
 	row = data[len(data)/2:]
 	rowRot = dataRot[len(dataRot)/2:]
 	for i := range row {
-		// Rotation to the left (combines the two rotations)
-		j := (i + int(k)) % len(row)
+		// Rotation to the right
+		j := (i - int(k) + len(row)) % len(row)
 		rowRot[i] = row[j]
 	}
 

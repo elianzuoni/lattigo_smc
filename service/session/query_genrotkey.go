@@ -2,6 +2,7 @@ package session
 
 import (
 	"errors"
+	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
@@ -97,6 +98,15 @@ func (service *Service) genRotKey(SessionID messages.SessionID, rotIdx int, K ui
 		err := errors.New("Requested session does not exist")
 		log.Error(service.ServerIdentity(), err)
 		return err
+	}
+
+	// Reduce K modulo n/2 (each row is long n/2)
+	K &= (1 << (s.Params.LogN - 1)) - 1
+
+	// Only left-rotation is available. If right-rotation is requested, transform it into a left-rotation.
+	if rotIdx == bfv.RotationRight {
+		rotIdx = bfv.RotationLeft
+		K = (1 << (s.Params.LogN - 1)) - K
 	}
 
 	// Lock the rotation key (no check for existence: can be overwritten)

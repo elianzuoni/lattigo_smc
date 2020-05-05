@@ -95,25 +95,32 @@ func (service *Service) rotateCipher(sessionID messages.SessionID, cipherID mess
 	// Retrieving rotation key
 	log.Lvl3(service.ServerIdentity(), "Checking if rotation key was generated")
 	// The rotation key is modifiable, but it is the pointer s.rotationKey itself that changes, not its content
-	rotKey, ok := s.GetRotationKey()
+	rotKey, ok := s.GetRotationKey(rotIdx, k)
 	if !ok {
 		err := errors.New("Could not retrieve rotation key")
 		log.Error(service.ServerIdentity(), err)
 		return messages.NilCipherID, err
 	}
-	// TODO: refine check for specific rotation
 
 	// Rotate
+
 	log.Lvl3(service.ServerIdentity(), "Rotating the ciphertext")
+
+	// Reduce K modulo n/2 (each row is long n/2)
+	k &= (1 << (s.Params.LogN - 1)) - 1
+
+	// Only left-rotation is available. If right-rotation is requested, transform it into a left-rotation.
+	if rotIdx == bfv.RotationRight {
+		rotIdx = bfv.RotationLeft
+		k = (1 << (s.Params.LogN - 1)) - k
+	}
+
 	eval := bfv.NewEvaluator(s.Params)
 	var ctRot *bfv.Ciphertext
 	switch bfv.Rotation(rotIdx) {
 	case bfv.RotationRow:
 		ctRot = eval.RotateRowsNew(ct, rotKey)
-	// TODO: what? they are the same?
 	case bfv.RotationLeft:
-		ctRot = eval.RotateColumnsNew(ct, k, rotKey)
-	case bfv.RotationRight:
 		ctRot = eval.RotateColumnsNew(ct, k, rotKey)
 	}
 
@@ -129,82 +136,84 @@ func (service *Service) rotateCipher(sessionID messages.SessionID, cipherID mess
 // It checks for feasibility (whether or not it possesses the requested ciphertext) and, based on the result,
 // it either returns an invalid reply, or performs the rotation and stores the new ciphertext under a new
 // CipherID which is returned in a valid reply.
-// TODO: it only check whether rotKeys is nil. If not, but the right rotation key was not generated, it panics.
 func (service *Service) processRotationRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*messages.RotationRequest)
+	/*
+		req := (msg.Msg).(*messages.RotationRequest)
 
-	log.Lvl1(service.ServerIdentity(), "Root. Received RotationRequest for ciphertext", req.Query.CipherID)
+		log.Lvl1(service.ServerIdentity(), "Root. Received RotationRequest for ciphertext", req.Query.CipherID)
 
-	// Start by declaring reply with minimal fields.
-	reply := &messages.RotationReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: messages.NilCipherID, Valid: false}
+		// Start by declaring reply with minimal fields.
+		reply := &messages.RotationReply{SessionID: req.SessionID, ReqID: req.ReqID, NewCipherID: messages.NilCipherID, Valid: false}
 
-	// Extract Session, if existent
-	s, ok := service.GetSessionService().GetSession(req.SessionID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
-		// Send negative response
+		// Extract Session, if existent
+		s, ok := service.GetSessionService().GetSession(req.SessionID)
+		if !ok {
+			log.Error(service.ServerIdentity(), "Requested session does not exist")
+			// Send negative response
+			err := service.SendRaw(msg.ServerIdentity, reply)
+			if err != nil {
+				log.Error("Could not send reply : ", err)
+			}
+			return
+		}
+
+		// Check feasibility
+		log.Lvl3(service.ServerIdentity(), "Checking existence of ciphertext")
+		ct, ok := s.GetCiphertext(req.Query.CipherID)
+		if !ok {
+			log.Error(service.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
+			err := service.SendRaw(msg.ServerIdentity, reply)
+			if err != nil {
+				log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			}
+			return
+		}
+		log.Lvl3(service.ServerIdentity(), "Checking if rotation key was generated")
+		// The rotation key is modifiable, but it is the pointer s.rotationKey itself that changes, not its content
+		rotKey, ok := s.GetRotationKey()
+		if !ok {
+			log.Error(service.ServerIdentity(), "Rotation key not generated")
+			err := service.SendRaw(msg.ServerIdentity, reply)
+			if err != nil {
+				log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			}
+			return
+		}
+		// TODO: refine check for specific rotation
+
+		// Evaluate the rotation
+		log.Lvl3(service.ServerIdentity(), "Evaluating the rotation of the ciphertexts")
+		eval := bfv.NewEvaluator(s.Params)
+		var ctRot *bfv.Ciphertext
+		switch bfv.Rotation(req.Query.RotIdx) {
+		case bfv.RotationRow:
+			ctRot = eval.RotateRowsNew(ct, rotKey)
+		// TODO: what? they are the same?
+		case bfv.RotationLeft:
+			ctRot = eval.RotateColumnsNew(ct, req.Query.K, rotKey)
+		case bfv.RotationRight:
+			ctRot = eval.RotateColumnsNew(ct, req.Query.K, rotKey)
+		}
+
+		// Register in local database
+		idRot := messages.NewCipherID(service.ServerIdentity())
+		s.StoreCiphertext(idRot, ctRot)
+
+		// Set fields in reply
+		reply.NewCipherID = idRot
+		reply.Valid = true
+
+		// Send reply to server
+		log.Lvl2(service.ServerIdentity(), "Sending positive reply to server")
 		err := service.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
-			log.Error("Could not send reply : ", err)
+			log.Error("Could not reply (positively) to server:", err)
 		}
+		log.Lvl4(service.ServerIdentity(), "Sent positive reply to server")
+
 		return
-	}
 
-	// Check feasibility
-	log.Lvl3(service.ServerIdentity(), "Checking existence of ciphertext")
-	ct, ok := s.GetCiphertext(req.Query.CipherID)
-	if !ok {
-		log.Error(service.ServerIdentity(), "Ciphertext", req.Query.CipherID, "does not exist.")
-		err := service.SendRaw(msg.ServerIdentity, reply)
-		if err != nil {
-			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
-		}
-		return
-	}
-	log.Lvl3(service.ServerIdentity(), "Checking if rotation key was generated")
-	// The rotation key is modifiable, but it is the pointer s.rotationKey itself that changes, not its content
-	rotKey, ok := s.GetRotationKey()
-	if !ok {
-		log.Error(service.ServerIdentity(), "Rotation key not generated")
-		err := service.SendRaw(msg.ServerIdentity, reply)
-		if err != nil {
-			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
-		}
-		return
-	}
-	// TODO: refine check for specific rotation
-
-	// Evaluate the rotation
-	log.Lvl3(service.ServerIdentity(), "Evaluating the rotation of the ciphertexts")
-	eval := bfv.NewEvaluator(s.Params)
-	var ctRot *bfv.Ciphertext
-	switch bfv.Rotation(req.Query.RotIdx) {
-	case bfv.RotationRow:
-		ctRot = eval.RotateRowsNew(ct, rotKey)
-	// TODO: what? they are the same?
-	case bfv.RotationLeft:
-		ctRot = eval.RotateColumnsNew(ct, req.Query.K, rotKey)
-	case bfv.RotationRight:
-		ctRot = eval.RotateColumnsNew(ct, req.Query.K, rotKey)
-	}
-
-	// Register in local database
-	idRot := messages.NewCipherID(service.ServerIdentity())
-	s.StoreCiphertext(idRot, ctRot)
-
-	// Set fields in reply
-	reply.NewCipherID = idRot
-	reply.Valid = true
-
-	// Send reply to server
-	log.Lvl2(service.ServerIdentity(), "Sending positive reply to server")
-	err := service.SendRaw(msg.ServerIdentity, reply)
-	if err != nil {
-		log.Error("Could not reply (positively) to server:", err)
-	}
-	log.Lvl4(service.ServerIdentity(), "Sent positive reply to server")
-
-	return
+	*/
 }
 
 // This method is executed at the server when receiving the root's RotationReply.

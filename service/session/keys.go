@@ -101,8 +101,17 @@ func (s *Session) GetEvaluationKey() (*bfv.EvaluationKey, bool) {
 
 // Returns the rotation key for this session. If not found locally, it tries at the root.
 // Returns a boolean indicating success.
-func (s *Session) GetRotationKey() (*bfv.RotationKeys, bool) {
+func (s *Session) GetRotationKey(rotIdx int, k uint64) (*bfv.RotationKeys, bool) {
 	log.Lvl4(s.service.ServerIdentity(), "Retrieving rotation key")
+
+	// Reduce K modulo n/2 (each row is long n/2)
+	k &= (1 << (s.Params.LogN - 1)) - 1
+
+	// Only left-rotation is available. If right-rotation is requested, transform it into a left-rotation.
+	if rotIdx == bfv.RotationRight {
+		rotIdx = bfv.RotationLeft
+		k = (1 << (s.Params.LogN - 1)) - k
+	}
 
 	// Try locally
 	s.rotKeyLock.RLock()
@@ -116,7 +125,12 @@ func (s *Session) GetRotationKey() (*bfv.RotationKeys, bool) {
 
 	// If present, return (success).
 	if rotk != nil {
-		return s.rotationKey, true
+		if rotIdx == bfv.RotationRow && rotk.CanRotateRows() {
+			return s.rotationKey, true
+		}
+		if rotIdx == bfv.RotationLeft && rotk.CanRotateLeft(k, uint64(1<<s.Params.LogN)) {
+			return s.rotationKey, true
+		}
 	}
 
 	// Else, if owner not set, return (failure)
@@ -133,7 +147,7 @@ func (s *Session) GetRotationKey() (*bfv.RotationKeys, bool) {
 
 	// Else, try at the owner
 	log.Lvl4(s.service.ServerIdentity(), "Retrieving remote rotation key")
-	rotk, ok := s.service.GetRemoteRotationKey(s.SessionID, owner)
+	rotk, ok := s.service.GetRemoteRotationKey(s.SessionID, rotIdx, k, owner)
 	// Cache the rotation key
 	if ok {
 		s.rotKeyLock.Lock()
