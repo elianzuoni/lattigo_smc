@@ -146,7 +146,6 @@ func TestBindToSession(t *testing.T) {
 	return
 }
 
-// TODO: don't return error in query handling?
 func TestCloseSession(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing CloseSession")
@@ -277,7 +276,6 @@ func TestUnbindFromSession(t *testing.T) {
 
 }
 
-// TODO: prohibit second query server-side?
 func TestGenEvalKeyQuery(t *testing.T) {
 	log.SetDebugVisible(3)
 	log.Lvl1("Testing GenEvalKeyQuery")
@@ -933,8 +931,6 @@ func TestRotationQuery(t *testing.T) {
 		t.Fatal("First call to method SendGenRotKeyQuery returned error:", err)
 	}
 	log.Lvl2("First call to method SendGenRotKeyQuery correctly returned no error")
-
-	// TODO: allow for multiple rotation key generations
 
 	// Generate data
 

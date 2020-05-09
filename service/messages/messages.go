@@ -22,28 +22,13 @@ type MessageTypes struct {
 	MsgCloseSessionQuery    network.MessageTypeID // Unused
 	MsgCloseSessionResponse network.MessageTypeID // Unused
 
-	MsgGenPubKeyQuery network.MessageTypeID // Unused
-	/*
-		MsgGenPubKeyRequest  network.MessageTypeID
-		MsgGenPubKeyReply    network.MessageTypeID
-
-	*/
+	MsgGenPubKeyQuery    network.MessageTypeID // Unused
 	MsgGenPubKeyResponse network.MessageTypeID // Unused
 
-	MsgGenEvalKeyQuery network.MessageTypeID // Unused
-	/*
-		MsgGenEvalKeyRequest  network.MessageTypeID
-		MsgGenEvalKeyReply    network.MessageTypeID
-
-	*/
+	MsgGenEvalKeyQuery    network.MessageTypeID // Unused
 	MsgGenEvalKeyResponse network.MessageTypeID // Unused
 
-	MsgGenRotKeyQuery network.MessageTypeID // Unused
-	/*
-		MsgGenRotKeyRequest  network.MessageTypeID
-		MsgGenRotKeyReply    network.MessageTypeID
-
-	*/
+	MsgGenRotKeyQuery    network.MessageTypeID // Unused
 	MsgGenRotKeyResponse network.MessageTypeID // Unused
 
 	MsgGetPubKeyRequest network.MessageTypeID
@@ -60,6 +45,9 @@ type MessageTypes struct {
 
 	MsgGetCipherRequest network.MessageTypeID
 	MsgGetCipherReply   network.MessageTypeID
+
+	MsgGetCipherIDRequest network.MessageTypeID
+	MsgGetCipherIDReply   network.MessageTypeID
 
 	MsgRetrieveQuery    network.MessageTypeID // Unused
 	MsgRetrieveRequest  network.MessageTypeID
@@ -137,6 +125,9 @@ func init() {
 
 	MsgTypes.MsgGetCipherRequest = network.RegisterMessage(&GetCipherRequest{})
 	MsgTypes.MsgGetCipherReply = network.RegisterMessage(&GetCipherReply{})
+
+	MsgTypes.MsgGetCipherIDRequest = network.RegisterMessage(&GetCipherIDRequest{})
+	MsgTypes.MsgGetCipherIDReply = network.RegisterMessage(&GetCipherIDReply{})
 
 	MsgTypes.MsgRetrieveQuery = network.RegisterMessage(&RetrieveQuery{}) // Unused
 	MsgTypes.MsgRetrieveRequest = network.RegisterMessage(&RetrieveRequest{})
@@ -268,39 +259,10 @@ type GenPubKeyQuery struct {
 	Seed      []byte
 }
 
-/*
-type GenPubKeyRequestID uuid.UUID
-
-func NewGenPubKeyRequestID() GenPubKeyRequestID {
-	return GenPubKeyRequestID(uuid.NewV1())
-}
-func (id GenPubKeyRequestID) String() string {
-	return (uuid.UUID)(id).String()
-}
-
-type GenPubKeyRequest struct {
-	SessionID SessionID
-	ReqID     GenPubKeyRequestID
-	Query     *GenPubKeyQuery
-}
-
-*/
-
 type GenPubKeyConfig struct {
 	SessionID SessionID
 	Seed      []byte
 }
-
-/*
-type GenPubKeyReply struct {
-	SessionID SessionID
-	ReqID     GenPubKeyRequestID
-
-	MasterPublicKey *bfv.PublicKey
-	Valid           bool
-}
-
-*/
 
 type GenPubKeyResponse struct {
 	MasterPublicKey *bfv.PublicKey
@@ -314,38 +276,10 @@ type GenEvalKeyQuery struct {
 	Seed      []byte
 }
 
-/*
-type GenEvalKeyRequestID uuid.UUID
-
-func NewGenEvalKeyRequestID() GenEvalKeyRequestID {
-	return GenEvalKeyRequestID(uuid.NewV1())
-}
-func (id GenEvalKeyRequestID) String() string {
-	return (uuid.UUID)(id).String()
-}
-
-type GenEvalKeyRequest struct {
-	SessionID SessionID
-	ReqID     GenEvalKeyRequestID
-	Query     *GenEvalKeyQuery
-}
-
-*/
-
 type GenEvalKeyConfig struct {
 	SessionID SessionID
 	Seed      []byte
 }
-
-/*
-type GenEvalKeyReply struct {
-	SessionID SessionID
-	ReqID     GenEvalKeyRequestID
-
-	Valid bool
-}
-
-*/
 
 type GenEvalKeyResponse struct {
 	Valid bool
@@ -360,25 +294,6 @@ type GenRotKeyQuery struct {
 	Seed      []byte
 }
 
-/*
-type GenRotKeyRequestID uuid.UUID
-
-func NewGenRotKeyRequestID() GenRotKeyRequestID {
-	return GenRotKeyRequestID(uuid.NewV1())
-}
-func (id GenRotKeyRequestID) String() string {
-	return (uuid.UUID)(id).String()
-}
-
-
-type GenRotKeyRequest struct {
-	SessionID SessionID
-	ReqID     GenRotKeyRequestID
-	Query     *GenRotKeyQuery
-}
-
-*/
-
 type GenRotKeyConfig struct {
 	SessionID SessionID
 
@@ -386,16 +301,6 @@ type GenRotKeyConfig struct {
 	K      uint64
 	Seed   []byte
 }
-
-/*
-type GenRotKeyReply struct {
-	SessionID SessionID
-	ReqID     GenRotKeyRequestID
-
-	Valid bool
-}
-
-*/
 
 type GenRotKeyResponse struct {
 	Valid bool
@@ -512,9 +417,32 @@ type GetCipherReply struct {
 	Valid      bool
 }
 
+// Get CipherID
+
+type GetCipherIDRequestID uuid.UUID
+
+func NewGetCipherIDRequestID() GetCipherIDRequestID {
+	return GetCipherIDRequestID(uuid.NewV1())
+}
+func (id GetCipherIDRequestID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+type GetCipherIDRequest struct {
+	ReqID     GetCipherIDRequestID
+	SessionID SessionID
+	Name      string
+}
+
+type GetCipherIDReply struct {
+	ReqID GetCipherIDRequestID
+
+	CipherID CipherID
+	Valid    bool
+}
+
 // Retrieve
 
-//RetrieveQuery query for a ciphertext represented by ID to be switched under PublicKey
 type RetrieveQuery struct {
 	SessionID SessionID
 

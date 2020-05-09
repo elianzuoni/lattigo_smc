@@ -11,7 +11,7 @@ func (service *Service) GetRemoteCiphertext(SessionID messages.SessionID,
 	CipherID messages.CipherID) (*bfv.Ciphertext, bool) {
 	log.Lvl1(service.ServerIdentity(), "Retrieving remote ciphertext")
 
-	// Create CloseSessionRequest with its ID
+	// Create GetCipherRequest with its ID
 	reqID := messages.NewGetCipherRequestID()
 	service.getCipherRepLock.Lock()
 	req := &messages.GetCipherRequest{reqID, SessionID, CipherID}
@@ -70,7 +70,7 @@ func (service *Service) processGetCipherRequest(msg *network.Envelope) {
 	// Retrieve ciphertext
 	ct, ok := s.GetCiphertext(req.CipherID)
 	if !ok {
-		log.Error(service.ServerIdentity(), "Requested cipehrtext does not exist")
+		log.Error(service.ServerIdentity(), "Requested ciphertext does not exist")
 		err := service.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
 			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
