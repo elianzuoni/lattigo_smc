@@ -373,8 +373,8 @@ func (c *Client) SendRetrieveQuery(cipherID messages.CipherID) ([]uint64, error)
 	}
 
 	// Craft query and prepare response
-	query := &messages.RetrieveQuery{c.sessionID, c.pk, cipherID}
-	resp := &messages.RetrieveResponse{}
+	query := &messages.SwitchQuery{c.sessionID, cipherID, c.pk}
+	resp := &messages.SwitchResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")

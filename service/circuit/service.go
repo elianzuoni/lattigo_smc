@@ -21,8 +21,8 @@ type Service struct {
 	relinReplies       map[messages.RelinRequestID]chan *messages.RelinReply
 	rotationRepLock    sync.RWMutex
 	rotationReplies    map[messages.RotationRequestID]chan *messages.RotationReply
-	retrieveRepLock    sync.RWMutex
-	retrieveReplies    map[messages.RetrieveRequestID]chan *messages.RetrieveReply
+	switchRepLock      sync.RWMutex
+	switchReplies      map[messages.SwitchRequestID]chan *messages.SwitchReply
 	refreshRepLock     sync.RWMutex
 	refreshReplies     map[messages.RefreshRequestID]chan *messages.RefreshReply
 	encToSharesRepLock sync.RWMutex
@@ -54,7 +54,7 @@ func NewService(c *onet.Context) (onet.Service, error) {
 		multiplyReplies:    make(map[messages.MultiplyRequestID]chan *messages.MultiplyReply),
 		relinReplies:       make(map[messages.RelinRequestID]chan *messages.RelinReply),
 		rotationReplies:    make(map[messages.RotationRequestID]chan *messages.RotationReply),
-		retrieveReplies:    make(map[messages.RetrieveRequestID]chan *messages.RetrieveReply),
+		switchReplies:      make(map[messages.SwitchRequestID]chan *messages.SwitchReply),
 		refreshReplies:     make(map[messages.RefreshRequestID]chan *messages.RefreshReply),
 		encToSharesReplies: make(map[messages.EncToSharesRequestID]chan *messages.EncToSharesReply),
 		sharesToEncReplies: make(map[messages.SharesToEncRequestID]chan *messages.SharesToEncReply),
@@ -146,11 +146,11 @@ func registerServerMsgHandler(c *onet.Context, service *Service) {
 func (service *Service) Process(msg *network.Envelope) {
 	// Retrieve
 	if msg.MsgType.Equal(messages.MsgTypes.MsgRetrieveRequest) {
-		service.processRetrieveRequest(msg)
+		service.processSwitchRequest(msg)
 		return
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgRetrieveReply) {
-		service.processRetrieveReply(msg)
+		service.processSwitchReply(msg)
 		return
 	}
 

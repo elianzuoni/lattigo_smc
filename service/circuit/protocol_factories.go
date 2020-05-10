@@ -62,7 +62,7 @@ func (service *Service) newProtoPCKS(tn *onet.TreeNodeInstance, cfg *onet.Generi
 	log.Lvl2(service.ServerIdentity(), "PCKS protocol factory")
 
 	// First, extract configuration
-	config := &messages.PublicSwitchConfig{}
+	config := &messages.SwitchConfig{}
 	err := config.UnmarshalBinary(cfg.Data)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not extract protocol configuration:", err)

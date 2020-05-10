@@ -129,10 +129,10 @@ func init() {
 	MsgTypes.MsgGetCipherIDRequest = network.RegisterMessage(&GetCipherIDRequest{})
 	MsgTypes.MsgGetCipherIDReply = network.RegisterMessage(&GetCipherIDReply{})
 
-	MsgTypes.MsgRetrieveQuery = network.RegisterMessage(&RetrieveQuery{}) // Unused
-	MsgTypes.MsgRetrieveRequest = network.RegisterMessage(&RetrieveRequest{})
-	MsgTypes.MsgRetrieveReply = network.RegisterMessage(&RetrieveReply{})
-	MsgTypes.MsgRetrieveResponse = network.RegisterMessage(&RetrieveResponse{}) // Unused
+	MsgTypes.MsgRetrieveQuery = network.RegisterMessage(&SwitchQuery{}) // Unused
+	MsgTypes.MsgRetrieveRequest = network.RegisterMessage(&SwitchRequest{})
+	MsgTypes.MsgRetrieveReply = network.RegisterMessage(&SwitchReply{})
+	MsgTypes.MsgRetrieveResponse = network.RegisterMessage(&SwitchResponse{}) // Unused
 
 	MsgTypes.MsgSumQuery = network.RegisterMessage(&SumQuery{}) // Unused
 	MsgTypes.MsgSumRequest = network.RegisterMessage(&SumRequest{})
@@ -441,55 +441,53 @@ type GetCipherIDReply struct {
 	Valid    bool
 }
 
-// Retrieve
+// Switch
 
-type RetrieveQuery struct {
+type SwitchQuery struct {
 	SessionID SessionID
 
-	PublicKey *bfv.PublicKey
 	CipherID  CipherID
+	PublicKey *bfv.PublicKey
 }
 
-type RetrieveRequestID uuid.UUID
+type SwitchRequestID uuid.UUID
 
-func NewRetrieveRequestID() RetrieveRequestID {
-	return RetrieveRequestID(uuid.NewV1())
+func NewSwitchRequestID() SwitchRequestID {
+	return SwitchRequestID(uuid.NewV1())
 }
-func (id RetrieveRequestID) String() string {
+func (id SwitchRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
 
-type RetrieveRequest struct {
+type SwitchRequest struct {
+	ReqID     SwitchRequestID
 	SessionID SessionID
 
-	ReqID RetrieveRequestID
-	Query *RetrieveQuery
+	CipherID  CipherID
+	PublicKey *bfv.PublicKey
 }
 
-type PublicSwitchConfig struct {
+type SwitchConfig struct {
 	SessionID  SessionID
 	PublicKey  *bfv.PublicKey
 	Ciphertext *bfv.Ciphertext
 }
 
-//RetrieveReply contains the ciphertext switched under the key requested.
-type RetrieveReply struct {
+type SwitchReply struct {
+	ReqID     SwitchRequestID
 	SessionID SessionID
 
-	ReqID RetrieveRequestID
-
-	Ciphertext *bfv.Ciphertext
+	Ciphertext *bfv.Ciphertext // Switched under the new public key
 	Valid      bool
 }
 
-type RetrieveResponse struct {
+type SwitchResponse struct {
 	Ciphertext *bfv.Ciphertext
 	Valid      bool
 }
 
 // Sum
 
-// Client asks to sum ciphertexts ID1 and ID2.
 type SumQuery struct {
 	SessionID SessionID
 
@@ -497,7 +495,6 @@ type SumQuery struct {
 	CipherID2 CipherID
 }
 
-// Server further assigns an ID to the query
 type SumRequestID uuid.UUID
 
 func NewSumRequestID() SumRequestID {
@@ -507,20 +504,17 @@ func (id SumRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
 
-// Message sent by server to root.
 type SumRequest struct {
+	ReqID     SumRequestID
 	SessionID SessionID
 
-	ReqID SumRequestID
-	Query *SumQuery
+	CipherID1 CipherID
+	CipherID2 CipherID
 }
 
-// Root answers with the same SumRequestID, the CipherID of the New ciphertext,
-// and a flag indicating whether the operation succeeded.
 type SumReply struct {
+	ReqID     SumRequestID
 	SessionID SessionID
-
-	ReqID SumRequestID
 
 	NewCipherID CipherID
 	Valid       bool
@@ -533,7 +527,6 @@ type SumResponse struct {
 
 // Multiply
 
-// Client asks to multiply ID1 and ID2
 type MultiplyQuery struct {
 	SessionID SessionID
 
@@ -550,20 +543,19 @@ func (id MultiplyRequestID) String() string {
 	return (uuid.UUID)(id).String()
 }
 
-// Message sent by server to root.
 type MultiplyRequest struct {
+	ReqID     MultiplyRequestID
 	SessionID SessionID
 
-	ReqID MultiplyRequestID
-	Query *MultiplyQuery
+	CipherID1 CipherID
+	CipherID2 CipherID
+	WithRelin bool // Signals whether the called server should also relinearise
 }
 
-// Root answers with the same SumRequestID, the CipherID of the New ciphertext,
-// and a flag indicating whether the operation succeeded.
 type MultiplyReply struct {
+	ReqID     MultiplyRequestID
 	SessionID SessionID
 
-	ReqID       MultiplyRequestID
 	NewCipherID CipherID
 	Valid       bool
 }
@@ -575,7 +567,6 @@ type MultiplyResponse struct {
 
 // Relinearise
 
-// Client asks to relinearise the given CipherID
 type RelinQuery struct {
 	SessionID SessionID
 
@@ -592,19 +583,18 @@ func (id RelinRequestID) String() string {
 }
 
 type RelinRequest struct {
+	ReqID     RelinRequestID
 	SessionID SessionID
 
-	ReqID RelinRequestID
-	Query *RelinQuery
+	CipherID CipherID
 }
 
 type RelinReply struct {
+	ReqID     RelinRequestID
 	SessionID SessionID
 
-	ReqID       RelinRequestID
 	NewCipherID CipherID
-
-	Valid bool
+	Valid       bool
 }
 
 type RelinResponse struct {
@@ -614,7 +604,6 @@ type RelinResponse struct {
 
 // Refresh
 
-//RefreshQuery query for ID1 to be refreshed.
 type RefreshQuery struct {
 	SessionID SessionID
 
@@ -632,10 +621,11 @@ func (id RefreshRequestID) String() string {
 }
 
 type RefreshRequest struct {
+	ReqID     RefreshRequestID
 	SessionID SessionID
 
-	ReqID RefreshRequestID
-	Query *RefreshQuery
+	CipherID CipherID
+	Seed     []byte
 }
 
 type RefreshConfig struct {
@@ -645,12 +635,11 @@ type RefreshConfig struct {
 }
 
 type RefreshReply struct {
+	ReqID     RefreshRequestID
 	SessionID SessionID
 
-	ReqID       RefreshRequestID
 	NewCipherID CipherID
-
-	Valid bool
+	Valid       bool
 }
 
 type RefreshResponse struct {
@@ -678,10 +667,12 @@ func (id RotationRequestID) String() string {
 }
 
 type RotationRequest struct {
+	ReqID     RotationRequestID
 	SessionID SessionID
 
-	ReqID RotationRequestID
-	Query *RotationQuery
+	CipherID CipherID
+	K        uint64
+	RotIdx   int
 }
 
 type RotationReply struct {
@@ -716,10 +707,10 @@ func (id EncToSharesRequestID) String() string {
 }
 
 type EncToSharesRequest struct {
+	ReqID     EncToSharesRequestID
 	SessionID SessionID
 
-	ReqID EncToSharesRequestID
-	Query *EncToSharesQuery
+	CipherID CipherID
 }
 
 type E2SConfig struct {
@@ -729,12 +720,11 @@ type E2SConfig struct {
 }
 
 type EncToSharesReply struct {
+	ReqID     EncToSharesRequestID
 	SessionID SessionID
 
-	ReqID    EncToSharesRequestID
 	SharesID SharesID
-
-	Valid bool
+	Valid    bool
 }
 
 type EncToSharesResponse struct {
@@ -761,10 +751,11 @@ func (id SharesToEncRequestID) String() string {
 }
 
 type SharesToEncRequest struct {
+	ReqID     SharesToEncRequestID
 	SessionID SessionID
 
-	ReqID SharesToEncRequestID
-	Query *SharesToEncQuery
+	SharesID SharesID
+	Seed     []byte
 }
 
 type S2EConfig struct {
@@ -774,12 +765,11 @@ type S2EConfig struct {
 }
 
 type SharesToEncReply struct {
+	ReqID     SharesToEncRequestID
 	SessionID SessionID
 
-	ReqID       SharesToEncRequestID
 	NewCipherID CipherID
-
-	Valid bool
+	Valid       bool
 }
 
 type SharesToEncResponse struct {
