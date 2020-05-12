@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
@@ -392,11 +393,11 @@ func TestStoreRetrieveQuery(t *testing.T) {
 	// Retrieve the data from second client
 
 	log.Lvl2("Going to retrieve data from second client. Should not return error")
-	retrData, err := c2.SendRetrieveQuery(cid)
+	retrData, err := c2.SendSwitchQuery(cid)
 	if err != nil {
-		t.Fatal("Method SendRetrieveQuery returned error:", err)
+		t.Fatal("Method SendSwitchQuery returned error:", err)
 	}
-	log.Lvl2("Method SendRetrieveQuery correctly returned no error")
+	log.Lvl2("Method SendSwitchQuery correctly returned no error")
 
 	// Test for equality
 
@@ -505,11 +506,11 @@ func TestSumQuery(t *testing.T) {
 	// Retrieve the remote sum from fourth client
 
 	log.Lvl2("Going to retrieve the remote sum from fourth client. Should not return error")
-	retrSum, err := c4.SendRetrieveQuery(cidSum)
+	retrSum, err := c4.SendSwitchQuery(cidSum)
 	if err != nil {
-		t.Fatal("Method SendRetrieveQuery returned error:", err)
+		t.Fatal("Method SendSwitchQuery returned error:", err)
 	}
-	log.Lvl2("Method SendRetrieveQuery correctly returned no error")
+	log.Lvl2("Method SendSwitchQuery correctly returned no error")
 
 	// Test for equality
 
@@ -646,11 +647,11 @@ func TestMultiplyRelinQuery(t *testing.T) {
 	// Retrieve the remote product
 
 	log.Lvl2("Going to retrieve the remote product. Should not return error")
-	retrMul, err := c5.SendRetrieveQuery(cidMul)
+	retrMul, err := c5.SendSwitchQuery(cidMul)
 	if err != nil {
-		t.Fatal("Method SendRetrieveQuery returned error:", err)
+		t.Fatal("Method SendSwitchQuery returned error:", err)
 	}
-	log.Lvl2("Method SendRetrieveQuery correctly returned no error")
+	log.Lvl2("Method SendSwitchQuery correctly returned no error")
 
 	// Test for equality
 
@@ -885,11 +886,11 @@ func TestRefreshQuery(t *testing.T) {
 	// Retrieve the remote abcd from third client
 
 	log.Lvl2("Going to retrieve the remote \"abcd\". Should not return error")
-	retr, err := client3.SendRetrieveQuery(cidABCD)
+	retr, err := client3.SendSwitchQuery(cidABCD)
 	if err != nil {
-		t.Fatal("Method SendRetrieveQuery for \"abcd\" returned error:", err)
+		t.Fatal("Method SendSwitchQuery for \"abcd\" returned error:", err)
 	}
-	log.Lvl2("Method SendRetrieveQuery for \"abcd\" correctly returned no error")
+	log.Lvl2("Method SendSwitchQuery for \"abcd\" correctly returned no error")
 
 	// Test for equality
 
@@ -1014,11 +1015,11 @@ func TestRotationQuery(t *testing.T) {
 
 	log.Lvl2("Going to retrieve the remote rotated vector. Should not return error")
 	var retrRot []uint64
-	retrRot, err = c5.SendRetrieveQuery(cidRot)
+	retrRot, err = c5.SendSwitchQuery(cidRot)
 	if err != nil {
-		t.Fatal("Method SendRetrieveQuery returned error:", err)
+		t.Fatal("Method SendSwitchQuery returned error:", err)
 	}
-	log.Lvl2("Method SendRetrieveQuery correctly returned no error")
+	log.Lvl2("Method SendSwitchQuery correctly returned no error")
 
 	// Test for equality
 
@@ -1270,11 +1271,11 @@ func TestEncSharesQuery(t *testing.T) {
 	// Retrieve the remote abcd from second client
 
 	log.Lvl2("Going to retrieve the remote \"abcd\". Should not return error")
-	retr, err := client2.SendRetrieveQuery(cidABCD)
+	retr, err := client2.SendSwitchQuery(cidABCD)
 	if err != nil {
-		t.Fatal("Method SendRetrieveQuery for \"abcd\" returned error:", err)
+		t.Fatal("Method SendSwitchQuery for \"abcd\" returned error:", err)
 	}
-	log.Lvl2("Method SendRetrieveQuery for \"abcd\" correctly returned no error")
+	log.Lvl2("Method SendSwitchQuery for \"abcd\" correctly returned no error")
 
 	// Test for equality
 
@@ -1285,4 +1286,351 @@ func TestEncSharesQuery(t *testing.T) {
 	log.Lvl2("Original \"abcd\" and retrieved \"abcd\" are the same")
 
 	return
+}
+
+// Two clients (0,1), with one variable each (x). Evaluate x0*x1.
+func TestSimpleCircuit(t *testing.T) {
+	log.SetDebugVisible(3)
+	log.Lvl1("Testing Circuit query")
+
+	size := 2
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
+
+	// Create session
+
+	paramsIdx := 1
+	clientID0 := "TestCircuitQuery-0"
+	log.Lvl2("Going to create new session. Should not return error")
+	c0, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, clientID0)
+	if err != nil {
+		t.Fatal("Method CreateSession returned error:", err)
+	}
+	log.Lvl2("Method CreateSession correctly returned no error")
+
+	// Generate evaluation key
+
+	log.Lvl2("Going to generate evaluation key. Should not return error")
+	err = c0.SendGenEvalKeyQuery(nil)
+	if err != nil {
+		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
+	}
+	log.Lvl2("Method SendGenEvalKeyQuery correctly returned no error")
+
+	// Generate x0 and x1
+
+	log.Lvl2("Going to generate x0 and x1. Should not return error")
+	ctx, x0, x1, err := testGenRandomPolys(paramsIdx)
+	if err != nil {
+		t.Fatal("Could not generate random data:", err)
+	}
+	log.Lvl2("Successfully generated random data")
+
+	// Store x0
+
+	log.Lvl2("Going to store x0. Should not return error")
+	dataX0 := x0.Coeffs[0] // Only one modulus exists
+	_, err = c0.SendStoreQuery("x", dataX0)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for a0 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for x0 correctly returned no error")
+
+	// Create other client
+
+	client1ID := "TestCircuitQuery-1"
+	log.Lvl2("Going to bind to session on Client 1. Should not return error")
+	c1, err := testNewClientBindToSession(roster, 1, paramsIdx, client1ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 1 correctly returned no error")
+
+	// Store x1
+
+	log.Lvl2("Going to store x1. Should not return error")
+	dataX1 := x1.Coeffs[0] // Only one modulus exists
+	_, err = c1.SendStoreQuery("x", dataX1)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for a1 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for x1 correctly returned no error")
+
+	// Evaluate the circuit remotely
+
+	log.Lvl2("Going to evaluate the circuit")
+	desc := "*(v x@0)(v x@1)"
+	remData, err := c0.SendCircuitQuery(desc)
+	if err != nil {
+		t.Fatal("Method SendCircuitQuery returned error:", err)
+	}
+	log.Lvl2("Method SendCircuitQuery correctly returned no error")
+
+	// Evaluate the circuit locally
+
+	log.Lvl2("Going to evaluate the circuit locally")
+	locRes := ctx.NewPoly()
+	ctx.MulCoeffs(x0, x1, locRes)
+
+	// Test for equality
+
+	log.Lvl2("Going to test for equality. Should be the same")
+	if !utils.Equalslice(remData, locRes.Coeffs[0]) {
+		t.Fatal("Original result and retrieved result are not the same")
+	}
+	log.Lvl2("Original result and retrieved result are the same")
+}
+
+// 4 parties (0,1,2,3), each storing two values (a,b).
+// We evaluate the circuit ((a0*a1)+(a1*a2)+(a2*a3)+(a0*a3))*((b0*b1)+(b1*b2)+(b2*b3)+(b0*b3))
+func TestBigCircuit(t *testing.T) {
+	log.SetDebugVisible(3)
+	log.Lvl1("Testing Circuit query")
+
+	size := 4
+	roster, localTest := genLocalTestRoster(size)
+	defer localTest.CloseAll()
+
+	// Create session
+
+	paramsIdx := 1
+	clientID0 := "TestCircuitQuery-0"
+	log.Lvl2("Going to create new session. Should not return error")
+	c0, sid, mpk, err := testNewClientCreateSession(roster, paramsIdx, clientID0)
+	if err != nil {
+		t.Fatal("Method CreateSession returned error:", err)
+	}
+	log.Lvl2("Method CreateSession correctly returned no error")
+
+	// Generate evaluation key
+
+	log.Lvl2("Going to generate evaluation key. Should not return error")
+	err = c0.SendGenEvalKeyQuery(nil)
+	if err != nil {
+		t.Fatal("Method SendGenEvalKeyQuery returned error:", err)
+	}
+	log.Lvl2("Method SendGenEvalKeyQuery correctly returned no error")
+
+	// Generate a0 and b0
+
+	log.Lvl2("Going to generate a0 and b0. Should not return error")
+	ctx, a0, b0, err := testGenRandomPolys(paramsIdx)
+	if err != nil {
+		t.Fatal("Could not generate random data:", err)
+	}
+	log.Lvl2("Successfully generated random data")
+
+	// Store a0
+
+	log.Lvl2("Going to store a0. Should not return error")
+	dataA0 := a0.Coeffs[0] // Only one modulus exists
+	_, err = c0.SendStoreQuery("a", dataA0)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for a0 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for a0 correctly returned no error")
+
+	// Store b0
+
+	log.Lvl2("Going to store b0. Should not return error")
+	dataB0 := b0.Coeffs[0] // Only one modulus exists
+	_, err = c0.SendStoreQuery("b", dataB0)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for b0 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for b0 correctly returned no error")
+
+	// Create other client
+
+	client1ID := "TestCircuitQuery-1"
+	log.Lvl2("Going to bind to session on Client 1. Should not return error")
+	c1, err := testNewClientBindToSession(roster, 1, paramsIdx, client1ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 1 correctly returned no error")
+
+	// Generate a1 and b1
+
+	log.Lvl2("Going to generate a1 and b1. Should not return error")
+	ctx, a1, b1, err := testGenRandomPolys(paramsIdx)
+	if err != nil {
+		t.Fatal("Could not generate random data:", err)
+	}
+	log.Lvl2("Successfully generated random data")
+
+	// Store a1
+
+	log.Lvl2("Going to store a1. Should not return error")
+	dataA1 := a1.Coeffs[0] // Only one modulus exists
+	_, err = c1.SendStoreQuery("a", dataA1)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for a1 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for a1 correctly returned no error")
+
+	// Store b1
+
+	log.Lvl2("Going to store b1. Should not return error")
+	dataB1 := b1.Coeffs[0] // Only one modulus exists
+	_, err = c1.SendStoreQuery("b", dataB1)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for b1 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for b1 correctly returned no error")
+
+	// Create other client
+
+	client2ID := "TestCircuitQuery-2"
+	log.Lvl2("Going to bind to session on Client 2. Should not return error")
+	c2, err := testNewClientBindToSession(roster, 2, paramsIdx, client2ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 2 correctly returned no error")
+
+	// Generate a2 and b2
+
+	log.Lvl2("Going to generate a2 and b2. Should not return error")
+	ctx, a2, b2, err := testGenRandomPolys(paramsIdx)
+	if err != nil {
+		t.Fatal("Could not generate random data:", err)
+	}
+	log.Lvl2("Successfully generated random data")
+
+	// Store a2
+
+	log.Lvl2("Going to store a2. Should not return error")
+	dataA2 := a2.Coeffs[0] // Only one modulus exists
+	_, err = c2.SendStoreQuery("a", dataA2)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for a2 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for a2 correctly returned no error")
+
+	// Store b2
+
+	log.Lvl2("Going to store b2. Should not return error")
+	dataB2 := b2.Coeffs[0] // Only one modulus exists
+	_, err = c2.SendStoreQuery("b", dataB2)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for b2 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for b2 correctly returned no error")
+
+	// Create other client
+
+	client3ID := "TestCircuitQuery-3"
+	log.Lvl2("Going to bind to session on Client 3. Should not return error")
+	c3, err := testNewClientBindToSession(roster, 3, paramsIdx, client3ID, sid, mpk)
+	if err != nil {
+		t.Fatal("Method BindToSession on Client 2 returned error:", err)
+	}
+	log.Lvl2("Method BindToSession on Client 3 correctly returned no error")
+
+	// Generate a3 and b3
+
+	log.Lvl2("Going to generate a3 and b3. Should not return error")
+	ctx, a3, b3, err := testGenRandomPolys(paramsIdx)
+	if err != nil {
+		t.Fatal("Could not generate random data:", err)
+	}
+	log.Lvl2("Successfully generated random data")
+
+	// Store a3
+
+	log.Lvl2("Going to store a3. Should not return error")
+	dataA3 := a3.Coeffs[0] // Only one modulus exists
+	_, err = c3.SendStoreQuery("a", dataA3)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for a3 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for a3 correctly returned no error")
+
+	// Store b3
+
+	log.Lvl2("Going to store b3. Should not return error")
+	dataB3 := b3.Coeffs[0] // Only one modulus exists
+	_, err = c3.SendStoreQuery("b", dataB3)
+	if err != nil {
+		t.Fatal("Method SendStoreQuery for b3 returned error:", err)
+	}
+	log.Lvl2("Method SendStoreQuery for b3 correctly returned no error")
+
+	// Evaluate the circuit remotely
+
+	log.Lvl2("Going to evaluate the circuit")
+	desc := "*(+(+(*(v a@0)(v a@1))(*(v a@1)(v a@2)))(+(*(v a@2)(v a@3))(*(v a@0)(v a@3))))" +
+		"(+(+(*(v b@0)(v b@1))(*(v b@1)(v b@2)))(+(*(v b@2)(v b@3))(*(v b@0)(v b@3))))"
+	remData, err := c0.SendCircuitQuery(desc)
+	if err != nil {
+		t.Fatal("Method SendCircuitQuery returned error:", err)
+	}
+	log.Lvl2("Method SendCircuitQuery correctly returned no error")
+
+	// Evaluate the circuit locally
+	// ((a0*a1)+(a1*a2)+(a2*a3)+(a0*a3))*((b0*b1)+(b1*b2)+(b2*b3)+(b0*b3))
+
+	log.Lvl2("Going to evaluate the circuit locally")
+	// a0*a1
+	a0a1 := ctx.NewPoly()
+	ctx.MulCoeffs(a0, a1, a0a1)
+	// a1*a2
+	a1a2 := ctx.NewPoly()
+	ctx.MulCoeffs(a1, a2, a1a2)
+	// a0*a1+a1*a2
+	a0112 := ctx.NewPoly()
+	ctx.Add(a0a1, a1a2, a0112)
+	// a2*a3
+	a2a3 := ctx.NewPoly()
+	ctx.MulCoeffs(a2, a3, a2a3)
+	// a0*a3
+	a0a3 := ctx.NewPoly()
+	ctx.MulCoeffs(a0, a3, a0a3)
+	// a2*a3+a0*a3
+	a2303 := ctx.NewPoly()
+	ctx.Add(a2a3, a0a3, a2303)
+	// a branch
+	a := ctx.NewPoly()
+	ctx.Add(a0112, a2303, a)
+	// b0*b1
+	b0b1 := ctx.NewPoly()
+	ctx.MulCoeffs(b0, b1, b0b1)
+	// b1*b2
+	b1b2 := ctx.NewPoly()
+	ctx.MulCoeffs(b1, b2, b1b2)
+	// b0*b1+b1*b2
+	b0112 := ctx.NewPoly()
+	ctx.Add(b0b1, b1b2, b0112)
+	// b2*b3
+	b2b3 := ctx.NewPoly()
+	ctx.MulCoeffs(b2, b3, b2b3)
+	// b0*b3
+	b0b3 := ctx.NewPoly()
+	ctx.MulCoeffs(b0, b3, b0b3)
+	// b2*b3+b0*b3
+	b2303 := ctx.NewPoly()
+	ctx.Add(b2b3, b0b3, b2303)
+	// b branch
+	b := ctx.NewPoly()
+	ctx.Add(b0112, b2303, b)
+	// Final result
+	locRes := ctx.NewPoly()
+	ctx.MulCoeffs(a, b, locRes)
+
+	// Test for equality
+
+	log.Lvl2("Going to test for equality. Should be the same")
+	if !utils.Equalslice(remData, locRes.Coeffs[0]) {
+		t.Fatal("Original result and retrieved result are not the same")
+	}
+	log.Lvl2("Original result and retrieved result are the same")
+}
+
+func TestBigCircuitManyTimes(t *testing.T) {
+	var nTest int = 1000000
+
+	for i := 0; i < nTest; i++ {
+		t.Run(fmt.Sprintf("TestCase %d", i), TestBigCircuit)
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
+	"time"
 )
 
 // Delegates the sum of the ciphertexts indexed by their IDs to the owner of the second one.
@@ -39,14 +40,20 @@ func (service *Service) DelegateSumCiphers(sessionID messages.SessionID, cipherI
 	}
 
 	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the owner. Waiting to receive reply...")
+	log.Lvl3(service.ServerIdentity(), "Forwarded request to the owner. Waiting to receive reply:", reqID)
 	service.sumRepLock.RLock()
 	replyChan := service.sumReplies[reqID]
 	service.sumRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+	var reply *messages.SumReply
+	select {
+	case reply = <-replyChan:
+		log.Lvl3(service.ServerIdentity(), "Got reply:", reqID)
+	case <-time.After(3 * time.Second):
+		log.Fatal(service.ServerIdentity(), "Did not receive reply:", reqID)
+	}
 
 	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it:", reqID)
 	service.sumRepLock.Lock()
 	close(replyChan)
 	delete(service.sumReplies, reqID)
@@ -87,12 +94,12 @@ func (service *Service) processSumRequest(msg *network.Envelope) {
 	reply.Valid = (err == nil)
 
 	// Send reply to server
-	log.Lvl2(service.ServerIdentity(), "Sending positive reply to server")
+	log.Lvl2(service.ServerIdentity(), "Sending positive reply to server:", req.ReqID)
 	err = service.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
 		log.Error("Could not reply (positively) to server:", err)
 	}
-	log.Lvl4(service.ServerIdentity(), "Sent positive reply to server")
+	log.Lvl4(service.ServerIdentity(), "Sent positive reply to server:", req.ReqID)
 
 	return
 }
@@ -147,7 +154,7 @@ func (service *Service) processSumReply(msg *network.Envelope) {
 	service.sumRepLock.RLock()
 	service.sumReplies[reply.ReqID] <- reply
 	service.sumRepLock.RUnlock()
-	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
+	log.Lvl4(service.ServerIdentity(), "Sent reply through channel:", reply.ReqID)
 
 	return
 }

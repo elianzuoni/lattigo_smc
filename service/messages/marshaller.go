@@ -1227,7 +1227,7 @@ func (req *SwitchRequest) MarshalBinary() (data []byte, err error) {
 	}
 	pkLen := len(pkData)
 
-	// Build data as [<ridLen>, <sidLen>, <cidLenLen>, <pkLen>, <RequestID>, <SessionID>, <CipherID>, <PublicKey>]
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <pkLen>, <RequestID>, <SessionID>, <CipherID>, <PublicKey>]
 	data = make([]byte, 4*8+ridLen+sidLen+cidLen+pkLen)
 	ptr := 0 // Used to index data
 	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
@@ -1262,19 +1262,19 @@ func (req *SwitchRequest) UnmarshalBinary(data []byte) (err error) {
 	pkLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
 	ptr += 8
 
-	// Read SessionID
-	if sidLen > 0 {
-		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
-		ptr += sidLen
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
 		if err != nil {
 			return
 		}
 	}
 
-	// Read RequestID
-	if ridLen > 0 {
-		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
-		ptr += ridLen
+	// Read SessionID
+	if sidLen > 0 {
+		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
 		if err != nil {
 			return
 		}
@@ -1312,7 +1312,7 @@ func (cfg *SwitchConfig) MarshalBinary() (data []byte, err error) {
 	}
 	sidLen := len(sidData)
 
-	// Marshal CipherID
+	// Marshal PublicKey
 	pkData, err := cfg.PublicKey.MarshalBinary()
 	if err != nil {
 		return
@@ -1355,7 +1355,7 @@ func (cfg *SwitchConfig) UnmarshalBinary(data []byte) (err error) {
 	ctLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
 	ptr += 8
 
-	// Read fields
+	// Read SessionID
 	if sidLen > 0 {
 		err = cfg.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
 		ptr += sidLen
@@ -1363,6 +1363,8 @@ func (cfg *SwitchConfig) UnmarshalBinary(data []byte) (err error) {
 			return
 		}
 	}
+
+	// Read PublicKey
 	if pkLen > 0 {
 		if cfg.PublicKey == nil {
 			cfg.PublicKey = &bfv.PublicKey{}
@@ -1373,6 +1375,8 @@ func (cfg *SwitchConfig) UnmarshalBinary(data []byte) (err error) {
 			return
 		}
 	}
+
+	// Read Ciphertext
 	if ctLen > 0 {
 		if cfg.Ciphertext == nil {
 			cfg.Ciphertext = &bfv.Ciphertext{}
@@ -1817,6 +1821,135 @@ func (cfg *S2EConfig) UnmarshalBinary(data []byte) (err error) {
 	cfg.Seed = make([]byte, seedLen)
 	copy(cfg.Seed, data[ptr:ptr+seedLen])
 	ptr += seedLen
+
+	return
+}
+
+// Circuit
+
+func (query *CircuitQuery) MarshalBinary() (data []byte, err error) {
+	// Marshal SessionID
+	sidData, err := query.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal Desc
+	descData := []byte(query.Desc)
+	descLen := len(descData)
+
+	// Marshal PublicKey
+	pkData, err := query.PublicKey.MarshalBinary()
+	if err != nil {
+		return
+	}
+	pkLen := len(pkData)
+
+	// Build data as [<sidLen>, <descLen>, <pkLen>, <SessionID>, <Name>, <PublicKey>]
+	data = make([]byte, 3*8+sidLen+descLen+pkLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(descLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(pkLen))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+descLen], descData)
+	ptr += descLen
+	copy(data[ptr:ptr+pkLen], pkData)
+	ptr += pkLen
+
+	return
+}
+func (query *CircuitQuery) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	descLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	pkLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = query.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Name
+	if descLen > 0 {
+		query.Desc = string(data[ptr : ptr+descLen])
+		ptr += descLen
+	}
+
+	// Read PublicKey
+	if pkLen > 0 {
+		if query.PublicKey == nil {
+			query.PublicKey = &bfv.PublicKey{}
+		}
+		err = query.PublicKey.UnmarshalBinary(data[ptr : ptr+pkLen])
+		ptr += pkLen
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (resp *CircuitResponse) MarshalBinary() (data []byte, err error) {
+	// Marshal Result
+	resData := make([]byte, 0)
+	if resp.Result != nil {
+		resData, err = resp.Result.MarshalBinary()
+		if err != nil {
+			return
+		}
+	}
+	resLen := len(resData)
+
+	// Build data as [<resLen>, <Result>, <Valid>]
+	data = make([]byte, 8+resLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(resLen))
+	ptr += 8
+	copy(data[ptr:ptr+resLen], resData)
+	ptr += resLen
+	data[ptr] = marshBool(resp.Valid)
+	ptr += 1
+
+	return
+}
+func (resp *CircuitResponse) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	resLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read Result
+	if resLen > 0 {
+		if resp.Result == nil {
+			resp.Result = &bfv.Ciphertext{}
+		}
+		err = resp.Result.UnmarshalBinary(data[ptr : ptr+resLen])
+		ptr += resLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	resp.Valid = unmarshBool(data[ptr])
+	ptr += 1
 
 	return
 }

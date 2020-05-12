@@ -360,9 +360,9 @@ func (c *Client) SendStoreQuery(name string, data []uint64) (messages.CipherID, 
 	return resp.CipherID, nil
 }
 
-// SendRetrieveQuery sends a query to retrieve the ciphertext indexed by cipherID, switched under the
+// SendSwitchQuery sends a query to retrieve the ciphertext indexed by cipherID, switched under the
 // client's own public key. The switched ciphertext is decrypted locally and returned in clear.
-func (c *Client) SendRetrieveQuery(cipherID messages.CipherID) ([]uint64, error) {
+func (c *Client) SendSwitchQuery(cipherID messages.CipherID) ([]uint64, error) {
 	log.Lvl1(c, "Called to send a retrieve query")
 
 	// Check that the client is bound
@@ -380,7 +380,7 @@ func (c *Client) SendRetrieveQuery(cipherID messages.CipherID) ([]uint64, error)
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
-		log.Error(c, "Retrieve query returned error:", err)
+		log.Error(c, "Switch query returned error:", err)
 		return nil, err
 	}
 	if !resp.Valid {
@@ -630,4 +630,42 @@ func (c *Client) SendSharesToEncQuery(sharesID messages.SharesID, seed []byte) (
 	log.Lvl2(c, "Shares-to-enc query was successful")
 
 	return resp.NewCipherID, nil
+}
+
+// SendCircuitQuery sends a query to evaluate the circuit described by desc.
+func (c *Client) SendCircuitQuery(desc string) ([]uint64, error) {
+	log.Lvl1(c, "Called to send a circuit query")
+
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return nil, err
+	}
+
+	// Craft query and prepare response
+	query := &messages.CircuitQuery{c.sessionID, desc, c.pk}
+	resp := &messages.CircuitResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "Circuit query returned error:", err)
+		return nil, err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid. Service could not evaluate circuit.")
+		log.Error(c, err)
+		return nil, err
+	}
+
+	log.Lvl2(c, "Circuit query was successful")
+
+	// Recover clear-text vector
+	log.Lvl4(c, "Recovering clear-text vector")
+	plain := c.decryptor.DecryptNew(resp.Result)
+	data := c.encoder.DecodeUint(plain)
+
+	return data, nil
 }

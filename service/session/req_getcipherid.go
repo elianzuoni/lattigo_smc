@@ -4,6 +4,7 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
+	"time"
 )
 
 func (service *Service) GetRemoteCipherID(SessionID messages.SessionID, name string,
@@ -12,15 +13,15 @@ func (service *Service) GetRemoteCipherID(SessionID messages.SessionID, name str
 
 	// Create GetCipherIDRequest with its ID
 	reqID := messages.NewGetCipherIDRequestID()
-	service.getCipherIDRepLock.Lock()
 	req := &messages.GetCipherIDRequest{reqID, SessionID, name}
-	service.getCipherIDRepLock.Unlock()
 
 	// Create channel before sending request to owner.
+	service.getCipherIDRepLock.Lock()
 	service.getCipherIDReplies[reqID] = make(chan *messages.GetCipherIDReply)
+	service.getCipherIDRepLock.Unlock()
 
 	// Send request to owner
-	log.Lvl2(service.ServerIdentity(), "Sending GetCipherIDRequest to ciphertext owner")
+	log.Lvl2(service.ServerIdentity(), "Sending GetCipherIDRequest to ciphertext owner:", reqID)
 	err := service.SendRaw(owner, req)
 	if err != nil {
 		log.Error("Couldn't send GetCipherIDRequest to owner:", err)
@@ -28,20 +29,27 @@ func (service *Service) GetRemoteCipherID(SessionID messages.SessionID, name str
 	}
 
 	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Sent GetCipherIDRequest to root. Waiting on channel to receive reply...")
+	log.Lvl3(service.ServerIdentity(), "Sent GetCipherIDRequest to root. Waiting on channel to receive reply:", reqID)
 	service.getCipherIDRepLock.RLock()
 	replyChan := service.getCipherIDReplies[reqID]
 	service.getCipherIDRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+	// Timeout of 3 seconds
+	var reply *messages.GetCipherIDReply
+	select {
+	case reply = <-replyChan:
+		log.Lvl3(service.ServerIdentity(), "Got reply:", reqID)
+	case <-time.After(3 * time.Second):
+		log.Fatal(service.ServerIdentity(), "Did not receive reply:", reqID)
+	}
 
 	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it:", reqID)
 	service.getCipherIDRepLock.Lock()
 	close(replyChan)
 	delete(service.getCipherIDReplies, reqID)
 	service.getCipherIDRepLock.Unlock()
 
-	log.Lvl4(service.ServerIdentity(), "Closed channel, returning")
+	log.Lvl3(service.ServerIdentity(), "Closed channel, returning")
 
 	return reply.CipherID, reply.Valid
 }
@@ -49,7 +57,7 @@ func (service *Service) GetRemoteCipherID(SessionID messages.SessionID, name str
 func (service *Service) processGetCipherIDRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.GetCipherIDRequest)
 
-	log.Lvl1(service.ServerIdentity(), "Owner. Received GetCipherIDRequest.")
+	log.Lvl1(service.ServerIdentity(), "Owner. Received GetCipherIDRequest:", req.ReqID)
 
 	// Start by declaring reply with minimal fields.
 	reply := &messages.GetCipherIDReply{req.ReqID, messages.NilCipherID, false}
@@ -83,12 +91,12 @@ func (service *Service) processGetCipherIDRequest(msg *network.Envelope) {
 	reply.Valid = true
 
 	// Send reply to server
-	log.Lvl2(service.ServerIdentity(), "Sending reply to server")
+	log.Lvl2(service.ServerIdentity(), "Sending reply to server:", req.ReqID)
 	err := service.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
 		log.Error("Could not reply to server:", err)
 	}
-	log.Lvl4(service.ServerIdentity(), "Sent positive reply to server")
+	log.Lvl3(service.ServerIdentity(), "Sent positive reply to server:", req.ReqID)
 
 	return
 }
@@ -102,9 +110,15 @@ func (service *Service) processGetCipherIDReply(msg *network.Envelope) {
 
 	// Simply send reply through channel
 	service.getCipherIDRepLock.RLock()
-	service.getCipherIDReplies[reply.ReqID] <- reply
+	replyChan, ok := service.getCipherIDReplies[reply.ReqID]
 	service.getCipherIDRepLock.RUnlock()
-	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
+
+	if !ok {
+		log.Fatal("Reply channel does not exist:", reply.ReqID)
+	}
+	replyChan <- reply
+
+	log.Lvl3(service.ServerIdentity(), "Sent reply through channel:", reply.ReqID)
 
 	return
 }

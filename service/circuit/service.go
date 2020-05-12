@@ -81,8 +81,8 @@ func registerClientQueryHandlers(service *Service) error {
 	if err := service.RegisterHandler(service.HandleMultiplyQuery); err != nil {
 		return errors.New("Couldn't register HandleMultiplyQuery: " + err.Error())
 	}
-	if err := service.RegisterHandler(service.HandleRetrieveQuery); err != nil {
-		return errors.New("Couldn't register HandleRetrieveQuery: " + err.Error())
+	if err := service.RegisterHandler(service.HandleSwitchQuery); err != nil {
+		return errors.New("Couldn't register HandleSwitchQuery: " + err.Error())
 	}
 	if err := service.RegisterHandler(service.HandleRelinQuery); err != nil {
 		return errors.New("Couldn't register HandleRelinearizationquery: " + err.Error())
@@ -98,6 +98,9 @@ func registerClientQueryHandlers(service *Service) error {
 	}
 	if err := service.RegisterHandler(service.HandleSharesToEncQuery); err != nil {
 		return errors.New("Couldn't register HandleSharesToEncQuery: " + err.Error())
+	}
+	if err := service.RegisterHandler(service.HandleCircuitQuery); err != nil {
+		return errors.New("Couldn't register HandleCircuitQuery: " + err.Error())
 	}
 
 	return nil

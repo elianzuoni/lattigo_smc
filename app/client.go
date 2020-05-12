@@ -113,7 +113,7 @@ func runLattigo(c *cli.Context) {
 			log.Error("Incorrect ID1 :", err)
 			return
 		}
-		data, err := client.SendRetrieveQuery(&id)
+		data, err := client.SendSwitchQuery(&id)
 		if typeData == "string" {
 			log.Lvl1("Retrieved data at id ", id, " : ", string(data))
 

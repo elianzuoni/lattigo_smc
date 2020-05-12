@@ -12,6 +12,7 @@ import (
 	"go.dedis.ch/onet/v3/network"
 	"go.dedis.ch/protobuf"
 	uuid "gopkg.in/satori/go.uuid.v1"
+	"sync"
 )
 
 // MsgTypes contains the different message types.
@@ -310,7 +311,11 @@ type GenRotKeyResponse struct {
 
 type GetPubKeyRequestID uuid.UUID
 
+var getPubKeyRIDLock sync.Mutex
+
 func NewGetPubKeyRequestID() GetPubKeyRequestID {
+	getPubKeyRIDLock.Lock()
+	defer getPubKeyRIDLock.Unlock()
 	return GetPubKeyRequestID(uuid.NewV1())
 }
 func (id GetPubKeyRequestID) String() string {
@@ -334,7 +339,11 @@ type GetPubKeyReply struct {
 
 type GetEvalKeyRequestID uuid.UUID
 
+var getEvalKeyRIDLock sync.Mutex
+
 func NewGetEvalKeyRequestID() GetEvalKeyRequestID {
+	getEvalKeyRIDLock.Lock()
+	defer getEvalKeyRIDLock.Unlock()
 	return GetEvalKeyRequestID(uuid.NewV1())
 }
 func (id GetEvalKeyRequestID) String() string {
@@ -357,7 +366,11 @@ type GetEvalKeyReply struct {
 
 type GetRotKeyRequestID uuid.UUID
 
+var getRotKeyRIDLock sync.Mutex
+
 func NewGetRotKeyRequestID() GetRotKeyRequestID {
+	getRotKeyRIDLock.Lock()
+	defer getRotKeyRIDLock.Unlock()
 	return GetRotKeyRequestID(uuid.NewV1())
 }
 func (id GetRotKeyRequestID) String() string {
@@ -397,7 +410,11 @@ type StoreResponse struct {
 
 type GetCipherRequestID uuid.UUID
 
+var getCipherRIDLock sync.Mutex
+
 func NewGetCipherRequestID() GetCipherRequestID {
+	getCipherRIDLock.Lock()
+	defer getCipherRIDLock.Unlock()
 	return GetCipherRequestID(uuid.NewV1())
 }
 func (id GetCipherRequestID) String() string {
@@ -421,7 +438,11 @@ type GetCipherReply struct {
 
 type GetCipherIDRequestID uuid.UUID
 
+var getCipherIDRIDLock sync.Mutex
+
 func NewGetCipherIDRequestID() GetCipherIDRequestID {
+	getCipherIDRIDLock.Lock()
+	defer getCipherIDRIDLock.Unlock()
 	return GetCipherIDRequestID(uuid.NewV1())
 }
 func (id GetCipherIDRequestID) String() string {
@@ -452,7 +473,11 @@ type SwitchQuery struct {
 
 type SwitchRequestID uuid.UUID
 
+var switchRIDLock sync.Mutex
+
 func NewSwitchRequestID() SwitchRequestID {
+	switchRIDLock.Lock()
+	defer switchRIDLock.Unlock()
 	return SwitchRequestID(uuid.NewV1())
 }
 func (id SwitchRequestID) String() string {
@@ -497,7 +522,11 @@ type SumQuery struct {
 
 type SumRequestID uuid.UUID
 
+var sumRIDLock sync.Mutex
+
 func NewSumRequestID() SumRequestID {
+	sumRIDLock.Lock()
+	defer sumRIDLock.Unlock()
 	return SumRequestID(uuid.NewV1())
 }
 func (id SumRequestID) String() string {
@@ -536,7 +565,11 @@ type MultiplyQuery struct {
 
 type MultiplyRequestID uuid.UUID
 
+var mulRIDLock sync.Mutex
+
 func NewMultiplyRequestID() MultiplyRequestID {
+	mulRIDLock.Lock()
+	defer mulRIDLock.Unlock()
 	return MultiplyRequestID(uuid.NewV1())
 }
 func (id MultiplyRequestID) String() string {
@@ -575,7 +608,11 @@ type RelinQuery struct {
 
 type RelinRequestID uuid.UUID
 
+var relinRIDLock sync.Mutex
+
 func NewRelinRequestID() RelinRequestID {
+	relinRIDLock.Lock()
+	defer relinRIDLock.Unlock()
 	return RelinRequestID(uuid.NewV1())
 }
 func (id RelinRequestID) String() string {
@@ -613,7 +650,11 @@ type RefreshQuery struct {
 
 type RefreshRequestID uuid.UUID
 
+var refreshRIDLock sync.Mutex
+
 func NewRefreshRequestID() RefreshRequestID {
+	refreshRIDLock.Lock()
+	defer refreshRIDLock.Unlock()
 	return RefreshRequestID(uuid.NewV1())
 }
 func (id RefreshRequestID) String() string {
@@ -659,7 +700,11 @@ type RotationQuery struct {
 
 type RotationRequestID uuid.UUID
 
+var rotRIDLock sync.Mutex
+
 func NewRotationRequestID() RotationRequestID {
+	rotRIDLock.Lock()
+	defer rotRIDLock.Unlock()
 	return RotationRequestID(uuid.NewV1())
 }
 func (id RotationRequestID) String() string {
@@ -699,7 +744,11 @@ type EncToSharesQuery struct {
 
 type EncToSharesRequestID uuid.UUID
 
+var e2sRIDLock sync.Mutex
+
 func NewEncToSharesRequestID() EncToSharesRequestID {
+	e2sRIDLock.Lock()
+	defer e2sRIDLock.Unlock()
 	return EncToSharesRequestID(uuid.NewV1())
 }
 func (id EncToSharesRequestID) String() string {
@@ -743,7 +792,11 @@ type SharesToEncQuery struct {
 
 type SharesToEncRequestID uuid.UUID
 
+var s2eRIDLock sync.Mutex
+
 func NewSharesToEncRequestID() SharesToEncRequestID {
+	s2eRIDLock.Lock()
+	defer s2eRIDLock.Unlock()
 	return SharesToEncRequestID(uuid.NewV1())
 }
 func (id SharesToEncRequestID) String() string {
@@ -775,4 +828,18 @@ type SharesToEncReply struct {
 type SharesToEncResponse struct {
 	NewCipherID CipherID
 	Valid       bool
+}
+
+// Circuit
+
+type CircuitQuery struct {
+	SessionID SessionID
+
+	Desc      string         // RPN description of the circuit
+	PublicKey *bfv.PublicKey // The public key under which to switch the final result
+}
+
+type CircuitResponse struct {
+	Result *bfv.Ciphertext // The result, switched under the provided public key
+	Valid  bool
 }

@@ -10,6 +10,14 @@ import (
 	"lattigo-smc/service/messages"
 )
 
+// Handler for reception of SwitchQuery from client.
+func (service *Service) HandleSwitchQuery(query *messages.SwitchQuery) (network.Message, error) {
+	log.Lvl1(service.ServerIdentity(), "Received SwitchQuery for ciphertext:", query.CipherID)
+
+	switchedCipher, err := service.switchCipher(query.SessionID, query.PublicKey, query.CipherID)
+	return &messages.SwitchResponse{switchedCipher, err == nil}, err
+}
+
 // Delegates the public key switch of the ciphertext indexed by the ID to its owner.
 func (service *Service) DelegateSwitchCipher(sessionID messages.SessionID, cipherID messages.CipherID,
 	publicKey *bfv.PublicKey) (*bfv.Ciphertext, error) {
@@ -197,12 +205,4 @@ func (service *Service) processSwitchReply(msg *network.Envelope) {
 	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
 
 	return
-}
-
-// Legacy query
-func (service *Service) HandleRetrieveQuery(query *messages.SwitchQuery) (network.Message, error) {
-	log.Lvl1(service.ServerIdentity(), "Received SwitchQuery for ciphertext:", query.CipherID)
-
-	switchedCipher, err := service.switchCipher(query.SessionID, query.PublicKey, query.CipherID)
-	return &messages.SwitchResponse{switchedCipher, err == nil}, err
 }

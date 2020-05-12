@@ -13,7 +13,7 @@ import (
 
 // Retrieves a ciphertext from the database, given its id. Returns a boolean indicating success.
 func (s *Session) GetCiphertext(id messages.CipherID) (ct *bfv.Ciphertext, ok bool) {
-	log.Lvl4(s.service.ServerIdentity(), "Retrieving ciphertext")
+	log.Lvl3(s.service.ServerIdentity(), "Retrieving ciphertext")
 
 	if id == messages.NilCipherID {
 		log.Error(s.service.ServerIdentity(), "Queried on NilCipherID")
@@ -29,7 +29,7 @@ func (s *Session) GetCiphertext(id messages.CipherID) (ct *bfv.Ciphertext, ok bo
 
 	// If present, return (success)
 	if ok {
-		log.Lvl4(s.service.ServerIdentity(), "Found the ciphertext locally")
+		log.Lvl3(s.service.ServerIdentity(), "Found the ciphertext locally")
 		return
 	}
 
@@ -40,7 +40,7 @@ func (s *Session) GetCiphertext(id messages.CipherID) (ct *bfv.Ciphertext, ok bo
 	}
 
 	// Else, send a request to the owner
-	log.Lvl4(s.service.ServerIdentity(), "Ciphertext is remote")
+	log.Lvl3(s.service.ServerIdentity(), "Ciphertext is remote, owner is", owner)
 	ct, ok = s.service.GetRemoteCiphertext(s.SessionID, id)
 	// Cache the ciphertext
 	if ok {
@@ -129,7 +129,7 @@ func (s *Session) StoreCipherID(name string, id messages.CipherID) {
 
 // Retrieves an additive share from the database, given its id. Returns a boolean indicating success.
 func (s *Session) GetAdditiveShare(id messages.SharesID) (share *dbfv.AdditiveShare, ok bool) {
-	log.Lvl4("Retrieving additive share")
+	log.Lvl3("Retrieving additive share")
 	s.sharesLock.RLock()
 	share, ok = s.shares[id]
 	s.sharesLock.RUnlock()
