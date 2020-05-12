@@ -1,7 +1,7 @@
 // This file contains the behaviour of the client, defined by the struct Client and its methods, each of which
 // sends a specific query to the Service (more precisely, always to the same server in the system, specified
 // at construct-time). The methods optionally return an error, if something goes wrong server-side, but they are
-// guaranteed to return within a certain timeout. // TODO: implement timeout in HandleQuery server-side
+// guaranteed to return within a certain timeout.
 
 package service
 

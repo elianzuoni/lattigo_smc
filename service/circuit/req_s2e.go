@@ -139,7 +139,7 @@ func (service *Service) reencryptShares(reqID string, sessionID messages.Session
 	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
 	if tree == nil {
 		err := errors.New("Could not create tree")
-		log.Error(service.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
 		return messages.NilCipherID, err
 	}
 	tni := service.NewTreeNodeInstance(tree, tree.Root, SharesToEncProtocolName)

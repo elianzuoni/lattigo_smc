@@ -189,7 +189,7 @@ func (id SessionID) String() string {
 // CipherID
 
 type CipherID struct {
-	Owner string // TODO: this is an ugly workaround
+	Owner string
 	ID    uuid.UUID
 }
 

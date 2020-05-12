@@ -212,7 +212,6 @@ func (service *Service) newProtoRKG(tn *onet.TreeNodeInstance, cfg *onet.Generic
 	// Finally, initialise the rest of the fields
 	log.Lvl3(service.ServerIdentity(), "Initialising protocol")
 	// No need to lock rotation key here. The root (which is the only one that uses it) has already locked it.
-	// TODO IMPORTANT: modify this if allow rotation key generation at non-root
 	err = rkgp.Init(s.Params, *s.skShard, s.rotationKey, bfv.Rotation(config.RotIdx), config.K, crp)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)

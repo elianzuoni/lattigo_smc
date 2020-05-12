@@ -99,7 +99,7 @@ func (service *Service) processSwitchRequest(msg *network.Envelope) {
 	if err != nil {
 		log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Could not switch the ciphertext:", err)
 	} else {
-		log.Lvl3(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Successfully re-encrypted the shares")
+		log.Lvl3(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Successfully switched the ciphertext")
 	}
 
 	// Set fields in reply
@@ -148,7 +148,7 @@ func (service *Service) switchCipher(reqID string, sessionID messages.SessionID,
 	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
 	if tree == nil {
 		err := errors.New("Could not create tree")
-		log.Error(service.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
 		return nil, err
 	}
 	tni := service.NewTreeNodeInstance(tree, tree.Root, protocols.CollectivePublicKeySwitchingProtocolName)
