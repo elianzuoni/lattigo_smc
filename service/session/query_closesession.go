@@ -14,55 +14,6 @@ import (
 func (service *Service) HandleCloseSessionQuery(query *messages.CloseSessionQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Received CloseSessionQuery")
 
-	/*
-		// Extract Session, if existent
-		s, ok := service.sessions.GetSession(query.SessionID)
-		if !ok {
-			err := errors.New("Requested session does not exist")
-			log.Error(service.ServerIdentity(), err)
-			return nil, err
-		}
-
-		// Create CloseSessionRequest with its ID
-		reqID := messages.NewCloseSessionRequestID()
-		req := &messages.CloseSessionRequest{reqID, query.SessionID, query}
-
-		// Create channel before sending request to root.
-		service.closeSessionRepLock.Lock()
-		service.closeSessionReplies[reqID] = make(chan *messages.CloseSessionReply)
-		service.closeSessionRepLock.Unlock()
-
-		// Send request to root
-		log.Lvl2(service.ServerIdentity(), "Sending CloseSessionRequest to root")
-		err := service.SendRaw(s.Root, req)
-		if err != nil {
-			err = errors.New("Couldn't send CloseSessionRequest to root: " + err.Error())
-			log.Error(err)
-			return nil, err
-		}
-
-		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root")
-
-		// Receive reply from channel
-		log.Lvl3(service.ServerIdentity(), "Sent CloseSessionRequest to root. Waiting on channel to receive reply...")
-		service.closeSessionRepLock.RLock()
-		replyChan := service.closeSessionReplies[reqID]
-		service.closeSessionRepLock.RUnlock()
-		reply := <-replyChan // TODO: timeout if root cannot send reply
-
-		// Close channel
-		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-		service.closeSessionRepLock.Lock()
-		close(replyChan)
-		delete(service.closeSessionReplies, reqID)
-		service.closeSessionRepLock.Unlock()
-
-		log.Lvl4(service.ServerIdentity(), "Closed channel, returning")
-
-		return &messages.CloseSessionResponse{reply.Valid}, nil
-
-	*/
-
 	// Launch the CloseSession protocol, to delete the Session at all nodes
 	err := service.closeSession(query.SessionID)
 	if err != nil {
@@ -74,50 +25,14 @@ func (service *Service) HandleCloseSessionQuery(query *messages.CloseSessionQuer
 	return &messages.CloseSessionResponse{true}, nil
 }
 
-/*
-func (service *Service) processCloseSessionRequest(msg *network.Envelope) {
-	req := (msg.Msg).(*messages.CloseSessionRequest)
-
-	log.Lvl1(service.ServerIdentity(), "Root. Received CloseSessionRequest.")
-
-	// Start by declaring reply with minimal fields.
-	reply := &messages.CloseSessionReply{ReqID: req.ReqID, Valid: false}
-
-	// Launch the CloseSession protocol, to delete the Session at all nodes
-	err := service.closeSession(req.Query.SessionID)
-	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not close session:", err)
-		err = service.SendRaw(msg.ServerIdentity, reply)
-		if err != nil {
-			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
-		}
-
-		return
-	}
-
-	// Send reply to server
-	reply.Valid = true
-	log.Lvl2(service.ServerIdentity(), "Sending reply to server")
-	err = service.SendRaw(msg.ServerIdentity, reply)
-	if err != nil {
-		log.Error("Could not reply to server:", err)
-		return
-	}
-	log.Lvl4(service.ServerIdentity(), "Sent positive reply to server")
-
-	return
-}
-
-*/
-
 func (service *Service) closeSession(SessionID messages.SessionID) error {
-	log.Lvl2(service.ServerIdentity(), "Closing a session")
+	log.Lvl2(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Closing a session")
 
 	// Extract session
 	s, ok := service.sessions.GetSession(SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
-		log.Error(service.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", err)
 		return err
 	}
 
@@ -125,7 +40,7 @@ func (service *Service) closeSession(SessionID messages.SessionID) error {
 	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
 	if tree == nil {
 		err := errors.New("Could not create tree")
-		log.Error(service.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", err)
 		return err
 	}
 	tni := service.NewTreeNodeInstance(tree, tree.Root, CloseSessionProtocolName)
@@ -139,24 +54,24 @@ func (service *Service) closeSession(SessionID messages.SessionID) error {
 	}
 
 	// Instantiate protocol
-	log.Lvl3(service.ServerIdentity(), "Instantiating close-session protocol")
+	log.Lvl3(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Instantiating close-session protocol")
 	protocol, err := service.NewProtocol(tni, &onet.GenericConfig{data})
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not instantiate create-session protocol", err)
+		log.Error(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Could not instantiate create-session protocol", err)
 		return err
 	}
 	// Register protocol instance
-	log.Lvl3(service.ServerIdentity(), "Registering close-session protocol instance")
+	log.Lvl3(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Registering close-session protocol instance")
 	err = service.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not register protocol instance:", err)
+		log.Error(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Could not register protocol instance:", err)
 		return err
 	}
 
 	csp := protocol.(*protocols.CloseSessionProtocol)
 
 	// Start the protocol
-	log.Lvl2(service.ServerIdentity(), "Starting close-session protocol")
+	log.Lvl3(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Starting close-session protocol")
 	err = csp.Start()
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not start enc-to-shares protocol:", err)
@@ -170,30 +85,11 @@ func (service *Service) closeSession(SessionID messages.SessionID) error {
 	}
 
 	// Wait for termination of protocol
-	log.Lvl2(csp.ServerIdentity(), "Waiting for close-session protocol to terminate...")
+	log.Lvl2(csp.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Waiting for close-session protocol to terminate...")
 	csp.WaitDone()
 	// At this point, the session has been closed
 
-	log.Lvl2(service.ServerIdentity(), "Closed Session!")
+	log.Lvl2(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Closed Session!")
 
 	return nil
 }
-
-/*
-// This method is executed at the server when receiving the root's CloseSessionReply.
-// It simply sends the reply through the channel.
-func (service *Service) processCloseSessionReply(msg *network.Envelope) {
-	reply := (msg.Msg).(*messages.CloseSessionReply)
-
-	log.Lvl1(service.ServerIdentity(), "Received CloseSessionReply:", reply.ReqID)
-
-	// Simply send reply through channel
-	service.closeSessionRepLock.RLock()
-	service.closeSessionReplies[reply.ReqID] <- reply
-	service.closeSessionRepLock.RUnlock()
-	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
-
-	return
-}
-
-*/

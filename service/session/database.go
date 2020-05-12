@@ -13,10 +13,10 @@ import (
 
 // Retrieves a ciphertext from the database, given its id. Returns a boolean indicating success.
 func (s *Session) GetCiphertext(id messages.CipherID) (ct *bfv.Ciphertext, ok bool) {
-	log.Lvl3(s.service.ServerIdentity(), "Retrieving ciphertext")
+	log.Lvl2(s.service.ServerIdentity(), "(id =", id, ")\n", "Retrieving ciphertext")
 
 	if id == messages.NilCipherID {
-		log.Error(s.service.ServerIdentity(), "Queried on NilCipherID")
+		log.Error(s.service.ServerIdentity(), "(id =", id, ")\n", "Queried on NilCipherID")
 		return nil, false
 	}
 
@@ -29,18 +29,18 @@ func (s *Session) GetCiphertext(id messages.CipherID) (ct *bfv.Ciphertext, ok bo
 
 	// If present, return (success)
 	if ok {
-		log.Lvl3(s.service.ServerIdentity(), "Found the ciphertext locally")
+		log.Lvl2(s.service.ServerIdentity(), "(id =", id, ")\n", "Found the ciphertext locally")
 		return
 	}
 
 	// If not present, and we are the owner, return (failure).
 	if owner.Equal(s.service.ServerIdentity()) {
-		log.Error(s.service.ServerIdentity(), "We are owner of ciphertext, but it is not present")
+		log.Error(s.service.ServerIdentity(), "(id =", id, ")\n", "We are owner of ciphertext, but it is not present")
 		return
 	}
 
 	// Else, send a request to the owner
-	log.Lvl3(s.service.ServerIdentity(), "Ciphertext is remote, owner is", owner)
+	log.Lvl2(s.service.ServerIdentity(), "(id =", id, ")\n", "Ciphertext is remote, owner is", owner)
 	ct, ok = s.service.GetRemoteCiphertext(s.SessionID, id)
 	// Cache the ciphertext
 	if ok {
@@ -68,23 +68,23 @@ func (s *Session) StoreCiphertextNewID(ct *bfv.Ciphertext) messages.CipherID {
 
 // Retrieves a CipherID, whether local or remote, given its full name
 func (s *Session) GetCipherID(fullName string) (messages.CipherID, bool) {
-	log.Lvl3(s.service.ServerIdentity(), "Retrieving CipherID")
+	log.Lvl2(s.service.ServerIdentity(), "(fullName =", fullName, ")\n", "Retrieving CipherID")
 
 	// Parse full name
 	name, owner, err := s.parseVarFullName(fullName)
 	if err != nil {
-		log.Error(s.service.ServerIdentity(), "Could not parse full variable name:", err)
+		log.Error(s.service.ServerIdentity(), "(fullName =", fullName, ")\n", "Could not parse full variable name:", err)
 		return messages.NilCipherID, false
 	}
 
 	// If we are owner, retrieve it locally
 	if owner.Equal(s.service.ServerIdentity()) {
-		log.Lvl3(s.service.ServerIdentity(), "CipherID is local")
+		log.Lvl2(s.service.ServerIdentity(), "(fullName =", fullName, ")\n", "CipherID is local")
 		return s.GetLocalCipherID(name)
 	}
 
 	// Else, send a request to the owner
-	log.Lvl3(s.service.ServerIdentity(), "CipherID is remote")
+	log.Lvl2(s.service.ServerIdentity(), "(fullName =", fullName, ")\n", "CipherID is remote")
 	return s.service.GetRemoteCipherID(s.SessionID, name, owner)
 }
 
@@ -129,7 +129,7 @@ func (s *Session) StoreCipherID(name string, id messages.CipherID) {
 
 // Retrieves an additive share from the database, given its id. Returns a boolean indicating success.
 func (s *Session) GetAdditiveShare(id messages.SharesID) (share *dbfv.AdditiveShare, ok bool) {
-	log.Lvl3("Retrieving additive share")
+	log.Lvl2(s.service.ServerIdentity(), "(id =", id, ")\n", "Retrieving additive share")
 	s.sharesLock.RLock()
 	share, ok = s.shares[id]
 	s.sharesLock.RUnlock()

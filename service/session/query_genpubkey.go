@@ -10,62 +10,7 @@ import (
 )
 
 func (service *Service) HandleGenPubKeyQuery(query *messages.GenPubKeyQuery) (network.Message, error) {
-	log.Lvl1(service.ServerIdentity(), "Received GenPubKeyQuery")
-
-	/*
-		// Extract Session, if existent
-		s, ok := service.sessions.GetSession(query.SessionID)
-		if !ok {
-			err := errors.New("Requested session does not exist")
-			log.Error(service.ServerIdentity(), err)
-			return nil, err
-		}
-
-		// Create GenPubKeyRequest with its ID
-		reqID := messages.NewGenPubKeyRequestID()
-		req := &messages.GenPubKeyRequest{query.SessionID, reqID, query}
-
-		// Create channel before sending request to root.
-		service.genPubKeyRepLock.Lock()
-		service.genPubKeyReplies[reqID] = make(chan *messages.GenPubKeyReply)
-		service.genPubKeyRepLock.Unlock()
-
-		// Send request to root
-		log.Lvl2(service.ServerIdentity(), "Sending GenPubKeyRequest to root:", reqID)
-		err := service.SendRaw(s.Root, req)
-		if err != nil {
-			err = errors.New("Couldn't send GenPubKeyRequest to root: " + err.Error())
-			log.Error(err)
-			return nil, err
-		}
-
-		// Receive reply from channel
-		log.Lvl3(service.ServerIdentity(), "Forwarded request to the root. Waiting to receive reply...")
-		service.genPubKeyRepLock.RLock()
-		replyChan := service.genPubKeyReplies[reqID]
-		service.genPubKeyRepLock.RUnlock()
-		reply := <-replyChan // TODO: timeout if root cannot send reply
-
-		// Close channel
-		log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
-		service.genPubKeyRepLock.Lock()
-		close(replyChan)
-		delete(service.genPubKeyReplies, reqID)
-		service.genPubKeyRepLock.Unlock()
-
-		log.Lvl4(service.ServerIdentity(), "Closed channel")
-
-		if !reply.Valid {
-			err := errors.New("Received invalid reply: root couldn't generate public key")
-			log.Error(service.ServerIdentity(), err)
-			// Respond with the reply, not nil, err
-		} else {
-			log.Lvl4(service.ServerIdentity(), "Received valid reply from channel")
-		}
-
-		return &messages.GenPubKeyResponse{reply.MasterPublicKey, reply.Valid}, nil
-
-	*/
+	log.Lvl2(service.ServerIdentity(), "Received GenPubKeyQuery")
 
 	// Extract Session, if existent (actually, only check existence)
 	s, ok := service.sessions.GetSession(query.SessionID)
@@ -96,7 +41,7 @@ func (service *Service) HandleGenPubKeyQuery(query *messages.GenPubKeyQuery) (ne
 }
 
 func (service *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) error {
-	log.Lvl1(service.ServerIdentity(), "Root. Generating PublicKey")
+	log.Lvl2(service.ServerIdentity(), "Root. Generating PublicKey")
 
 	// Extract session
 	s, ok := service.sessions.GetSession(SessionID)
@@ -172,7 +117,7 @@ func (service *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) 
 
 	// Retrieve PublicKey
 	s.publicKey = ckgp.Pk
-	log.Lvl1(service.ServerIdentity(), "Generated PublicKey!")
+	log.Lvl2(service.ServerIdentity(), "Generated PublicKey!")
 
 	return nil
 }

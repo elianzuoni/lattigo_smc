@@ -16,10 +16,8 @@ type Session struct {
 	service *Service
 	Roster  *onet.Roster
 
-	// These variables are set upon construction.
-	Params  *bfv.Parameters
-	skShard *bfv.SecretKey
-	// These variables have to be set via an explicit Query.
+	Params           *bfv.Parameters
+	skShard          *bfv.SecretKey
 	pubKeyLock       sync.RWMutex
 	publicKey        *bfv.PublicKey
 	pubKeyOwnerLock  sync.RWMutex

@@ -7,6 +7,7 @@ import (
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/protocols"
 	"lattigo-smc/service/messages"
+	"time"
 )
 
 // Delegates the sharing of the ciphertext indexed by its ID to its owner.
@@ -23,10 +24,12 @@ func (service *Service) DelegateShareCipher(sessionID messages.SessionID, cipher
 	// Create EncToSharesRequest with its ID
 	reqID := messages.NewEncToSharesRequestID()
 	req := &messages.EncToSharesRequest{reqID, sessionID, cipherID}
+	var reply *messages.EncToSharesReply
 
 	// Create channel before sending request to root.
+	replyChan := make(chan *messages.EncToSharesReply, 1)
 	service.encToSharesRepLock.Lock()
-	service.encToSharesReplies[reqID] = make(chan *messages.EncToSharesReply)
+	service.encToSharesReplies[reqID] = replyChan
 	service.encToSharesRepLock.Unlock()
 
 	// Send request to owner of the ciphertext
@@ -34,34 +37,39 @@ func (service *Service) DelegateShareCipher(sessionID messages.SessionID, cipher
 	err := service.SendRaw(cipherID.GetServerIdentityOwner(), req)
 	if err != nil {
 		err = errors.New("Couldn't send EncToSharesRequest to owner: " + err.Error())
-		log.Error(err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
 		return messages.NilSharesID, err
 	}
 
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Forwarded request to the owner. Waiting to receive reply...")
-	service.encToSharesRepLock.RLock()
-	replyChan := service.encToSharesReplies[reqID]
-	service.encToSharesRepLock.RUnlock()
-	reply := <-replyChan // TODO: timeout if root cannot send reply
+	// Wait on channel with timeout
+	timeout := 1000 * time.Second
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Sent GetEncToSharesRequest to root. Waiting on channel to receive reply...")
+	select {
+	case reply = <-replyChan:
+		log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Got reply from channel")
+	case <-time.After(timeout):
+		err := errors.New("Did not receive reply from channel")
+		log.Fatal(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
+		return messages.NilSharesID, err // Just not to see the warning
+	}
 
 	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it.")
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Received reply from channel. Closing it.")
 	service.encToSharesRepLock.Lock()
 	close(replyChan)
 	delete(service.encToSharesReplies, reqID)
 	service.encToSharesRepLock.Unlock()
 
-	log.Lvl4(service.ServerIdentity(), "Closed channel")
+	log.Lvl4(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Closed channel")
 
 	if !reply.Valid {
 		err := errors.New("Received invalid reply: owner couldn't perform EncToShares")
-		log.Error(service.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
 
 		return messages.NilSharesID, err
 	}
 
-	log.Lvl4(service.ServerIdentity(), "Received valid reply from channel:", reply.SharesID)
+	log.Lvl4(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Received valid reply from channel:", reply.SharesID)
 
 	return reply.SharesID, nil
 }
@@ -70,15 +78,18 @@ func (service *Service) DelegateShareCipher(sessionID messages.SessionID, cipher
 func (service *Service) processEncToSharesRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.EncToSharesRequest)
 
-	log.Lvl1(service.ServerIdentity(), "Received EncToSharesRequest for ciphertext", req.CipherID)
+	log.Lvl1(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Received EncToSharesRequest for ciphertext", req.CipherID)
 
 	// Start by declaring reply with minimal fields.
 	reply := &messages.EncToSharesReply{SessionID: req.SessionID, ReqID: req.ReqID, Valid: false}
 
 	// Share the ciphertext
-	sharesID, err := service.shareCipher(req.SessionID, req.CipherID)
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Going to share the ciphertext")
+	sharesID, err := service.shareCipher(req.ReqID.String(), req.SessionID, req.CipherID)
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not share the ciphertext:", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Could not share the ciphertext:", err)
+	} else {
+		log.Lvl3(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Successfully shared the ciphertext")
 	}
 
 	// Set fields in reply
@@ -86,34 +97,37 @@ func (service *Service) processEncToSharesRequest(msg *network.Envelope) {
 	reply.SharesID = sharesID
 
 	// Send reply to server
-	log.Lvl2(service.ServerIdentity(), "Sending positive reply to server")
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Sending reply to server")
 	err = service.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
-		log.Error("Could not reply (positively) to server:", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Could not reply to server:", err)
+		return
 	}
-	log.Lvl4(service.ServerIdentity(), "Sent positive reply to server")
+	log.Lvl4(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Sent reply to server")
 
 	return
 }
 
 // Shares the ciphertext indexed by its ID.
-func (service *Service) shareCipher(sessionID messages.SessionID, cipherID messages.CipherID) (messages.SharesID, error) {
-	log.Lvl2(service.ServerIdentity(), "Sharing a ciphertext")
+// reqID is just a prefix for logs.
+func (service *Service) shareCipher(reqID string, sessionID messages.SessionID,
+	cipherID messages.CipherID) (messages.SharesID, error) {
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Share a ciphertext")
 
 	// Extract Session, if existent
 	s, ok := service.GetSessionService().GetSession(sessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
-		log.Error(service.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
 		return messages.NilSharesID, err
 	}
 
 	// Retrieve ciphertext
-	log.Lvl3(service.ServerIdentity(), "Retrieving ciphertext")
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Retrieving ciphertext")
 	ct, ok := s.GetCiphertext(cipherID)
 	if !ok {
 		err := errors.New("Ciphertext does not exist.")
-		log.Error(service.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
 		return messages.NilSharesID, err
 	}
 
@@ -123,58 +137,61 @@ func (service *Service) shareCipher(sessionID messages.SessionID, cipherID messa
 	// Perform the EncToSharesProtocol to share the ciphertext
 
 	// Create TreeNodeInstance as root
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Generating the Tree")
 	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
 	if tree == nil {
 		err := errors.New("Could not create tree")
-		log.Error(service.ServerIdentity(), err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
 		return messages.NilSharesID, err
 	}
 	tni := service.NewTreeNodeInstance(tree, tree.Root, EncToSharesProtocolName)
 
 	// Create configuration for the protocol instance
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Creating the configuration")
 	config := &messages.E2SConfig{sessionID, sharesID, ct}
 	data, err := config.MarshalBinary()
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not marshal protocol configuration:", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Could not marshal protocol configuration:", err)
 		return messages.NilSharesID, err
 	}
 
 	// Instantiate protocol
-	log.Lvl3(service.ServerIdentity(), "Instantiating enc-to-shares protocol")
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Instantiating enc-to-shares protocol")
 	protocol, err := service.NewProtocol(tni, &onet.GenericConfig{data})
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not instantiate enc-to-shares protocol", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Could not instantiate enc-to-shares protocol", err)
 		return messages.NilSharesID, err
 	}
 	// Register protocol instance
-	log.Lvl3(service.ServerIdentity(), "Registering enc-to-shares protocol instance")
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Registering enc-to-shares protocol instance")
 	err = service.RegisterProtocolInstance(protocol)
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not register protocol instance:", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Could not register protocol instance:", err)
 		return messages.NilSharesID, err
 	}
 
 	e2s := protocol.(*protocols.EncryptionToSharesProtocol)
 
 	// Start the protocol
-	log.Lvl2(service.ServerIdentity(), "Starting enc-to-shares protocol")
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Starting enc-to-shares protocol")
 	err = e2s.Start()
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not start enc-to-shares protocol:", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Could not start enc-to-shares protocol:", err)
 		return messages.NilSharesID, err
 	}
 	// Call dispatch (the main logic)
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Dispatching protocol")
 	err = e2s.Dispatch()
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not dispatch enc-to-shares protocol:", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Could not dispatch enc-to-shares protocol:", err)
 		return messages.NilSharesID, err
 	}
 
 	// Wait for termination of protocol
-	log.Lvl2(e2s.ServerIdentity(), "Waiting for enc-to-shares protocol to terminate...")
+	log.Lvl2(e2s.ServerIdentity(), "(ReqID =", reqID, ")\n", "Waiting for enc-to-shares protocol to terminate...")
 	e2s.WaitDone()
 
-	log.Lvl2(service.ServerIdentity(), "Shared ciphertext!")
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Shared ciphertext!")
 
 	// Done with the protocol
 
@@ -188,13 +205,22 @@ func (service *Service) shareCipher(sessionID messages.SessionID, cipherID messa
 func (service *Service) processEncToSharesReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*messages.EncToSharesReply)
 
-	log.Lvl1(service.ServerIdentity(), "Received EncToSharesReply")
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reply.ReqID, ")\n", "Received EncToSharesReply")
 
-	// Simply send reply through channel
+	// Get reply channel
 	service.encToSharesRepLock.RLock()
-	service.encToSharesReplies[reply.ReqID] <- reply
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reply.ReqID, ")\n", "Locked EncToSharesRepLock")
+	replyChan, ok := service.encToSharesReplies[reply.ReqID]
 	service.encToSharesRepLock.RUnlock()
-	log.Lvl4(service.ServerIdentity(), "Sent reply through channel")
+
+	// Send reply through channel
+	if !ok {
+		log.Fatal("Reply channel does not exist:", reply.ReqID)
+	}
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reply.ReqID, ")\n", "Sending reply through channel")
+	replyChan <- reply
+
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reply.ReqID, ")\n", "Sent reply through channel")
 
 	return
 }
@@ -203,6 +229,6 @@ func (service *Service) processEncToSharesReply(msg *network.Envelope) {
 func (service *Service) HandleEncToSharesQuery(query *messages.EncToSharesQuery) (network.Message, error) {
 	log.Lvl1(service.ServerIdentity(), "Received EncToSharesQuery for ciphertext:", query.CipherID)
 
-	sharesID, err := service.shareCipher(query.SessionID, query.CipherID)
+	sharesID, err := service.shareCipher("query", query.SessionID, query.CipherID)
 	return &messages.EncToSharesResponse{sharesID, err == nil}, err
 }

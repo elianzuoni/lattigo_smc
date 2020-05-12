@@ -205,7 +205,7 @@ func (id CipherID) GetServerIdentityOwner() *network.ServerIdentity {
 	return &owner
 }
 func (id CipherID) String() string {
-	return id.GetServerIdentityOwner().String() + ":" + id.ID.String()
+	return "[Owner = " + id.GetServerIdentityOwner().String() + ", ID = " + id.ID.String() + "]"
 }
 
 // SharesID

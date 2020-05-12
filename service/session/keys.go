@@ -12,7 +12,7 @@ func (s *Session) GetSecretKeyShare() *bfv.SecretKey {
 // Returns the public key for this session. If not found locally, it tries at the root.
 // Returns a boolean indicating success.
 func (s *Session) GetPublicKey() (*bfv.PublicKey, bool) {
-	log.Lvl4(s.service.ServerIdentity(), "Retrieving public key")
+	log.Lvl2(s.service.ServerIdentity(), "Retrieving public key")
 
 	// Try locally
 	s.pubKeyLock.RLock()
@@ -26,6 +26,7 @@ func (s *Session) GetPublicKey() (*bfv.PublicKey, bool) {
 
 	// If present, return (success).
 	if pk != nil {
+		log.Lvl2(s.service.ServerIdentity(), "Public key is local")
 		return s.publicKey, true
 	}
 
@@ -42,7 +43,7 @@ func (s *Session) GetPublicKey() (*bfv.PublicKey, bool) {
 	}
 
 	// Else, try at the owner
-	log.Lvl4(s.service.ServerIdentity(), "Retrieving remote public key")
+	log.Lvl2(s.service.ServerIdentity(), "Public key is remote")
 	pk, ok := s.service.GetRemotePublicKey(s.SessionID, owner)
 	// Cache the public key
 	if ok {
@@ -57,7 +58,7 @@ func (s *Session) GetPublicKey() (*bfv.PublicKey, bool) {
 // Returns the evaluation key for this session. If not found locally, it tries at the root.
 // Returns a boolean indicating success.
 func (s *Session) GetEvaluationKey() (*bfv.EvaluationKey, bool) {
-	log.Lvl4(s.service.ServerIdentity(), "Retrieving evaluation key")
+	log.Lvl2(s.service.ServerIdentity(), "Retrieving evaluation key")
 
 	// Try locally
 	s.evalKeyLock.RLock()
@@ -71,6 +72,7 @@ func (s *Session) GetEvaluationKey() (*bfv.EvaluationKey, bool) {
 
 	// If present, return (success).
 	if evk != nil {
+		log.Lvl2(s.service.ServerIdentity(), "Evaluation key is local")
 		return s.evalKey, true
 	}
 
@@ -87,7 +89,7 @@ func (s *Session) GetEvaluationKey() (*bfv.EvaluationKey, bool) {
 	}
 
 	// Else, try at the owner
-	log.Lvl4(s.service.ServerIdentity(), "Retrieving remote evaluation key")
+	log.Lvl2(s.service.ServerIdentity(), "Evaluation key is remote")
 	evk, ok := s.service.GetRemoteEvalKey(s.SessionID, owner)
 	// Cache the evaluation key
 	if ok {
@@ -102,7 +104,7 @@ func (s *Session) GetEvaluationKey() (*bfv.EvaluationKey, bool) {
 // Returns the rotation key for this session. If not found locally, it tries at the root.
 // Returns a boolean indicating success.
 func (s *Session) GetRotationKey(rotIdx int, k uint64) (*bfv.RotationKeys, bool) {
-	log.Lvl4(s.service.ServerIdentity(), "Retrieving rotation key")
+	log.Lvl2(s.service.ServerIdentity(), "(rotIdx =", rotIdx, ", k =", k, ")\n", "Retrieving rotation key")
 
 	// Reduce K modulo n/2 (each row is long n/2)
 	k &= (1 << (s.Params.LogN - 1)) - 1
@@ -125,12 +127,16 @@ func (s *Session) GetRotationKey(rotIdx int, k uint64) (*bfv.RotationKeys, bool)
 
 	// If present, return (success).
 	if rotk != nil {
+		log.Lvl2(s.service.ServerIdentity(), "(rotIdx =", rotIdx, ", k =", k, ")\n", "Rotation key is present locally")
+
 		if rotIdx == bfv.RotationRow && rotk.CanRotateRows() {
 			return s.rotationKey, true
 		}
 		if rotIdx == bfv.RotationLeft && rotk.CanRotateLeft(k, uint64(1<<s.Params.LogN)) {
 			return s.rotationKey, true
 		}
+
+		log.Lvl2(s.service.ServerIdentity(), "(rotIdx =", rotIdx, ", k =", k, ")\n", "Rotation key is present locally but unusable")
 	}
 
 	// Else, if owner not set, return (failure)
@@ -141,12 +147,12 @@ func (s *Session) GetRotationKey(rotIdx int, k uint64) (*bfv.RotationKeys, bool)
 
 	// Else, if we are the owner (we are supposed to have it) return (failure).
 	if s.service.ServerIdentity().Equal(owner) {
-		log.Lvl3(s.service.ServerIdentity(), "We are owner. Key not generated.")
+		log.Lvl2(s.service.ServerIdentity(), "We are owner. Key not generated.")
 		return nil, false
 	}
 
 	// Else, try at the owner
-	log.Lvl4(s.service.ServerIdentity(), "Retrieving remote rotation key")
+	log.Lvl2(s.service.ServerIdentity(), "Rotation key is remote")
 	rotk, ok := s.service.GetRemoteRotationKey(s.SessionID, rotIdx, k, owner)
 	// Cache the rotation key
 	if ok {

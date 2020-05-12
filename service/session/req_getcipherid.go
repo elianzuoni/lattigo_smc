@@ -9,41 +9,40 @@ import (
 
 func (service *Service) GetRemoteCipherID(SessionID messages.SessionID, name string,
 	owner *network.ServerIdentity) (messages.CipherID, bool) {
-	log.Lvl1(service.ServerIdentity(), "Retrieving remote CipherID")
+	log.Lvl1(service.ServerIdentity(), "(name =", name, ")\n", "Retrieving remote CipherID")
 
 	// Create GetCipherIDRequest with its ID
 	reqID := messages.NewGetCipherIDRequestID()
 	req := &messages.GetCipherIDRequest{reqID, SessionID, name}
+	var reply *messages.GetCipherIDReply
 
 	// Create channel before sending request to owner.
+	replyChan := make(chan *messages.GetCipherIDReply, 1)
 	service.getCipherIDRepLock.Lock()
-	service.getCipherIDReplies[reqID] = make(chan *messages.GetCipherIDReply)
+	service.getCipherIDReplies[reqID] = replyChan
 	service.getCipherIDRepLock.Unlock()
 
 	// Send request to owner
-	log.Lvl2(service.ServerIdentity(), "Sending GetCipherIDRequest to ciphertext owner:", reqID)
+	log.Lvl2(service.ServerIdentity(), "(name =", name, ")\n", "Sending GetCipherIDRequest to ciphertext owner:", reqID)
 	err := service.SendRaw(owner, req)
 	if err != nil {
-		log.Error("Couldn't send GetCipherIDRequest to owner:", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Couldn't send GetCipherIDRequest to owner:", err)
 		return messages.NilCipherID, false
 	}
 
-	// Receive reply from channel
-	log.Lvl3(service.ServerIdentity(), "Sent GetCipherIDRequest to root. Waiting on channel to receive reply:", reqID)
-	service.getCipherIDRepLock.RLock()
-	replyChan := service.getCipherIDReplies[reqID]
-	service.getCipherIDRepLock.RUnlock()
-	// Timeout of 3 seconds
-	var reply *messages.GetCipherIDReply
+	// Wait on channel with timeout
+	timeout := 1000 * time.Second
+	log.Lvl2(service.ServerIdentity(), "(name =", name, ", ReqID =", reqID, ")\n", "Sent GetCipherIDRequest to root. Waiting on channel to receive reply...")
 	select {
 	case reply = <-replyChan:
-		log.Lvl3(service.ServerIdentity(), "Got reply:", reqID)
-	case <-time.After(3 * time.Second):
-		log.Fatal(service.ServerIdentity(), "Did not receive reply:", reqID)
+		log.Lvl3(service.ServerIdentity(), "(name =", name, ", ReqID =", reqID, ")\n", "Got reply from channel")
+	case <-time.After(timeout):
+		log.Fatal(service.ServerIdentity(), "(name =", name, ", ReqID =", reqID, ")\n", "Did not receive reply from channel")
+		return messages.NilCipherID, false // Just not to see the warning
 	}
 
 	// Close channel
-	log.Lvl3(service.ServerIdentity(), "Received reply from channel. Closing it:", reqID)
+	log.Lvl3(service.ServerIdentity(), "(name =", name, ", ReqID =", reqID, ")\n", "Received reply from channel. Closing it")
 	service.getCipherIDRepLock.Lock()
 	close(replyChan)
 	delete(service.getCipherIDReplies, reqID)
@@ -57,7 +56,7 @@ func (service *Service) GetRemoteCipherID(SessionID messages.SessionID, name str
 func (service *Service) processGetCipherIDRequest(msg *network.Envelope) {
 	req := (msg.Msg).(*messages.GetCipherIDRequest)
 
-	log.Lvl1(service.ServerIdentity(), "Owner. Received GetCipherIDRequest:", req.ReqID)
+	log.Lvl1(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Owner. Received GetCipherIDRequest")
 
 	// Start by declaring reply with minimal fields.
 	reply := &messages.GetCipherIDReply{req.ReqID, messages.NilCipherID, false}
@@ -65,38 +64,40 @@ func (service *Service) processGetCipherIDRequest(msg *network.Envelope) {
 	// Retrieve session
 	s, ok := service.GetSession(req.SessionID)
 	if !ok {
-		log.Error(service.ServerIdentity(), "Requested session does not exist")
+		log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Requested session does not exist")
 		err := service.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
-			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Could not reply (negatively) to server:", err)
 		}
 
 		return
 	}
 
 	// Retrieve CipherID
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Retrieving local CipherID")
 	id, ok := s.GetLocalCipherID(req.Name)
 	if !ok {
-		log.Error(service.ServerIdentity(), "Requested CipherID does not exist")
+		log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Requested CipherID does not exist")
 		err := service.SendRaw(msg.ServerIdentity, reply)
 		if err != nil {
-			log.Error(service.ServerIdentity(), "Could not reply (negatively) to server:", err)
+			log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Could not reply (negatively) to server:", err)
 		}
 
 		return
 	}
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Retrieved local CipherID")
 
 	// Set fields in reply
 	reply.CipherID = id
 	reply.Valid = true
 
 	// Send reply to server
-	log.Lvl2(service.ServerIdentity(), "Sending reply to server:", req.ReqID)
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Sending reply to server:")
 	err := service.SendRaw(msg.ServerIdentity, reply)
 	if err != nil {
-		log.Error("Could not reply to server:", err)
+		log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Could not reply to server:", err)
 	}
-	log.Lvl3(service.ServerIdentity(), "Sent positive reply to server:", req.ReqID)
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Sent positive reply to server")
 
 	return
 }
@@ -106,19 +107,22 @@ func (service *Service) processGetCipherIDRequest(msg *network.Envelope) {
 func (service *Service) processGetCipherIDReply(msg *network.Envelope) {
 	reply := (msg.Msg).(*messages.GetCipherIDReply)
 
-	log.Lvl3(service.ServerIdentity(), "Received GetCipherIDReply:", reply.ReqID)
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reply.ReqID, ")\n", "Received GetCipherIDReply")
 
-	// Simply send reply through channel
+	// Get reply channel
 	service.getCipherIDRepLock.RLock()
+	log.Lvl3(service.ServerIdentity(), "(ReqID =", reply.ReqID, ")\n", "Locked getCipherIDRepLock")
 	replyChan, ok := service.getCipherIDReplies[reply.ReqID]
 	service.getCipherIDRepLock.RUnlock()
 
+	// Send reply through channel
 	if !ok {
 		log.Fatal("Reply channel does not exist:", reply.ReqID)
 	}
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reply.ReqID, ")\n", "Sending reply through channel")
 	replyChan <- reply
 
-	log.Lvl3(service.ServerIdentity(), "Sent reply through channel:", reply.ReqID)
+	log.Lvl2(service.ServerIdentity(), "(ReqID =", reply.ReqID, ")\n", "Sent reply through channel")
 
 	return
 }
