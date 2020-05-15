@@ -1,13 +1,13 @@
 package service
 
 import (
-	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/service/messages"
 	"lattigo-smc/utils"
+	"runtime"
 	"testing"
 )
 
@@ -1631,6 +1631,9 @@ func TestBigCircuitManyTimes(t *testing.T) {
 	var nTest int = 1000000
 
 	for i := 0; i < nTest; i++ {
-		t.Run(fmt.Sprintf("TestCase %d", i), TestBigCircuit)
+		TestBigCircuit(t)
+		if i%10 == 0 {
+			runtime.GC()
+		}
 	}
 }

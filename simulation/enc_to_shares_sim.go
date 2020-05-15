@@ -4,7 +4,7 @@
 // As in test, a random message and its encryption are generated (once per round): the protocol is run on
 // the encryption and the result is tested against the message.
 
-package main // TODO: why is this package main?
+package main
 
 import (
 	"errors"
