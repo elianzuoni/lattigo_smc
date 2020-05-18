@@ -51,11 +51,14 @@ func (service *Service) createSession(SessionID messages.SessionID, roster *onet
 
 	// Instantiate protocol
 	log.Lvl3(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Instantiating create-session protocol")
-	protocol, err := service.NewProtocol(tni, &onet.GenericConfig{data})
+	conf := onet.GenericConfig{data}
+	protocol, err := service.NewProtocol(tni, &conf)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not instantiate create-session protocol", err)
 		return err
 	}
+	tni.SetConfig(&conf)
+
 	// Register protocol instance
 	log.Lvl3(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Registering create-session protocol instance")
 	err = service.RegisterProtocolInstance(protocol)

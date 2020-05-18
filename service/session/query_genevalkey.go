@@ -74,12 +74,15 @@ func (service *Service) genEvalKey(SessionID messages.SessionID, Seed []byte) er
 	}
 
 	// Instantiate protocol
+	conf := onet.GenericConfig{data}
 	log.Lvl3(service.ServerIdentity(), "Instantiating EKG protocol")
-	protocol, err := service.NewProtocol(tni, &onet.GenericConfig{data})
+	protocol, err := service.NewProtocol(tni, &conf)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not instantiate EKG protocol", err)
 		return err
 	}
+	tni.SetConfig(&conf)
+
 	// Register protocol instance
 	log.Lvl3(service.ServerIdentity(), "Registering EKG protocol instance")
 	err = service.RegisterProtocolInstance(protocol)

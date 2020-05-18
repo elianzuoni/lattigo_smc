@@ -81,12 +81,15 @@ func (service *Service) genPublicKey(SessionID messages.SessionID, Seed []byte) 
 	}
 
 	// Instantiate protocol
+	conf := onet.GenericConfig{data}
 	log.Lvl3(service.ServerIdentity(), "Instantiating CKG protocol")
-	protocol, err := service.NewProtocol(tni, &onet.GenericConfig{data})
+	protocol, err := service.NewProtocol(tni, &conf)
 	if err != nil {
 		log.Error(service.ServerIdentity(), "Could not instantiate CKG protocol", err)
 		return err
 	}
+	tni.SetConfig(&conf)
+
 	// Register protocol instance
 	log.Lvl3(service.ServerIdentity(), "Registering CKG protocol instance")
 	err = service.RegisterProtocolInstance(protocol)

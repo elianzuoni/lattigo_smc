@@ -32,11 +32,11 @@ func init() {
 // It is able to do the initialisation because it has access to the service.
 // Only gets called at children: root has to manually call it, register the instance, and dispatch it.
 func (service *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
-	err := tni.SetConfig(conf) // Needed in order for conf to be sent by onet along the protocol name at the beginning
-	if err != nil {
-		return nil, err
-	}
-
+	//err := tni.SetConfig(conf) // Needed in order for conf to be sent by onet along the protocol name at the beginning
+	//if err != nil {
+	//	return nil, err
+	//}
+	var err error
 	var protocol onet.ProtocolInstance = nil
 
 	switch tni.ProtocolName() {
@@ -65,7 +65,7 @@ func (service *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.Gener
 // Public key generation
 
 func (service *Service) newProtoCKG(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
-	log.Lvl2(service.ServerIdentity(), "CKG protocol factory")
+	log.Lvl1(service.ServerIdentity(), "CKG protocol factory")
 
 	// First, extract configuration
 	config := &messages.GenPubKeyConfig{}
