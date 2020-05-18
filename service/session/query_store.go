@@ -10,7 +10,7 @@ import (
 )
 
 func (service *Service) HandleStoreQuery(query *messages.StoreQuery) (network.Message, error) {
-	log.Lvl2(service.ServerIdentity(), "Received StoreRequest query")
+	log.Lvl2(service.ServerIdentity(), "Received StoreQuery")
 
 	// Extract Session, if existent
 	s, ok := service.sessions.GetSession(query.SessionID)

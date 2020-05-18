@@ -134,32 +134,38 @@ func (service *Service) reencryptShares(reqID string, sessionID messages.Session
 
 	// Perform the SharesToEncProtocol to re-encrypt the shares
 
-	// Create TreeNodeInstance as root
-	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Generating the Tree")
-	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
-	if tree == nil {
-		err := errors.New("Could not create tree")
-		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
-		return messages.NilCipherID, err
-	}
-	tni := service.NewTreeNodeInstance(tree, tree.Root, SharesToEncProtocolName)
-
 	// Create configuration for the protocol instance
 	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Creating the configuration")
 	config := &messages.S2EConfig{sessionID, sharesID, Seed}
 	data, err := config.MarshalBinary()
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not marshal protocol configuration:", err)
+		log.Error(service.ServerIdentity(), "(SessionID =", sessionID, ")\n", "Could not marshal protocol configuration:", err)
+		return messages.NilCipherID, err
+	}
+	conf := onet.GenericConfig{data}
+
+	// Create TreeNodeInstance as root
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(service.ServerIdentity(), "(SessionID =", sessionID, ")\n", err)
+		return messages.NilCipherID, err
+	}
+	tni := service.NewTreeNodeInstance(tree, tree.Root, SharesToEncProtocolName)
+	err = tni.SetConfig(&conf)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "(SessionID =", sessionID, ")\n", "Could not set config:", err)
 		return messages.NilCipherID, err
 	}
 
 	// Instantiate protocol
-	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Instantiating shares-to-enc protocol")
-	protocol, err := service.NewProtocol(tni, &onet.GenericConfig{data})
+	log.Lvl3(service.ServerIdentity(), "(SessionID =", sessionID, ")\n", "Instantiating protocol")
+	protocol, err := service.NewProtocol(tni, &conf)
 	if err != nil {
-		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Could not instantiate shares-to-enc protocol", err)
+		log.Error(service.ServerIdentity(), "Could not instantiate protocol", err)
 		return messages.NilCipherID, err
 	}
+
 	// Register protocol instance
 	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Registering shares-to-enc protocol instance")
 	err = service.RegisterProtocolInstance(protocol)

@@ -1,8 +1,8 @@
 Simulation = "SMCService"
-Servers = 4
+Servers = 5
+Rounds = 10
 BF = 3
 Suite = "Ed25519"
-Rounds = 1
 
 Hosts, ParamsIdx
-4, 1
+5, 1

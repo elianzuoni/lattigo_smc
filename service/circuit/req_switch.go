@@ -143,32 +143,38 @@ func (service *Service) switchCipher(reqID string, sessionID messages.SessionID,
 
 	// Perform the PublicKeySwitchProtocol to switch the ciphertext
 
-	// Create TreeNodeInstance as root
-	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Generating the Tree")
-	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
-	if tree == nil {
-		err := errors.New("Could not create tree")
-		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", err)
-		return nil, err
-	}
-	tni := service.NewTreeNodeInstance(tree, tree.Root, protocols.CollectivePublicKeySwitchingProtocolName)
-
 	// Create configuration for the protocol instance
 	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Creating the configuration")
 	config := &messages.SwitchConfig{sessionID, pk, ct}
 	data, err := config.MarshalBinary()
 	if err != nil {
-		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Could not marshal protocol configuration:", err)
+		log.Error(service.ServerIdentity(), "(SessionID =", sessionID, ")\n", "Could not marshal protocol configuration:", err)
+		return nil, err
+	}
+	conf := onet.GenericConfig{data}
+
+	// Create TreeNodeInstance as root
+	tree := s.Roster.GenerateNaryTreeWithRoot(2, service.ServerIdentity())
+	if tree == nil {
+		err := errors.New("Could not create tree")
+		log.Error(service.ServerIdentity(), "(SessionID =", sessionID, ")\n", err)
+		return nil, err
+	}
+	tni := service.NewTreeNodeInstance(tree, tree.Root, protocols.CollectivePublicKeySwitchingProtocolName)
+	err = tni.SetConfig(&conf)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "(SessionID =", sessionID, ")\n", "Could not set config:", err)
 		return nil, err
 	}
 
 	// Instantiate protocol
-	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Instantiating PCKS protocol")
-	protocol, err := service.NewProtocol(tni, &onet.GenericConfig{data})
+	log.Lvl3(service.ServerIdentity(), "(SessionID =", sessionID, ")\n", "Instantiating protocol")
+	protocol, err := service.NewProtocol(tni, &conf)
 	if err != nil {
-		log.Error(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Could not instantiate PCKS protocol", err)
+		log.Error(service.ServerIdentity(), "Could not instantiate protocol", err)
 		return nil, err
 	}
+
 	// Register protocol instance
 	log.Lvl3(service.ServerIdentity(), "(ReqID =", reqID, ")\n", "Registering PCKS protocol instance")
 	err = service.RegisterProtocolInstance(protocol)

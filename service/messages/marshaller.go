@@ -929,6 +929,50 @@ func (query *StoreQuery) UnmarshalBinary(data []byte) (err error) {
 	return
 }
 
+func (resp *StoreResponse) MarshalBinary() (data []byte, err error) {
+	// Marshal CipherID
+	cidData := make([]byte, 0)
+	cidData, err = resp.CipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<cidLen>, <CipherID>, <valid>]
+	data = make([]byte, 8+cidLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	data[ptr] = marshBool(resp.Valid)
+	ptr += 1
+
+	return
+}
+func (resp *StoreResponse) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = resp.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	resp.Valid = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
+}
+
 // Get Ciphertext
 
 func (id *GetCipherRequestID) MarshalBinary() ([]byte, error) {
@@ -1097,6 +1141,72 @@ func (id *GetCipherIDRequestID) MarshalBinary() ([]byte, error) {
 }
 func (id *GetCipherIDRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
+func (req *GetCipherIDReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal CipherID
+	cidData := make([]byte, 0)
+	cidData, err = req.CipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <cidLen>, <RequestID>, <Ciphertext>, <Valid>]
+	data = make([]byte, 2*8+ridLen+cidLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	data[ptr] = marshBool(req.Valid)
+	ptr += 1
+
+	return
+}
+func (req *GetCipherIDReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Ciphertext
+	if cidLen > 0 {
+		err = req.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	req.Valid = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
 }
 
 // Retrieve
@@ -1542,6 +1652,197 @@ func (id *SumRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 
+func (req *SumRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := req.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal CipherID1
+	cid1Data, err := req.CipherID1.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cid1Len := len(cid1Data)
+
+	// Marshal CipherID2
+	cid2Data, err := req.CipherID2.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cid2Len := len(cid2Data)
+
+	// Build data as [<ridLen>, <sidLen>, <cid1Len>, <cid2Len>, <RequestID>, <SessionID>, <CipherID1>, <CipherID2>]
+	data = make([]byte, 4*8+ridLen+sidLen+cid1Len+cid2Len)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cid1Len))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cid2Len))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], ridData)
+	ptr += sidLen
+	copy(data[ptr:ptr+ridLen], sidData)
+	ptr += ridLen
+	copy(data[ptr:ptr+cid1Len], cid1Data)
+	ptr += cid1Len
+	copy(data[ptr:ptr+cid2Len], cid2Data)
+	ptr += cid2Len
+
+	return
+}
+func (req *SumRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cid1Len := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cid2Len := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID1
+	if cid1Len > 0 {
+		err = req.CipherID1.UnmarshalBinary(data[ptr : ptr+cid1Len])
+		ptr += cid1Len
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID2
+	if cid1Len > 0 {
+		err = req.CipherID2.UnmarshalBinary(data[ptr : ptr+cid2Len])
+		ptr += cid2Len
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (reply *SumReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := reply.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := reply.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal NewCipherID
+	cidData := make([]byte, 0)
+	cidData, err = reply.NewCipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>, <Valid>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	data[ptr] = marshBool(reply.Valid)
+	ptr += 1
+
+	return
+}
+func (reply *SumReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = reply.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = reply.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = reply.NewCipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	reply.Valid = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
+}
+
 // Multiply
 
 func (id *MultiplyRequestID) MarshalBinary() ([]byte, error) {
@@ -1549,6 +1850,203 @@ func (id *MultiplyRequestID) MarshalBinary() ([]byte, error) {
 }
 func (id *MultiplyRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
+func (req *MultiplyRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := req.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal CipherID1
+	cid1Data, err := req.CipherID1.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cid1Len := len(cid1Data)
+
+	// Marshal CipherID2
+	cid2Data, err := req.CipherID2.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cid2Len := len(cid2Data)
+
+	// Build data as [<ridLen>, <sidLen>, <cid1Len>, <cid2Len>, <RequestID>, <SessionID>, <CipherID1>, <CipherID2>, <WithRelin>]
+	data = make([]byte, 4*8+ridLen+sidLen+cid1Len+cid2Len+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cid1Len))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cid2Len))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], ridData)
+	ptr += sidLen
+	copy(data[ptr:ptr+ridLen], sidData)
+	ptr += ridLen
+	copy(data[ptr:ptr+cid1Len], cid1Data)
+	ptr += cid1Len
+	copy(data[ptr:ptr+cid2Len], cid2Data)
+	ptr += cid2Len
+	data[ptr] = marshBool(req.WithRelin)
+	ptr += 1
+
+	return
+}
+func (req *MultiplyRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cid1Len := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cid2Len := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID1
+	if cid1Len > 0 {
+		err = req.CipherID1.UnmarshalBinary(data[ptr : ptr+cid1Len])
+		ptr += cid1Len
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID2
+	if cid1Len > 0 {
+		err = req.CipherID2.UnmarshalBinary(data[ptr : ptr+cid2Len])
+		ptr += cid2Len
+		if err != nil {
+			return
+		}
+	}
+
+	// Read WithRelin
+	req.WithRelin = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
+}
+
+func (reply *MultiplyReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := reply.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := reply.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal NewCipherID
+	cidData := make([]byte, 0)
+	cidData, err = reply.NewCipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>, <Valid>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	data[ptr] = marshBool(reply.Valid)
+	ptr += 1
+
+	return
+}
+func (reply *MultiplyReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = reply.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = reply.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = reply.NewCipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	reply.Valid = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
 }
 
 // Relinearise
@@ -1560,6 +2058,175 @@ func (id *RelinRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 
+func (req *RelinRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := req.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal CipherID
+	cidData, err := req.CipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], ridData)
+	ptr += sidLen
+	copy(data[ptr:ptr+ridLen], sidData)
+	ptr += ridLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+
+	return
+}
+func (req *RelinRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = req.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func (reply *RelinReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := reply.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := reply.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal NewCipherID
+	cidData := make([]byte, 0)
+	cidData, err = reply.NewCipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>, <Valid>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	data[ptr] = marshBool(reply.Valid)
+	ptr += 1
+
+	return
+}
+func (reply *RelinReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = reply.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = reply.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = reply.NewCipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	reply.Valid = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
+}
+
 // Refresh
 
 func (id *RefreshRequestID) MarshalBinary() ([]byte, error) {
@@ -1567,6 +2234,101 @@ func (id *RefreshRequestID) MarshalBinary() ([]byte, error) {
 }
 func (id *RefreshRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
+func (req *RefreshRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := req.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal CipherID
+	cidData, err := req.CipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Marshal Seed
+	seedLen := len(req.Seed)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <seedLen>, <RequestID>, <SessionID>, <CipherID>, <Seed>]
+	data = make([]byte, 4*8+ridLen+sidLen+cidLen+seedLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(seedLen))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], ridData)
+	ptr += sidLen
+	copy(data[ptr:ptr+ridLen], sidData)
+	ptr += ridLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	copy(data[ptr:ptr+seedLen], req.Seed)
+	ptr += seedLen
+
+	return
+}
+func (req *RefreshRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	seedLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = req.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Seed
+	req.Seed = make([]byte, seedLen)
+	copy(req.Seed, data[ptr:ptr+seedLen])
+	ptr += seedLen
+
+	return
 }
 
 func (cfg *RefreshConfig) MarshalBinary() (data []byte, err error) {
@@ -1624,6 +2386,7 @@ func (cfg *RefreshConfig) UnmarshalBinary(data []byte) (err error) {
 			return
 		}
 	}
+
 	// Read Ciphertext
 	if ctLen > 0 {
 		if cfg.Ciphertext == nil {
@@ -1635,10 +2398,99 @@ func (cfg *RefreshConfig) UnmarshalBinary(data []byte) (err error) {
 			return
 		}
 	}
+
 	// Read Seed
 	cfg.Seed = make([]byte, seedLen)
 	copy(cfg.Seed, data[ptr:ptr+seedLen])
 	ptr += seedLen
+
+	return
+}
+
+func (reply *RefreshReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := reply.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := reply.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal NewCipherID
+	cidData := make([]byte, 0)
+	cidData, err = reply.NewCipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>, <Valid>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	data[ptr] = marshBool(reply.Valid)
+	ptr += 1
+
+	return
+}
+func (reply *RefreshReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = reply.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = reply.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = reply.NewCipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	reply.Valid = unmarshBool(data[ptr])
+	ptr += 1
 
 	return
 }
@@ -1652,6 +2504,187 @@ func (id *RotationRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
 }
 
+func (req *RotationRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := req.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal CipherID
+	cidData, err := req.CipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>, <K>, <RotIdx>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen+2*8)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+sidLen], ridData)
+	ptr += sidLen
+	copy(data[ptr:ptr+ridLen], sidData)
+	ptr += ridLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], req.K)
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(req.RotIdx))
+	ptr += 8
+
+	return
+}
+func (req *RotationRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = req.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read K
+	req.K = binary.BigEndian.Uint64(data[ptr : ptr+8])
+	ptr += 8
+
+	// Read RotIdx
+	req.RotIdx = int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	return
+}
+
+func (reply *RotationReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := reply.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := reply.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal NewCipherID
+	cidData := make([]byte, 0)
+	cidData, err = reply.NewCipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>, <Valid>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	data[ptr] = marshBool(reply.Valid)
+	ptr += 1
+
+	return
+}
+func (reply *RotationReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = reply.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = reply.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = reply.NewCipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	reply.Valid = unmarshBool(data[ptr])
+	ptr += 1
+
+	return
+}
+
 // Encryption to shares
 
 func (id *EncToSharesRequestID) MarshalBinary() ([]byte, error) {
@@ -1659,6 +2692,87 @@ func (id *EncToSharesRequestID) MarshalBinary() ([]byte, error) {
 }
 func (id *EncToSharesRequestID) UnmarshalBinary(data []byte) error {
 	return (*uuid.UUID)(id).UnmarshalBinary(data)
+}
+
+func (req *EncToSharesRequest) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := req.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := req.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal CipherID
+	cidData, err := req.CipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+
+	return
+}
+func (req *EncToSharesRequest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = req.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = req.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = req.CipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	return
 }
 
 func (cfg *E2SConfig) MarshalBinary() (data []byte, err error) {
@@ -1821,6 +2935,94 @@ func (cfg *S2EConfig) UnmarshalBinary(data []byte) (err error) {
 	cfg.Seed = make([]byte, seedLen)
 	copy(cfg.Seed, data[ptr:ptr+seedLen])
 	ptr += seedLen
+
+	return
+}
+
+func (reply *SharesToEncReply) MarshalBinary() (data []byte, err error) {
+	// Marshal RequestID
+	ridData, err := reply.ReqID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ridLen := len(ridData)
+
+	// Marshal SessionID
+	sidData, err := reply.SessionID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	sidLen := len(sidData)
+
+	// Marshal NewCipherID
+	cidData := make([]byte, 0)
+	cidData, err = reply.NewCipherID.MarshalBinary()
+	if err != nil {
+		return
+	}
+	cidLen := len(cidData)
+
+	// Build data as [<ridLen>, <sidLen>, <cidLen>, <RequestID>, <SessionID>, <CipherID>, <Valid>]
+	data = make([]byte, 3*8+ridLen+sidLen+cidLen+1)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ridLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sidLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(cidLen))
+	ptr += 8
+	copy(data[ptr:ptr+ridLen], ridData)
+	ptr += ridLen
+	copy(data[ptr:ptr+sidLen], sidData)
+	ptr += sidLen
+	copy(data[ptr:ptr+cidLen], cidData)
+	ptr += cidLen
+	data[ptr] = marshBool(reply.Valid)
+	ptr += 1
+
+	return
+}
+func (reply *SharesToEncReply) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	ridLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	cidLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read RequestID
+	if ridLen > 0 {
+		err = reply.ReqID.UnmarshalBinary(data[ptr : ptr+ridLen])
+		ptr += ridLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SessionID
+	if sidLen > 0 {
+		err = reply.SessionID.UnmarshalBinary(data[ptr : ptr+sidLen])
+		ptr += sidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherID
+	if cidLen > 0 {
+		err = reply.NewCipherID.UnmarshalBinary(data[ptr : ptr+cidLen])
+		ptr += cidLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Valid
+	reply.Valid = unmarshBool(data[ptr])
+	ptr += 1
 
 	return
 }
