@@ -2,6 +2,8 @@ module lattigo-smc
 
 go 1.13
 
+replace go.dedis.ch/onet/v3 => github.com/dedis/onet/v3 v3.2.0
+
 require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/golangplus/testing v0.0.0-20180327235837-af21d9c3145e
