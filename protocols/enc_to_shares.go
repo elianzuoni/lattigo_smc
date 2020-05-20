@@ -33,8 +33,14 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/utils"
 )
+
+func init() {
+	_ = network.RegisterMessage(&StructStart{})
+	_ = network.RegisterMessage(&StructE2SDecryptionShare{})
+}
 
 // This is a full-blown constructor. In every context (test, simulation, or deployment) it will have to
 // be encapsulated in a proper protocol factory, that only takes the TreeNodeInstance as an argument

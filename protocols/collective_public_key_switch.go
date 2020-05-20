@@ -14,12 +14,16 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
 )
 
 const CollectivePublicKeySwitchingProtocolName = "CollectivePublicKeySwitching"
 
 func init() {
 	_, _ = onet.GlobalProtocolRegister(CollectivePublicKeySwitchingProtocolName, NewCollectivePublicKeySwitching)
+
+	_ = network.RegisterMessage(&StructStart{})
+	_ = network.RegisterMessage(&StructPCKS{})
 }
 
 //Init initializes the protocol and prepares the variable. Should be called before dispatch

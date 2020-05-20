@@ -26,7 +26,13 @@ import (
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
 )
+
+func init() {
+	_ = network.RegisterMessage(&StructStart{})
+	_ = network.RegisterMessage(&StructS2EReencryptionShare{})
+}
 
 // This is a full-blown constructor. In every context (test, simulation, or deployment) it will have to
 // be encapsulated in a proper protocol factory, that only takes the TreeNodeInstance as an argument

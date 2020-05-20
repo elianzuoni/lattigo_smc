@@ -7,6 +7,7 @@ import (
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
 )
 
 //CollectiveKeyGenerationProtocolName name of protocol for onet
@@ -17,6 +18,9 @@ func init() {
 	if _, err := onet.GlobalProtocolRegister(CollectiveRefreshName, NewCollectiveRefresh); err != nil {
 		log.ErrFatal(err, "Could not register CollectiveKeyGeneration protocol : ")
 	}
+
+	_ = network.RegisterMessage(&StructStart{})
+	_ = network.RegisterMessage(&StructRShare{})
 
 }
 

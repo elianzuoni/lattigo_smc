@@ -16,6 +16,7 @@ import (
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
 )
 
 const CollectiveKeySwitchingProtocolName = "CollectiveKeySwitching"
@@ -25,6 +26,9 @@ func init() {
 	if err != nil {
 		log.ErrFatal(err, "Could not register CollectiveKeySwitching protocol:")
 	}
+
+	_ = network.RegisterMessage(&StructCKSShare{})
+	_ = network.RegisterMessage(&StructStart{})
 }
 
 //Init initialize the variables needed for the protocol. Should be called before dispatch

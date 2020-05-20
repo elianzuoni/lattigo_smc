@@ -1,11 +1,3 @@
-package protocols
-
-import (
-	"go.dedis.ch/onet/v3"
-	"go.dedis.ch/onet/v3/log"
-	"lattigo-smc/service/messages"
-)
-
 // Close-session protocol: the parties delete a session in their AbstractSessionStore.
 // The steps are:
 //
@@ -21,6 +13,20 @@ import (
 // 3) Every node deletes the session, using the AbstractSessionStore.DeleteSession() method.
 // 		4a) If leaf, the node sends the Done message to the parent straight away.
 //		4b) Else, it first waits to receive the Done message from all children, then it sends it to the parent.
+
+package protocols
+
+import (
+	"go.dedis.ch/onet/v3"
+	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
+	"lattigo-smc/service/messages"
+)
+
+func init() {
+	_ = network.RegisterMessage(&StructStart{})
+	_ = network.RegisterMessage(&StructDone{})
+}
 
 // This is a full-blown constructor. In every context, it will have to
 // be encapsulated in a proper protocol factory, that only takes the TreeNodeInstance as an argument

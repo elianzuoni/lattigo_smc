@@ -7,12 +7,16 @@ import (
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
+	"go.dedis.ch/onet/v3/network"
 )
 
 const RotationProtocolName = "RotationKeyProtocol"
 
 func init() {
 	_, _ = onet.GlobalProtocolRegister(RotationProtocolName, NewRotationKey)
+
+	_ = network.RegisterMessage(&StructStart{})
+	_ = network.RegisterMessage(&StructRTGShare{})
 }
 
 //Init initializes the variable for the protocol. Should be called before dispatch
