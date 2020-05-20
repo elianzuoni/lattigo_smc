@@ -2,11 +2,15 @@ package session
 
 import (
 	"errors"
+	"fmt"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
 	"sync"
+	// Imports just to execute their init functions
+	_ "lattigo-smc/protocols"
+	_ "lattigo-smc/service/protocols"
 )
 
 type Service struct {
@@ -31,6 +35,8 @@ const ServiceName = "SessionService"
 
 // Registers the Session Service to the onet library
 func init() {
+	fmt.Println("SessionService: init")
+
 	_, err := onet.RegisterNewService(ServiceName, NewService)
 	if err != nil {
 		log.Error("Could not register the service")

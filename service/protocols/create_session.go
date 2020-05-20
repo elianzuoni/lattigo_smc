@@ -17,6 +17,7 @@
 package protocols
 
 import (
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -25,6 +26,8 @@ import (
 )
 
 func init() {
+	fmt.Println("CreateSession: init")
+
 	_ = network.RegisterMessage(&StructStart{})
 	_ = network.RegisterMessage(&StructDone{})
 }

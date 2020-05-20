@@ -17,6 +17,7 @@
 package protocols
 
 import (
+	"fmt"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
@@ -24,6 +25,8 @@ import (
 )
 
 func init() {
+	fmt.Println("CloseSession: init")
+
 	_ = network.RegisterMessage(&StructStart{})
 	_ = network.RegisterMessage(&StructDone{})
 }

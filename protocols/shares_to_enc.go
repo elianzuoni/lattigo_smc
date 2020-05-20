@@ -21,6 +21,7 @@
 package protocols
 
 import (
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
@@ -30,6 +31,8 @@ import (
 )
 
 func init() {
+	fmt.Println("S2E: init")
+
 	_ = network.RegisterMessage(&StructStart{})
 	_ = network.RegisterMessage(&StructS2EReencryptionShare{})
 }

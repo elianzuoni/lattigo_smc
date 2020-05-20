@@ -14,6 +14,7 @@ package protocols
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
@@ -25,6 +26,8 @@ import (
 const RelinearizationKeyProtocolName = "RelinearizationKeyProtocol"
 
 func init() {
+	fmt.Println("EKG: init")
+
 	_, _ = onet.GlobalProtocolRegister(RelinearizationKeyProtocolName, NewRelinearizationKey)
 
 	_ = network.RegisterMessage(&StructStart{})

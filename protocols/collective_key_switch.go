@@ -12,6 +12,7 @@ package protocols
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
@@ -22,6 +23,8 @@ import (
 const CollectiveKeySwitchingProtocolName = "CollectiveKeySwitching"
 
 func init() {
+	fmt.Println("CKS: init")
+
 	_, err := onet.GlobalProtocolRegister(CollectiveKeySwitchingProtocolName, NewCollectiveKeySwitching)
 	if err != nil {
 		log.ErrFatal(err, "Could not register CollectiveKeySwitching protocol:")

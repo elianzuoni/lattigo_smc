@@ -10,6 +10,7 @@ package protocols
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
@@ -20,6 +21,8 @@ import (
 const CollectivePublicKeySwitchingProtocolName = "CollectivePublicKeySwitching"
 
 func init() {
+	fmt.Println("PCKS: init")
+
 	_, _ = onet.GlobalProtocolRegister(CollectivePublicKeySwitchingProtocolName, NewCollectivePublicKeySwitching)
 
 	_ = network.RegisterMessage(&StructStart{})

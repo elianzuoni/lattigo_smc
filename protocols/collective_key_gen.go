@@ -12,6 +12,7 @@ package protocols
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
@@ -24,6 +25,7 @@ import (
 const CollectiveKeyGenerationProtocolName = "CollectiveKeyGeneration"
 
 func init() {
+	fmt.Println("CKG: init")
 
 	if _, err := onet.GlobalProtocolRegister(CollectiveKeyGenerationProtocolName, NewCollectiveKeyGeneration); err != nil {
 		log.ErrFatal(err, "Could not register CollectiveKeyGeneration protocol : ")

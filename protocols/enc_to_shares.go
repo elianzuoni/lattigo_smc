@@ -29,6 +29,7 @@
 package protocols
 
 import (
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3"
@@ -38,6 +39,8 @@ import (
 )
 
 func init() {
+	fmt.Println("E2S: init")
+
 	_ = network.RegisterMessage(&StructStart{})
 	_ = network.RegisterMessage(&StructE2SDecryptionShare{})
 }

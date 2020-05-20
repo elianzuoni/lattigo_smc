@@ -2,6 +2,7 @@ package protocols
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
@@ -13,6 +14,8 @@ import (
 const RotationProtocolName = "RotationKeyProtocol"
 
 func init() {
+	fmt.Println("RKG: init")
+
 	_, _ = onet.GlobalProtocolRegister(RotationProtocolName, NewRotationKey)
 
 	_ = network.RegisterMessage(&StructStart{})

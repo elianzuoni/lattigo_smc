@@ -2,6 +2,7 @@ package protocols
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
@@ -14,6 +15,7 @@ import (
 const CollectiveRefreshName = "CollectiveRefreshKey"
 
 func init() {
+	fmt.Println("RefProto: init")
 
 	if _, err := onet.GlobalProtocolRegister(CollectiveRefreshName, NewCollectiveRefresh); err != nil {
 		log.ErrFatal(err, "Could not register CollectiveKeyGeneration protocol : ")
