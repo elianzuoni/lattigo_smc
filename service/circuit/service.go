@@ -17,6 +17,10 @@ import (
 type Service struct {
 	*onet.ServiceProcessor
 
+	circuits *CircuitStore
+
+	getCipherIDRepLock sync.RWMutex
+	getCipherIDReplies map[messages.GetCipherIDRequestID]chan *messages.GetCipherIDReply
 	sumRepLock         sync.RWMutex
 	sumReplies         map[messages.SumRequestID]chan *messages.SumReply
 	multiplyRepLock    sync.RWMutex
@@ -33,6 +37,11 @@ type Service struct {
 	encToSharesReplies map[messages.EncToSharesRequestID]chan *messages.EncToSharesReply
 	sharesToEncRepLock sync.RWMutex
 	sharesToEncReplies map[messages.SharesToEncRequestID]chan *messages.SharesToEncReply
+}
+
+// Retrieves Circuit from the underlying CircuitStore. Returns boolean indicating success.
+func (service *Service) GetCircuit(id messages.CircuitID) (s *Circuit, ok bool) {
+	return service.circuits.GetCircuit(id)
 }
 
 const ServiceName = "CircuitService"
@@ -56,6 +65,7 @@ func NewService(c *onet.Context) (onet.Service, error) {
 		ServiceProcessor: onet.NewServiceProcessor(c),
 
 		// Synchronisation points on which a reply from a contacted server is waited for
+		getCipherIDReplies: make(map[messages.GetCipherIDRequestID]chan *messages.GetCipherIDReply),
 		sumReplies:         make(map[messages.SumRequestID]chan *messages.SumReply),
 		multiplyReplies:    make(map[messages.MultiplyRequestID]chan *messages.MultiplyReply),
 		relinReplies:       make(map[messages.RelinRequestID]chan *messages.RelinReply),
@@ -65,6 +75,9 @@ func NewService(c *onet.Context) (onet.Service, error) {
 		encToSharesReplies: make(map[messages.EncToSharesRequestID]chan *messages.EncToSharesReply),
 		sharesToEncReplies: make(map[messages.SharesToEncRequestID]chan *messages.SharesToEncReply),
 	}
+
+	// Create the SessionStore, indicating itself as the reference Service
+	service.circuits = NewCircuitStore(service)
 
 	// Registers the handlers for client requests.
 	e := registerClientQueryHandlers(service)
@@ -81,6 +94,12 @@ func NewService(c *onet.Context) (onet.Service, error) {
 // Registers in smcService handlers - of the form func(msg interface{})(ret interface{}, err error) -
 // for every possible type of client request, implicitly identified by the type of msg.
 func registerClientQueryHandlers(service *Service) error {
+	if err := service.RegisterHandler(service.HandleStoreAndNameQuery); err != nil {
+		return errors.New("Couldn't register HandleStoreQuery: " + err.Error())
+	}
+	if err := service.RegisterHandler(service.HandleNameQuery); err != nil {
+		return errors.New("Couldn't register HandleStoreQuery: " + err.Error())
+	}
 	if err := service.RegisterHandler(service.HandleSumQuery); err != nil {
 		return errors.New("Couldn't register HandleSumQuery: " + err.Error())
 	}
@@ -105,20 +124,26 @@ func registerClientQueryHandlers(service *Service) error {
 	if err := service.RegisterHandler(service.HandleSharesToEncQuery); err != nil {
 		return errors.New("Couldn't register HandleSharesToEncQuery: " + err.Error())
 	}
-	if err := service.RegisterHandler(service.HandleCircuitQuery); err != nil {
-		return errors.New("Couldn't register HandleCircuitQuery: " + err.Error())
+	if err := service.RegisterHandler(service.HandleCreateCircuitQuery); err != nil {
+		return errors.New("Couldn't register HandleCreateCircuitQuery: " + err.Error())
+	}
+	if err := service.RegisterHandler(service.HandleEvalCircuitQuery); err != nil {
+		return errors.New("Couldn't register HandleEvalCircuitQuery: " + err.Error())
 	}
 
 	return nil
 }
 
 // Registers smcService to the underlying onet.Context as a processor for all the possible types of messages
-// received by another server (every client request is forwarded to the root, so every query entails some
-// server-root interaction). Upon reception of one of these messages, the method Process will be invoked.
+// received by another server. Upon reception of one of these messages, the method Process will be invoked.
 func registerServerMsgHandler(c *onet.Context, service *Service) {
-	// Retrieve
-	c.RegisterProcessor(service, messages.MsgTypes.MsgRetrieveRequest)
-	c.RegisterProcessor(service, messages.MsgTypes.MsgRetrieveReply)
+	// Get CipherID
+	c.RegisterProcessor(service, messages.MsgTypes.MsgGetCipherIDRequest)
+	c.RegisterProcessor(service, messages.MsgTypes.MsgGetCipherIDReply)
+
+	// Switch
+	c.RegisterProcessor(service, messages.MsgTypes.MsgSwitchRequest)
+	c.RegisterProcessor(service, messages.MsgTypes.MsgSwitchReply)
 
 	// Sum
 	c.RegisterProcessor(service, messages.MsgTypes.MsgSumRequest)
@@ -153,12 +178,22 @@ func registerServerMsgHandler(c *onet.Context, service *Service) {
 // the messages registered in registerServerMsgHandler. For this reason, the Process method
 // is bound to be a giant if-else-if, which "manually" dispatches based on the message type.
 func (service *Service) Process(msg *network.Envelope) {
-	// Retrieve
-	if msg.MsgType.Equal(messages.MsgTypes.MsgRetrieveRequest) {
+	// Get CipherID
+	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherIDRequest) {
+		service.processGetCipherIDRequest(msg)
+		return
+	}
+	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherIDReply) {
+		service.processGetCipherIDReply(msg)
+		return
+	}
+
+	// Switch
+	if msg.MsgType.Equal(messages.MsgTypes.MsgSwitchRequest) {
 		service.processSwitchRequest(msg)
 		return
 	}
-	if msg.MsgType.Equal(messages.MsgTypes.MsgRetrieveReply) {
+	if msg.MsgType.Equal(messages.MsgTypes.MsgSwitchReply) {
 		service.processSwitchReply(msg)
 		return
 	}

@@ -374,7 +374,7 @@ func TestStoreRetrieveQuery(t *testing.T) {
 
 	log.Lvl2("Going to store data. Should not return error")
 	origData := p.Coeffs[0] // Only one modulus exists
-	cid, err := c1.SendStoreQuery("a", origData)
+	cid, err := c1.SendStoreQuery(origData)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery returned error:", err)
 	}
@@ -442,7 +442,7 @@ func TestSumQuery(t *testing.T) {
 
 	log.Lvl2("Going to store first vector. Should not return error")
 	data1 := p.Coeffs[0] // Only one modulus exists
-	cid1, err := c1.SendStoreQuery("a", data1)
+	cid1, err := c1.SendStoreQuery(data1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for first vector returned error:", err)
 	}
@@ -462,7 +462,7 @@ func TestSumQuery(t *testing.T) {
 
 	log.Lvl2("Going to store second vector from second client. Should not return error")
 	data2 := q.Coeffs[0] // Only one modulus exists
-	cid2, err := c2.SendStoreQuery("b", data2)
+	cid2, err := c2.SendStoreQuery(data2)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for second vector returned error:", err)
 	}
@@ -564,7 +564,7 @@ func TestMultiplyRelinQuery(t *testing.T) {
 
 	log.Lvl2("Going to store first vector. Should not return error")
 	data1 := p.Coeffs[0] // Only one modulus exists
-	cid1, err := c1.SendStoreQuery("a", data1)
+	cid1, err := c1.SendStoreQuery(data1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for first vector returned error:", err)
 	}
@@ -584,7 +584,7 @@ func TestMultiplyRelinQuery(t *testing.T) {
 
 	log.Lvl2("Going to store second vector. Should not return error")
 	data2 := q.Coeffs[0] // Only one modulus exists
-	cid2, err := c2.SendStoreQuery("b", data2)
+	cid2, err := c2.SendStoreQuery(data2)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for second vector returned error:", err)
 	}
@@ -715,7 +715,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Store a from first client
 
 	log.Lvl2("Going to store \"a\". Should not return error")
-	cidA, err := client1.SendStoreQuery("a", a.Coeffs[0]) // Only one modulus exists
+	cidA, err := client1.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"a\" returned error:", err)
 	}
@@ -734,7 +734,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Store b from second client
 
 	log.Lvl2("Going to store \"b\". Should not return error")
-	cidB, err := client2.SendStoreQuery("b", b.Coeffs[0]) // Only one modulus exists
+	cidB, err := client2.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"b\" returned error:", err)
 	}
@@ -794,7 +794,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Store c from third client
 
 	log.Lvl2("Going to store \"c\". Should not return error")
-	cidC, err := client3.SendStoreQuery("c", c.Coeffs[0]) // Only one modulus exists
+	cidC, err := client3.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"c\" returned error:", err)
 	}
@@ -813,7 +813,7 @@ func TestRefreshQuery(t *testing.T) {
 	// Store d from the fourth client
 
 	log.Lvl2("Going to store \"d\". Should not return error")
-	cidD, err := client4.SendStoreQuery("d", d.Coeffs[0]) // Only one modulus exists
+	cidD, err := client4.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"d\" returned error:", err)
 	}
@@ -956,7 +956,7 @@ func TestRotationQuery(t *testing.T) {
 
 	log.Lvl2("Going to store vector. Should not return error")
 	data := p.Coeffs[0] // Only one modulus exists
-	cid, err := c3.SendStoreQuery("a", data)
+	cid, err := c3.SendStoreQuery(data)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery returned error:", err)
 	}
@@ -1073,7 +1073,7 @@ func TestEncSharesQuery(t *testing.T) {
 	// Store a from first client
 
 	log.Lvl2("Going to store \"a\". Should not return error")
-	cidA, err := client1.SendStoreQuery("a", a.Coeffs[0]) // Only one modulus exists
+	cidA, err := client1.SendStoreQuery(a.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"a\" returned error:", err)
 	}
@@ -1092,7 +1092,7 @@ func TestEncSharesQuery(t *testing.T) {
 	// Store b from second client
 
 	log.Lvl2("Going to store \"b\". Should not return error")
-	cidB, err := client2.SendStoreQuery("b", b.Coeffs[0]) // Only one modulus exists
+	cidB, err := client2.SendStoreQuery(b.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"b\" returned error:", err)
 	}
@@ -1161,7 +1161,7 @@ func TestEncSharesQuery(t *testing.T) {
 	// Store c fro third client
 
 	log.Lvl2("Going to store \"c\". Should not return error")
-	cidC, err := client3.SendStoreQuery("c", c.Coeffs[0]) // Only one modulus exists
+	cidC, err := client3.SendStoreQuery(c.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"c\" returned error:", err)
 	}
@@ -1180,7 +1180,7 @@ func TestEncSharesQuery(t *testing.T) {
 	// Store d from fourth client
 
 	log.Lvl2("Going to store \"d\". Should not return error")
-	cidD, err := client4.SendStoreQuery("d", d.Coeffs[0]) // Only one modulus exists
+	cidD, err := client4.SendStoreQuery(d.Coeffs[0]) // Only one modulus exists
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for \"d\" returned error:", err)
 	}
@@ -1317,6 +1317,16 @@ func TestSimpleCircuit(t *testing.T) {
 	}
 	log.Lvl2("Method SendGenEvalKeyQuery correctly returned no error")
 
+	// Create circuit
+
+	log.Lvl2("Going to create circuit. Should not return error")
+	desc := "*(v x@0)(v x@1)"
+	circuitID, err := c0.CreateCircuit(desc)
+	if err != nil {
+		t.Fatal("Method CreateCircuit returned error:", err)
+	}
+	log.Lvl2("Method CreateCircuit correctly returned no error")
+
 	// Generate x0 and x1
 
 	log.Lvl2("Going to generate x0 and x1. Should not return error")
@@ -1330,7 +1340,7 @@ func TestSimpleCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store x0. Should not return error")
 	dataX0 := x0.Coeffs[0] // Only one modulus exists
-	_, err = c0.SendStoreQuery("x", dataX0)
+	_, err = c0.SendStoreAndNameQuery(circuitID, "x", dataX0)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for a0 returned error:", err)
 	}
@@ -1350,7 +1360,7 @@ func TestSimpleCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store x1. Should not return error")
 	dataX1 := x1.Coeffs[0] // Only one modulus exists
-	_, err = c1.SendStoreQuery("x", dataX1)
+	_, err = c1.SendStoreAndNameQuery(circuitID, "x", dataX1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for a1 returned error:", err)
 	}
@@ -1359,12 +1369,20 @@ func TestSimpleCircuit(t *testing.T) {
 	// Evaluate the circuit remotely
 
 	log.Lvl2("Going to evaluate the circuit")
-	desc := "*(v x@0)(v x@1)"
-	remData, err := c0.SendCircuitQuery(desc)
+	resID, err := c0.SendEvalCircuitQuery(circuitID)
 	if err != nil {
 		t.Fatal("Method SendCircuitQuery returned error:", err)
 	}
 	log.Lvl2("Method SendCircuitQuery correctly returned no error")
+
+	// Retrieve the remote result
+
+	log.Lvl2("Going to retrieve the remote result. Should not return error")
+	remData, err := c0.SendSwitchQuery(resID)
+	if err != nil {
+		t.Fatal("Method SendSwitchQuery returned error:", err)
+	}
+	log.Lvl2("Method SendSwitchQuery correctly returned no error")
 
 	// Evaluate the circuit locally
 
@@ -1411,6 +1429,17 @@ func TestBigCircuit(t *testing.T) {
 	}
 	log.Lvl2("Method SendGenEvalKeyQuery correctly returned no error")
 
+	// Create circuit
+
+	log.Lvl2("Going to create circuit. Should not return error")
+	desc := "*(+(+(*(v a@0)(v a@1))(*(v a@1)(v a@2)))(+(*(v a@2)(v a@3))(*(v a@0)(v a@3))))" +
+		"(+(+(*(v b@0)(v b@1))(*(v b@1)(v b@2)))(+(*(v b@2)(v b@3))(*(v b@0)(v b@3))))"
+	circuitID, err := c0.CreateCircuit(desc)
+	if err != nil {
+		t.Fatal("Method CreateCircuit returned error:", err)
+	}
+	log.Lvl2("Method CreateCircuit correctly returned no error")
+
 	// Generate a0 and b0
 
 	log.Lvl2("Going to generate a0 and b0. Should not return error")
@@ -1424,7 +1453,7 @@ func TestBigCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store a0. Should not return error")
 	dataA0 := a0.Coeffs[0] // Only one modulus exists
-	_, err = c0.SendStoreQuery("a", dataA0)
+	_, err = c0.SendStoreAndNameQuery(circuitID, "a", dataA0)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for a0 returned error:", err)
 	}
@@ -1434,7 +1463,7 @@ func TestBigCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store b0. Should not return error")
 	dataB0 := b0.Coeffs[0] // Only one modulus exists
-	_, err = c0.SendStoreQuery("b", dataB0)
+	_, err = c0.SendStoreAndNameQuery(circuitID, "b", dataB0)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for b0 returned error:", err)
 	}
@@ -1463,7 +1492,7 @@ func TestBigCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store a1. Should not return error")
 	dataA1 := a1.Coeffs[0] // Only one modulus exists
-	_, err = c1.SendStoreQuery("a", dataA1)
+	_, err = c1.SendStoreAndNameQuery(circuitID, "a", dataA1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for a1 returned error:", err)
 	}
@@ -1473,7 +1502,7 @@ func TestBigCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store b1. Should not return error")
 	dataB1 := b1.Coeffs[0] // Only one modulus exists
-	_, err = c1.SendStoreQuery("b", dataB1)
+	_, err = c1.SendStoreAndNameQuery(circuitID, "b", dataB1)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for b1 returned error:", err)
 	}
@@ -1502,7 +1531,7 @@ func TestBigCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store a2. Should not return error")
 	dataA2 := a2.Coeffs[0] // Only one modulus exists
-	_, err = c2.SendStoreQuery("a", dataA2)
+	_, err = c2.SendStoreAndNameQuery(circuitID, "a", dataA2)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for a2 returned error:", err)
 	}
@@ -1512,7 +1541,7 @@ func TestBigCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store b2. Should not return error")
 	dataB2 := b2.Coeffs[0] // Only one modulus exists
-	_, err = c2.SendStoreQuery("b", dataB2)
+	_, err = c2.SendStoreAndNameQuery(circuitID, "b", dataB2)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for b2 returned error:", err)
 	}
@@ -1541,7 +1570,7 @@ func TestBigCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store a3. Should not return error")
 	dataA3 := a3.Coeffs[0] // Only one modulus exists
-	_, err = c3.SendStoreQuery("a", dataA3)
+	_, err = c3.SendStoreAndNameQuery(circuitID, "a", dataA3)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for a3 returned error:", err)
 	}
@@ -1551,7 +1580,7 @@ func TestBigCircuit(t *testing.T) {
 
 	log.Lvl2("Going to store b3. Should not return error")
 	dataB3 := b3.Coeffs[0] // Only one modulus exists
-	_, err = c3.SendStoreQuery("b", dataB3)
+	_, err = c3.SendStoreAndNameQuery(circuitID, "b", dataB3)
 	if err != nil {
 		t.Fatal("Method SendStoreQuery for b3 returned error:", err)
 	}
@@ -1560,13 +1589,20 @@ func TestBigCircuit(t *testing.T) {
 	// Evaluate the circuit remotely
 
 	log.Lvl2("Going to evaluate the circuit")
-	desc := "*(+(+(*(v a@0)(v a@1))(*(v a@1)(v a@2)))(+(*(v a@2)(v a@3))(*(v a@0)(v a@3))))" +
-		"(+(+(*(v b@0)(v b@1))(*(v b@1)(v b@2)))(+(*(v b@2)(v b@3))(*(v b@0)(v b@3))))"
-	remData, err := c0.SendCircuitQuery(desc)
+	resID, err := c0.SendEvalCircuitQuery(circuitID)
 	if err != nil {
 		t.Fatal("Method SendCircuitQuery returned error:", err)
 	}
 	log.Lvl2("Method SendCircuitQuery correctly returned no error")
+
+	// Retrieve the remote result
+
+	log.Lvl2("Going to retrieve the remote result. Should not return error")
+	remData, err := c0.SendSwitchQuery(resID)
+	if err != nil {
+		t.Fatal("Method SendSwitchQuery returned error:", err)
+	}
+	log.Lvl2("Method SendSwitchQuery correctly returned no error")
 
 	// Evaluate the circuit locally
 	// ((a0*a1)+(a1*a2)+(a2*a3)+(a0*a3))*((b0*b1)+(b1*b2)+(b2*b3)+(b0*b3))

@@ -1,5 +1,3 @@
-// The goal of the Store Query is to store a new ciphertext into the system.
-
 package session
 
 import (
@@ -10,10 +8,10 @@ import (
 )
 
 func (service *Service) HandleStoreQuery(query *messages.StoreQuery) (network.Message, error) {
-	log.Lvl2(service.ServerIdentity(), "Received StoreQuery")
+	log.Lvl2(service.ServerIdentity(), "Received StoreAndNameQuery")
 
 	// Extract Session, if existent
-	s, ok := service.sessions.GetSession(query.SessionID)
+	s, ok := service.GetSession(query.SessionID)
 	if !ok {
 		err := errors.New("Requested session does not exist")
 		log.Error(service.ServerIdentity(), err)
@@ -22,8 +20,6 @@ func (service *Service) HandleStoreQuery(query *messages.StoreQuery) (network.Me
 
 	// Store locally
 	newID := s.StoreCiphertextNewID(query.Ciphertext)
-	// Store ID under name
-	s.StoreCipherID(query.Name, newID)
 
 	return &messages.StoreResponse{newID, true}, nil
 }

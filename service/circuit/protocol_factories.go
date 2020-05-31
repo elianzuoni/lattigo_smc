@@ -7,10 +7,13 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"lattigo-smc/protocols"
 	"lattigo-smc/service/messages"
+	serviceProto "lattigo-smc/service/protocols"
 )
 
 const EncToSharesProtocolName = "EncryptionToSharesProtocol"
 const SharesToEncProtocolName = "SharesToEncryptionProtocol"
+const CreateCircuitProtocolName = "CreateCircuitProtocol"
+const CloseCircuitProtocolName = "CloseCircuitProtocol"
 
 // Though we have NewProtocol, onet needs to register the protocol name. So we register dummy protocol factories.
 func init() {
@@ -23,24 +26,32 @@ func init() {
 		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
 			return nil, nil
 		})
+
+	_, _ = onet.GlobalProtocolRegister(CreateCircuitProtocolName,
+		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+			return nil, nil
+		})
+
+	_, _ = onet.GlobalProtocolRegister(CloseCircuitProtocolName,
+		func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
+			return nil, nil
+		})
 }
 
 // NewProtocol starts a new protocol given by the name in the TreeNodeInstance, and returns it correctly initialised.
 // It is able to do the initialisation because it has access to the
 // Only gets called at children: root has to manually call it, register the instance, and dispatch it.
 func (service *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
-	// New version of onet sets config automatically, and does not allow to do it twice
-	/*
-		err := tni.SetConfig(conf) // Needed in order for conf to be sent by onet along the protocol name at the beginning
-		if err != nil {
-			return nil, err
-		}
-
-	*/
 	var err error
 	var protocol onet.ProtocolInstance = nil
 
 	switch tni.ProtocolName() {
+	case CreateCircuitProtocolName:
+		protocol, err = service.newProtoCreateCircuit(tni, conf)
+
+	case CloseCircuitProtocolName:
+		protocol, err = service.newProtoCloseCircuit(tni, conf)
+
 	case protocols.CollectivePublicKeySwitchingProtocolName:
 		protocol, err = service.newProtoPCKS(tni, conf)
 
@@ -58,6 +69,52 @@ func (service *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.Gener
 		return nil, err
 	}
 	return protocol, nil
+}
+
+// Create Circuit
+
+func (service *Service) newProtoCreateCircuit(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(service.ServerIdentity(), "CreateCircuit protocol factory")
+
+	// First, extract configuration
+	config := &messages.CreateCircuitConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, create the protocol with the known parameters and the one just received
+	p, err := serviceProto.NewCreateCircuitProtocol(tn, service.circuits, config.SessionID, config.CircuitID, config.Description)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
+		return nil, err
+	}
+
+	return p, nil
+}
+
+// Close Session
+
+func (service *Service) newProtoCloseCircuit(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(service.ServerIdentity(), "CloseCircuit protocol factory")
+
+	// First, extract configuration
+	config := &messages.CloseCircuitConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, create the protocol with the known parameters and the one just received
+	p, err := serviceProto.NewCloseCircuitProtocol(tn, service.circuits, config.CircuitID)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
+		return nil, err
+	}
+
+	return p, nil
 }
 
 // Public collective key switching

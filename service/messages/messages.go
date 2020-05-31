@@ -32,6 +32,9 @@ type MessageTypes struct {
 	MsgGenRotKeyQuery    network.MessageTypeID // Unused
 	MsgGenRotKeyResponse network.MessageTypeID // Unused
 
+	MsgCreateCircuitQuery    network.MessageTypeID // Unused
+	MsgCreateCircuitResponse network.MessageTypeID // Unused
+
 	MsgGetPubKeyRequest network.MessageTypeID
 	MsgGetPubKeyReply   network.MessageTypeID
 
@@ -44,16 +47,22 @@ type MessageTypes struct {
 	MsgStoreQuery    network.MessageTypeID // Unused
 	MsgStoreResponse network.MessageTypeID // Unused
 
+	MsgStoreAndNameQuery    network.MessageTypeID // Unused
+	MsgStoreAndNameResponse network.MessageTypeID // Unused
+
+	MsgNameQuery    network.MessageTypeID // Unused
+	MsgNameResponse network.MessageTypeID // Unused
+
 	MsgGetCipherRequest network.MessageTypeID
 	MsgGetCipherReply   network.MessageTypeID
 
 	MsgGetCipherIDRequest network.MessageTypeID
 	MsgGetCipherIDReply   network.MessageTypeID
 
-	MsgRetrieveQuery    network.MessageTypeID // Unused
-	MsgRetrieveRequest  network.MessageTypeID
-	MsgRetrieveReply    network.MessageTypeID
-	MsgRetrieveResponse network.MessageTypeID // Unused
+	MsgSwitchQuery    network.MessageTypeID // Unused
+	MsgSwitchRequest  network.MessageTypeID
+	MsgSwitchReply    network.MessageTypeID
+	MsgSwitchResponse network.MessageTypeID // Unused
 
 	MsgSumQuery    network.MessageTypeID // Unused
 	MsgSumRequest  network.MessageTypeID
@@ -89,6 +98,9 @@ type MessageTypes struct {
 	MsgSharesToEncRequest  network.MessageTypeID
 	MsgSharesToEncReply    network.MessageTypeID
 	MsgSharesToEncResponse network.MessageTypeID // Unused
+
+	MsgEvalCircuitQuery    network.MessageTypeID // Unused
+	MsgEvalCircuitResponse network.MessageTypeID // Unused
 }
 
 var MsgTypes = MessageTypes{}
@@ -112,6 +124,9 @@ func init() {
 	MsgTypes.MsgGenRotKeyQuery = network.RegisterMessage(&GenRotKeyQuery{})       // Unused
 	MsgTypes.MsgGenRotKeyResponse = network.RegisterMessage(&GenRotKeyResponse{}) // Unused
 
+	MsgTypes.MsgCreateCircuitQuery = network.RegisterMessage(&CreateCircuitQuery{})       // Unused
+	MsgTypes.MsgCreateCircuitResponse = network.RegisterMessage(&CreateCircuitResponse{}) // Unused
+
 	MsgTypes.MsgGetPubKeyRequest = network.RegisterMessage(&GetPubKeyRequest{})
 	MsgTypes.MsgGetPubKeyReply = network.RegisterMessage(&GetPubKeyReply{})
 
@@ -124,16 +139,22 @@ func init() {
 	MsgTypes.MsgStoreQuery = network.RegisterMessage(&StoreQuery{})       // Unused
 	MsgTypes.MsgStoreResponse = network.RegisterMessage(&StoreResponse{}) // Unused
 
+	MsgTypes.MsgStoreAndNameQuery = network.RegisterMessage(&StoreAndNameQuery{})       // Unused
+	MsgTypes.MsgStoreAndNameResponse = network.RegisterMessage(&StoreAndNameResponse{}) // Unused
+
+	MsgTypes.MsgNameQuery = network.RegisterMessage(&NameQuery{})       // Unused
+	MsgTypes.MsgNameResponse = network.RegisterMessage(&NameResponse{}) // Unused
+
 	MsgTypes.MsgGetCipherRequest = network.RegisterMessage(&GetCipherRequest{})
 	MsgTypes.MsgGetCipherReply = network.RegisterMessage(&GetCipherReply{})
 
 	MsgTypes.MsgGetCipherIDRequest = network.RegisterMessage(&GetCipherIDRequest{})
 	MsgTypes.MsgGetCipherIDReply = network.RegisterMessage(&GetCipherIDReply{})
 
-	MsgTypes.MsgRetrieveQuery = network.RegisterMessage(&SwitchQuery{}) // Unused
-	MsgTypes.MsgRetrieveRequest = network.RegisterMessage(&SwitchRequest{})
-	MsgTypes.MsgRetrieveReply = network.RegisterMessage(&SwitchReply{})
-	MsgTypes.MsgRetrieveResponse = network.RegisterMessage(&SwitchResponse{}) // Unused
+	MsgTypes.MsgSwitchQuery = network.RegisterMessage(&SwitchQuery{}) // Unused
+	MsgTypes.MsgSwitchRequest = network.RegisterMessage(&SwitchRequest{})
+	MsgTypes.MsgSwitchReply = network.RegisterMessage(&SwitchReply{})
+	MsgTypes.MsgSwitchResponse = network.RegisterMessage(&SwitchResponse{}) // Unused
 
 	MsgTypes.MsgSumQuery = network.RegisterMessage(&SumQuery{}) // Unused
 	MsgTypes.MsgSumRequest = network.RegisterMessage(&SumRequest{})
@@ -169,6 +190,9 @@ func init() {
 	MsgTypes.MsgSharesToEncRequest = network.RegisterMessage(&SharesToEncRequest{})
 	MsgTypes.MsgSharesToEncReply = network.RegisterMessage(&SharesToEncReply{})
 	MsgTypes.MsgSharesToEncResponse = network.RegisterMessage(&SharesToEncResponse{}) // Unused
+
+	MsgTypes.MsgEvalCircuitQuery = network.RegisterMessage(&EvalCircuitQuery{})       // Unused
+	MsgTypes.MsgEvalCircuitResponse = network.RegisterMessage(&EvalCircuitResponse{}) // Unused
 }
 
 /*********************** Message structs *********************/
@@ -179,10 +203,31 @@ type SessionID uuid.UUID
 
 var NilSessionID = SessionID(uuid.Nil)
 
+var sessIDLock sync.Mutex
+
 func NewSessionID() SessionID {
+	sessIDLock.Lock()
+	defer sessIDLock.Unlock()
 	return SessionID(uuid.NewV1())
 }
 func (id SessionID) String() string {
+	return (uuid.UUID)(id).String()
+}
+
+// Circuit ID
+
+type CircuitID uuid.UUID
+
+var NilCircuitID = CircuitID(uuid.Nil)
+
+var circIDLock sync.Mutex
+
+func NewCircuitID() CircuitID {
+	circIDLock.Lock()
+	defer circIDLock.Unlock()
+	return CircuitID(uuid.NewV1())
+}
+func (id CircuitID) String() string {
 	return (uuid.UUID)(id).String()
 }
 
@@ -195,7 +240,11 @@ type CipherID struct {
 
 var NilCipherID = CipherID{"", uuid.Nil}
 
+var cipIDLock sync.Mutex
+
 func NewCipherID(owner *network.ServerIdentity) CipherID {
+	cipIDLock.Lock()
+	defer cipIDLock.Unlock()
 	data, _ := protobuf.Encode(owner)
 	return CipherID{string(data), uuid.NewV1()}
 }
@@ -397,13 +446,41 @@ type GetRotKeyReply struct {
 type StoreQuery struct {
 	SessionID SessionID
 
-	Name       string
 	Ciphertext *bfv.Ciphertext
 }
 
 type StoreResponse struct {
 	CipherID CipherID
 	Valid    bool
+}
+
+// Store and name
+
+// StoreAndNameQuery contains the data to store, and its variable name.
+type StoreAndNameQuery struct {
+	CircuitID CircuitID
+
+	Name       string
+	Ciphertext *bfv.Ciphertext
+}
+
+type StoreAndNameResponse struct {
+	CipherID CipherID
+	Valid    bool
+}
+
+// Name
+
+// NameQuery contains the variable name.
+type NameQuery struct {
+	CircuitID CircuitID
+
+	Name     string
+	CipherID CipherID
+}
+
+type NameResponse struct {
+	Valid bool
 }
 
 // Get Ciphertext
@@ -451,7 +528,7 @@ func (id GetCipherIDRequestID) String() string {
 
 type GetCipherIDRequest struct {
 	ReqID     GetCipherIDRequestID
-	SessionID SessionID
+	CircuitID CircuitID
 	Name      string
 }
 
@@ -830,16 +907,36 @@ type SharesToEncResponse struct {
 	Valid       bool
 }
 
-// Circuit
+// Create circuit
 
-type CircuitQuery struct {
+type CreateCircuitQuery struct {
 	SessionID SessionID
 
-	Desc      string         // RPN description of the circuit
-	PublicKey *bfv.PublicKey // The public key under which to switch the final result
+	Desc string // RPN description of the circuit
 }
 
-type CircuitResponse struct {
-	Result *bfv.Ciphertext // The result, switched under the provided public key
+type CreateCircuitConfig struct {
+	SessionID   SessionID
+	CircuitID   CircuitID
+	Description string
+}
+
+type CreateCircuitResponse struct {
+	CircuitID CircuitID
+	Valid     bool
+}
+
+// Evaluate circuit
+
+type EvalCircuitQuery struct {
+	CircuitID CircuitID
+}
+
+type CloseCircuitConfig struct {
+	CircuitID CircuitID
+}
+
+type EvalCircuitResponse struct {
+	Result CipherID
 	Valid  bool
 }

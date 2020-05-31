@@ -134,6 +134,18 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 	for i := 0; i < sim.Rounds; i++ {
 		// round := monitor.NewTimeMeasure("alpha") // TODO: is this needed?
 
+		// Create circuit
+
+		log.Lvl2("Going to create circuit. Should not return error")
+		desc := "*(+(+(*(v a@0)(v a@1))(*(v a@1)(v a@2)))(+(*(v a@2)(v a@3))(*(v a@0)(v a@3))))" +
+			"(+(+(*(v b@0)(v b@1))(*(v b@1)(v b@2)))(+(*(v b@2)(v b@3))(*(v b@0)(v b@3))))"
+		circuitID, err := clients[0].CreateCircuit(desc)
+		if err != nil {
+			log.Error("Method CreateCircuit returned error:", err)
+			return err
+		}
+		log.Lvl2("Method CreateCircuit correctly returned no error")
+
 		// Generate a0 and b0
 
 		log.Lvl2("Going to generate a0 and b0. Should not return error")
@@ -181,101 +193,109 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 
 		log.Lvl2("Going to store a0. Should not return error")
 		dataA0 := a0.Coeffs[0] // Only one modulus exists
-		_, err = clients[0].SendStoreQuery("a", dataA0)
+		_, err = clients[0].SendStoreAndNameQuery(circuitID, "a", dataA0)
 		if err != nil {
-			log.Error("Method SendStoreQuery for a0 returned error:", err)
+			log.Error("Method SendStoreAndNameQuery for a0 returned error:", err)
 			return err
 		}
-		log.Lvl2("Method SendStoreQuery for a0 correctly returned no error")
+		log.Lvl2("Method SendStoreAndNameQuery for a0 correctly returned no error")
 
 		// Store b0
 
 		log.Lvl2("Going to store b0. Should not return error")
 		dataB0 := b0.Coeffs[0] // Only one modulus exists
-		_, err = clients[0].SendStoreQuery("b", dataB0)
+		_, err = clients[0].SendStoreAndNameQuery(circuitID, "b", dataB0)
 		if err != nil {
-			log.Error("Method SendStoreQuery for b0 returned error:", err)
+			log.Error("Method SendStoreAndNameQuery for b0 returned error:", err)
 			return err
 		}
-		log.Lvl2("Method SendStoreQuery for b0 correctly returned no error")
+		log.Lvl2("Method SendStoreAndNameQuery for b0 correctly returned no error")
 
 		// Store a1
 
 		log.Lvl2("Going to store a1. Should not return error")
 		dataA1 := a1.Coeffs[0] // Only one modulus exists
-		_, err = clients[1].SendStoreQuery("a", dataA1)
+		_, err = clients[1].SendStoreAndNameQuery(circuitID, "a", dataA1)
 		if err != nil {
-			log.Error("Method SendStoreQuery for a1 returned error:", err)
+			log.Error("Method SendStoreAndNameQuery for a1 returned error:", err)
 			return err
 		}
-		log.Lvl2("Method SendStoreQuery for a1 correctly returned no error")
+		log.Lvl2("Method SendStoreAndNameQuery for a1 correctly returned no error")
 
 		// Store b1
 
 		log.Lvl2("Going to store b1. Should not return error")
 		dataB1 := b1.Coeffs[0] // Only one modulus exists
-		_, err = clients[1].SendStoreQuery("b", dataB1)
+		_, err = clients[1].SendStoreAndNameQuery(circuitID, "b", dataB1)
 		if err != nil {
-			log.Error("Method SendStoreQuery for b1 returned error:", err)
+			log.Error("Method SendStoreAndNameQuery for b1 returned error:", err)
 			return err
 		}
-		log.Lvl2("Method SendStoreQuery for b1 correctly returned no error")
+		log.Lvl2("Method SendStoreAndNameQuery for b1 correctly returned no error")
 
 		// Store a2
 
 		log.Lvl2("Going to store a2. Should not return error")
 		dataA2 := a2.Coeffs[0] // Only one modulus exists
-		_, err = clients[2].SendStoreQuery("a", dataA2)
+		_, err = clients[2].SendStoreAndNameQuery(circuitID, "a", dataA2)
 		if err != nil {
-			log.Error("Method SendStoreQuery for a2 returned error:", err)
+			log.Error("Method SendStoreAndNameQuery for a2 returned error:", err)
 			return err
 		}
-		log.Lvl2("Method SendStoreQuery for a2 correctly returned no error")
+		log.Lvl2("Method SendStoreAndNameQuery for a2 correctly returned no error")
 
 		// Store b2
 
 		log.Lvl2("Going to store b2. Should not return error")
 		dataB2 := b2.Coeffs[0] // Only one modulus exists
-		_, err = clients[2].SendStoreQuery("b", dataB2)
+		_, err = clients[2].SendStoreAndNameQuery(circuitID, "b", dataB2)
 		if err != nil {
-			log.Error("Method SendStoreQuery for b2 returned error:", err)
+			log.Error("Method SendStoreAndNameQuery for b2 returned error:", err)
 			return err
 		}
-		log.Lvl2("Method SendStoreQuery for b2 correctly returned no error")
+		log.Lvl2("Method SendStoreAndNameQuery for b2 correctly returned no error")
 
 		// Store a3
 
 		log.Lvl2("Going to store a3. Should not return error")
 		dataA3 := a3.Coeffs[0] // Only one modulus exists
-		_, err = clients[3].SendStoreQuery("a", dataA3)
+		_, err = clients[3].SendStoreAndNameQuery(circuitID, "a", dataA3)
 		if err != nil {
-			log.Error("Method SendStoreQuery for a3 returned error:", err)
+			log.Error("Method SendStoreAndNameQuery for a3 returned error:", err)
 			return err
 		}
-		log.Lvl2("Method SendStoreQuery for a3 correctly returned no error")
+		log.Lvl2("Method SendStoreAndNameQuery for a3 correctly returned no error")
 
 		// Store b3
 
 		log.Lvl2("Going to store b3. Should not return error")
 		dataB3 := b3.Coeffs[0] // Only one modulus exists
-		_, err = clients[3].SendStoreQuery("b", dataB3)
+		_, err = clients[3].SendStoreAndNameQuery(circuitID, "b", dataB3)
 		if err != nil {
-			log.Error("Method SendStoreQuery for b3 returned error:", err)
+			log.Error("Method SendStoreAndNameQuery for b3 returned error:", err)
 			return err
 		}
-		log.Lvl2("Method SendStoreQuery for b3 correctly returned no error")
+		log.Lvl2("Method SendStoreAndNameQuery for b3 correctly returned no error")
 
 		// Evaluate the circuit remotely
 
 		log.Lvl2("Going to evaluate the circuit")
-		desc := "*(+(+(*(v a@0)(v a@1))(*(v a@1)(v a@2)))(+(*(v a@2)(v a@3))(*(v a@0)(v a@3))))" +
-			"(+(+(*(v b@0)(v b@1))(*(v b@1)(v b@2)))(+(*(v b@2)(v b@3))(*(v b@0)(v b@3))))"
-		remCirc, err := clients[0].SendCircuitQuery(desc)
+		resID, err := clients[0].SendEvalCircuitQuery(circuitID)
 		if err != nil {
 			log.Error("Method SendCircuitQuery returned error:", err)
 			return err
 		}
 		log.Lvl2("Method SendCircuitQuery correctly returned no error")
+
+		// Retrieve the remote result
+
+		log.Lvl2("Going to retrieve the remote result. Should not return error")
+		remCirc, err := clients[0].SendSwitchQuery(resID)
+		if err != nil {
+			log.Error("Method SendSwitchQuery returned error:", err)
+			return err
+		}
+		log.Lvl2("Method SendSwitchQuery correctly returned no error")
 
 		// Stop timer.
 		elapsed := time.Since(start)

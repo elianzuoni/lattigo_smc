@@ -13,7 +13,7 @@ import (
 )
 
 const CreateSessionProtocolName = "CreateSessionProtocol"
-const CloseSessionProtocolName = "CloseSessionProtocolName"
+const CloseSessionProtocolName = "CloseSessionProtocol"
 
 // Though we have NewProtocol, onet needs to register the protocol name. So we register dummy protocol factories.
 func init() {
@@ -32,14 +32,6 @@ func init() {
 // It is able to do the initialisation because it has access to the service.
 // Only gets called at children: root has to manually call it, register the instance, and dispatch it.
 func (service *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.GenericConfig) (onet.ProtocolInstance, error) {
-	// New version of onet sets config automatically, and does not allow to do it twice
-	/*
-		err := tni.SetConfig(conf) // Needed in order for conf to be sent by onet along the protocol name at the beginning
-		if err != nil {
-			return nil, err
-		}
-
-	*/
 	var err error
 	var protocol onet.ProtocolInstance = nil
 

@@ -19,16 +19,19 @@ type Service struct {
 	sessions *SessionStore
 
 	// Synchronisation points on which a reply from a contacted server is waited for
-	getPubKeyRepLock   sync.RWMutex
-	getPubKeyReplies   map[messages.GetPubKeyRequestID]chan *messages.GetPubKeyReply
-	getEvalKeyRepLock  sync.RWMutex
-	getEvalKeyReplies  map[messages.GetEvalKeyRequestID]chan *messages.GetEvalKeyReply
-	getRotKeyRepLock   sync.RWMutex
-	getRotKeyReplies   map[messages.GetRotKeyRequestID]chan *messages.GetRotKeyReply
-	getCipherRepLock   sync.RWMutex
-	getCipherReplies   map[messages.GetCipherRequestID]chan *messages.GetCipherReply
-	getCipherIDRepLock sync.RWMutex
-	getCipherIDReplies map[messages.GetCipherIDRequestID]chan *messages.GetCipherIDReply
+	getPubKeyRepLock  sync.RWMutex
+	getPubKeyReplies  map[messages.GetPubKeyRequestID]chan *messages.GetPubKeyReply
+	getEvalKeyRepLock sync.RWMutex
+	getEvalKeyReplies map[messages.GetEvalKeyRequestID]chan *messages.GetEvalKeyReply
+	getRotKeyRepLock  sync.RWMutex
+	getRotKeyReplies  map[messages.GetRotKeyRequestID]chan *messages.GetRotKeyReply
+	getCipherRepLock  sync.RWMutex
+	getCipherReplies  map[messages.GetCipherRequestID]chan *messages.GetCipherReply
+}
+
+// Retrieves Session from the underlying SessionStore. Returns boolean indicating success.
+func (service *Service) GetSession(id messages.SessionID) (s *Session, ok bool) {
+	return service.sessions.GetSession(id)
 }
 
 const ServiceName = "SessionService"
@@ -51,11 +54,10 @@ func NewService(c *onet.Context) (onet.Service, error) {
 	serv := &Service{
 		ServiceProcessor: onet.NewServiceProcessor(c),
 
-		getPubKeyReplies:   make(map[messages.GetPubKeyRequestID]chan *messages.GetPubKeyReply),
-		getEvalKeyReplies:  make(map[messages.GetEvalKeyRequestID]chan *messages.GetEvalKeyReply),
-		getRotKeyReplies:   make(map[messages.GetRotKeyRequestID]chan *messages.GetRotKeyReply),
-		getCipherReplies:   make(map[messages.GetCipherRequestID]chan *messages.GetCipherReply),
-		getCipherIDReplies: make(map[messages.GetCipherIDRequestID]chan *messages.GetCipherIDReply),
+		getPubKeyReplies:  make(map[messages.GetPubKeyRequestID]chan *messages.GetPubKeyReply),
+		getEvalKeyReplies: make(map[messages.GetEvalKeyRequestID]chan *messages.GetEvalKeyReply),
+		getRotKeyReplies:  make(map[messages.GetRotKeyRequestID]chan *messages.GetRotKeyReply),
+		getCipherReplies:  make(map[messages.GetCipherRequestID]chan *messages.GetCipherReply),
 	}
 
 	// Create the SessionStore, indicating itself as the reference Service
@@ -76,6 +78,9 @@ func NewService(c *onet.Context) (onet.Service, error) {
 // Registers in serv handlers - of the form func(msg interface{})(ret interface{}, err error) -
 // for every possible type of client request, implicitly identified by the type of msg.
 func registerClientQueryHandlers(serv *Service) error {
+	if err := serv.RegisterHandler(serv.HandleStoreQuery); err != nil {
+		return errors.New("Couldn't register HandleStoreQuery: " + err.Error())
+	}
 	if err := serv.RegisterHandler(serv.HandleCreateSessionQuery); err != nil {
 		return errors.New("Couldn't register HandleCreateSessionQuery: " + err.Error())
 	}
@@ -90,9 +95,6 @@ func registerClientQueryHandlers(serv *Service) error {
 	}
 	if err := serv.RegisterHandler(serv.HandleGenRotKeyQuery); err != nil {
 		return errors.New("Couldn't register HandleGenRotKeyQuery: " + err.Error())
-	}
-	if err := serv.RegisterHandler(serv.HandleStoreQuery); err != nil {
-		return errors.New("Couldn't register HandleStoreQuery: " + err.Error())
 	}
 
 	return nil
@@ -116,15 +118,6 @@ func registerServerMsgHandler(c *onet.Context, serv *Service) {
 	// Get Ciphertext
 	c.RegisterProcessor(serv, messages.MsgTypes.MsgGetCipherRequest)
 	c.RegisterProcessor(serv, messages.MsgTypes.MsgGetCipherReply)
-
-	// Get CipherID
-	c.RegisterProcessor(serv, messages.MsgTypes.MsgGetCipherIDRequest)
-	c.RegisterProcessor(serv, messages.MsgTypes.MsgGetCipherIDReply)
-}
-
-// Retrieves Session from the underlying SessionStore. Returns boolean indicating success.
-func (service *Service) GetSession(id messages.SessionID) (s *Session, ok bool) {
-	return service.sessions.GetSession(id)
 }
 
 // Process processes messages from servers. It is called by the onet library upon reception of any of
@@ -168,16 +161,6 @@ func (service *Service) Process(msg *network.Envelope) {
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherReply) {
 		service.processGetCipherReply(msg)
-		return
-	}
-
-	// Get CipherID
-	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherIDRequest) {
-		service.processGetCipherIDRequest(msg)
-		return
-	}
-	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherIDReply) {
-		service.processGetCipherIDReply(msg)
 		return
 	}
 

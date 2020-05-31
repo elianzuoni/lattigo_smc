@@ -81,13 +81,13 @@ func (service *Service) closeSession(SessionID messages.SessionID) error {
 	log.Lvl3(service.ServerIdentity(), "(SessionID =", SessionID, ")\n", "Starting close-session protocol")
 	err = csp.Start()
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not start enc-to-shares protocol:", err)
+		log.Error(service.ServerIdentity(), "Could not start close-session protocol:", err)
 		return err
 	}
 	// Call dispatch (the main logic)
 	err = csp.Dispatch()
 	if err != nil {
-		log.Error(service.ServerIdentity(), "Could not dispatch enc-to-shares protocol:", err)
+		log.Error(service.ServerIdentity(), "Could not dispatch close-session protocol:", err)
 		return err
 	}
 

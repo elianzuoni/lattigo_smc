@@ -89,11 +89,11 @@ func runLattigo(c *cli.Context) {
 		var err error
 		var id *uuid.UUID
 		if typeData == "string" {
-			id, err = client.SendStoreQuery(roster, []byte(write))
+			id, err = client.SendStoreAndNameQuery(roster, []byte(write))
 		} else if typeData == "byte" {
 			data := strings.Split(write, ",")
 			dBytes := utils.StringToBytes(data)
-			id, err = client.SendStoreQuery(roster, dBytes)
+			id, err = client.SendStoreAndNameQuery(roster, dBytes)
 		} else {
 			log.Error("unknown type of data : ", typeData)
 			return

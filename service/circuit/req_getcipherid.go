@@ -1,4 +1,4 @@
-package session
+package circuit
 
 import (
 	"go.dedis.ch/onet/v3/log"
@@ -7,13 +7,13 @@ import (
 	"time"
 )
 
-func (service *Service) GetRemoteCipherID(SessionID messages.SessionID, name string,
+func (service *Service) GetRemoteCipherID(CircuitID messages.CircuitID, name string,
 	owner *network.ServerIdentity) (messages.CipherID, bool) {
 	log.Lvl1(service.ServerIdentity(), "(name =", name, ")\n", "Retrieving remote CipherID")
 
 	// Create GetCipherIDRequest with its ID
 	reqID := messages.NewGetCipherIDRequestID()
-	req := &messages.GetCipherIDRequest{reqID, SessionID, name}
+	req := &messages.GetCipherIDRequest{reqID, CircuitID, name}
 	var reply *messages.GetCipherIDReply
 
 	// Create channel before sending request to owner.
@@ -61,8 +61,8 @@ func (service *Service) processGetCipherIDRequest(msg *network.Envelope) {
 	// Start by declaring reply with minimal fields.
 	reply := &messages.GetCipherIDReply{req.ReqID, messages.NilCipherID, false}
 
-	// Retrieve session
-	s, ok := service.GetSession(req.SessionID)
+	// Retrieve circuit
+	c, ok := service.GetCircuit(req.CircuitID)
 	if !ok {
 		log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Requested session does not exist")
 		err := service.SendRaw(msg.ServerIdentity, reply)
@@ -75,7 +75,7 @@ func (service *Service) processGetCipherIDRequest(msg *network.Envelope) {
 
 	// Retrieve CipherID
 	log.Lvl2(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Retrieving local CipherID")
-	id, ok := s.GetLocalCipherID(req.Name)
+	id, ok := c.GetLocalCipherID(req.Name)
 	if !ok {
 		log.Error(service.ServerIdentity(), "(ReqID =", req.ReqID, ")\n", "Requested CipherID does not exist")
 		err := service.SendRaw(msg.ServerIdentity, reply)

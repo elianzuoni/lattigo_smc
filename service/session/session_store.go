@@ -34,9 +34,6 @@ type Session struct {
 	// Stores ciphertexts.
 	ciphertextsLock sync.RWMutex
 	ciphertexts     map[messages.CipherID]*bfv.Ciphertext
-	// Stores the name-CipherID correspondence
-	cipherIDsLock sync.RWMutex
-	cipherIDs     map[string]messages.CipherID
 	// Stores additive shares.
 	sharesLock sync.RWMutex
 	shares     map[messages.SharesID]*dbfv.AdditiveShare
@@ -78,8 +75,6 @@ func (store *SessionStore) NewSession(id messages.SessionID, roster *onet.Roster
 
 		// No need to initialise ciphertextsLock
 		ciphertexts: make(map[messages.CipherID]*bfv.Ciphertext),
-		// No need to initialise cipherIDsLock
-		cipherIDs: make(map[string]messages.CipherID),
 		// No need to initialise sharesLock
 		shares: make(map[messages.SharesID]*dbfv.AdditiveShare),
 	}

@@ -292,8 +292,42 @@ func (c *Client) SendGenRotKeyQuery(rotIdx int, K uint64, seed []byte) error {
 	return nil
 }
 
+// Sends a CreateCircuitQuery to the system.
+func (c *Client) CreateCircuit(desc string) (messages.CircuitID, error) {
+	log.Lvl1(c, "Creating new session")
+
+	// Check that the client is already bound
+	if !c.isBound() {
+		err := errors.New("Cannot CreateCircuit: is not bound")
+		log.Error(c, err)
+		return messages.NilCircuitID, err
+	}
+
+	// Create circuit
+
+	// Craft CreateSessionQuery and prepare response
+	query := &messages.CreateCircuitQuery{c.sessionID, desc}
+	resp := &messages.CreateCircuitResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending CreateCircuit query to entry point")
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "CreateCircuit query returned error:", err)
+		return messages.NilCircuitID, err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid. Service could not create circuit.")
+		log.Error(c, err)
+		return messages.NilCircuitID, err
+	}
+	log.Lvl3(c, "CreateCircuit query was successful!")
+
+	return resp.CircuitID, nil
+}
+
 // SendStoreQuery sends a query to store in the system the provided vector. The vector is encrypted locally.
-func (c *Client) SendStoreQuery(name string, data []uint64) (messages.CipherID, error) {
+func (c *Client) SendStoreQuery(data []uint64) (messages.CipherID, error) {
 	log.Lvl1(c, "Called to send a store query")
 
 	// Check that the client is bound
@@ -309,7 +343,7 @@ func (c *Client) SendStoreQuery(name string, data []uint64) (messages.CipherID, 
 	cipher := c.encryptor.EncryptNew(plain)
 
 	// Craft query and prepare response
-	query := &messages.StoreQuery{c.sessionID, name, cipher}
+	query := &messages.StoreQuery{c.sessionID, cipher}
 	resp := &messages.StoreResponse{}
 
 	// Send query
@@ -328,6 +362,78 @@ func (c *Client) SendStoreQuery(name string, data []uint64) (messages.CipherID, 
 	log.Lvl2(c, "Store query was successful")
 
 	return resp.CipherID, nil
+}
+
+// SendStoreAndNameQuery sends a query to store in the system the provided vector under the given name.
+// The vector is encrypted locally.
+func (c *Client) SendStoreAndNameQuery(circuitID messages.CircuitID, name string, data []uint64) (messages.CipherID, error) {
+	log.Lvl1(c, "Called to send a store-and-name query")
+
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return messages.NilCipherID, err
+	}
+
+	// Encrypt data
+	plain := bfv.NewPlaintext(c.params)
+	c.encoder.EncodeUint(data, plain)
+	cipher := c.encryptor.EncryptNew(plain)
+
+	// Craft query and prepare response
+	query := &messages.StoreAndNameQuery{circuitID, name, cipher}
+	resp := &messages.StoreAndNameResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "Store-and-name query returned error:", err)
+		return messages.NilCipherID, err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid: service could not store-and-name")
+		log.Error(c, err)
+		return messages.NilCipherID, err
+	}
+
+	log.Lvl2(c, "Store-and-name query was successful")
+
+	return resp.CipherID, nil
+}
+
+// SendNameQuery sends a query to associate the given name to the given CipherID.
+func (c *Client) SendNameQuery(circuitID messages.CircuitID, name string, cipherID messages.CipherID) error {
+	log.Lvl1(c, "Called to send a name query")
+
+	// Check that the client is bound
+	if !c.isBound() {
+		err := errors.New("Cannot send query: is not bound")
+		log.Error(c, err)
+		return err
+	}
+
+	// Craft query and prepare response
+	query := &messages.NameQuery{circuitID, name, cipherID}
+	resp := &messages.NameResponse{}
+
+	// Send query
+	log.Lvl2(c, "Sending query to entry point")
+	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
+	if err != nil {
+		log.Error(c, "Name query returned error:", err)
+		return err
+	}
+	if !resp.Valid {
+		err = errors.New("Received response is invalid: service could not name")
+		log.Error(c, err)
+		return err
+	}
+
+	log.Lvl2(c, "Name query was successful")
+
+	return nil
 }
 
 // SendSwitchQuery sends a query to retrieve the ciphertext indexed by cipherID, switched under the
@@ -602,40 +708,35 @@ func (c *Client) SendSharesToEncQuery(sharesID messages.SharesID, seed []byte) (
 	return resp.NewCipherID, nil
 }
 
-// SendCircuitQuery sends a query to evaluate the circuit described by desc.
-func (c *Client) SendCircuitQuery(desc string) ([]uint64, error) {
-	log.Lvl1(c, "Called to send a circuit query")
+// SendEvalCircuitQuery sends a query to evaluate the circuit described by desc.
+func (c *Client) SendEvalCircuitQuery(circuitID messages.CircuitID) (messages.CipherID, error) {
+	log.Lvl1(c, "Called to send an eval-circuit query")
 
 	// Check that the client is bound
 	if !c.isBound() {
 		err := errors.New("Cannot send query: is not bound")
 		log.Error(c, err)
-		return nil, err
+		return messages.NilCipherID, err
 	}
 
 	// Craft query and prepare response
-	query := &messages.CircuitQuery{c.sessionID, desc, c.pk}
-	resp := &messages.CircuitResponse{}
+	query := &messages.EvalCircuitQuery{circuitID}
+	resp := &messages.EvalCircuitResponse{}
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
 	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
-		log.Error(c, "Circuit query returned error:", err)
-		return nil, err
+		log.Error(c, "EvalCircuit query returned error:", err)
+		return messages.NilCipherID, err
 	}
 	if !resp.Valid {
 		err = errors.New("Received response is invalid. Service could not evaluate circuit.")
 		log.Error(c, err)
-		return nil, err
+		return messages.NilCipherID, err
 	}
 
-	log.Lvl2(c, "Circuit query was successful")
+	log.Lvl2(c, "EvalCircuit query was successful")
 
-	// Recover clear-text vector
-	log.Lvl4(c, "Recovering clear-text vector")
-	plain := c.decryptor.DecryptNew(resp.Result)
-	data := c.encoder.DecodeUint(plain)
-
-	return data, nil
+	return resp.Result, nil
 }

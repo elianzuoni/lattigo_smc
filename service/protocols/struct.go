@@ -14,6 +14,13 @@ type AbstractSessionStore interface {
 	DeleteSession(id messages.SessionID)
 }
 
+// This interface is implemented by the CircuitStore struct. It extrapolates the behaviour required to run the
+// CreateCircuit and CloseCircuit protocols.
+type AbstractCircuitStore interface {
+	NewCircuit(circuitID messages.CircuitID, sessionID messages.SessionID, desc string)
+	DeleteCircuit(id messages.CircuitID)
+}
+
 type CreateSessionProtocol struct {
 	*onet.TreeNodeInstance
 
@@ -35,6 +42,36 @@ type CloseSessionProtocol struct {
 
 	store     AbstractSessionStore
 	SessionID messages.SessionID
+
+	// Channels to receive from other nodes.
+	channelStart chan StructStart
+	channelDone  chan []StructDone // A channel of slices allows to receive all shares at once.
+
+	// Used ot wait for termination.
+	done sync.Mutex
+}
+
+type CreateCircuitProtocol struct {
+	*onet.TreeNodeInstance
+
+	store     AbstractCircuitStore
+	CircuitID messages.CircuitID
+	SessionID messages.SessionID
+	desc      string
+
+	// Channels to receive from other nodes.
+	channelStart chan StructStart
+	channelDone  chan []StructDone // A channel of slices allows to receive all shares at once.
+
+	// Used ot wait for termination.
+	done sync.Mutex
+}
+
+type CloseCircuitProtocol struct {
+	*onet.TreeNodeInstance
+
+	store     AbstractCircuitStore
+	CircuitID messages.CircuitID
 
 	// Channels to receive from other nodes.
 	channelStart chan StructStart

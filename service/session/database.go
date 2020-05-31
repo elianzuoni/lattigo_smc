@@ -1,14 +1,10 @@
 package session
 
 import (
-	"errors"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/dbfv"
 	"go.dedis.ch/onet/v3/log"
-	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
-	"strconv"
-	"strings"
 )
 
 // Retrieves a ciphertext from the database, given its id. Returns a boolean indicating success.
@@ -64,67 +60,6 @@ func (s *Session) StoreCiphertextNewID(ct *bfv.Ciphertext) messages.CipherID {
 	newCipherID := messages.NewCipherID(s.service.ServerIdentity())
 	s.StoreCiphertext(newCipherID, ct)
 	return newCipherID
-}
-
-// Retrieves a CipherID, whether local or remote, given its full name
-func (s *Session) GetCipherID(fullName string) (messages.CipherID, bool) {
-	log.Lvl2(s.service.ServerIdentity(), "(fullName =", fullName, ")\n", "Retrieving CipherID")
-
-	// Parse full name
-	name, owner, err := s.parseVarFullName(fullName)
-	if err != nil {
-		log.Error(s.service.ServerIdentity(), "(fullName =", fullName, ")\n", "Could not parse full variable name:", err)
-		return messages.NilCipherID, false
-	}
-
-	// If we are owner, retrieve it locally
-	if owner.Equal(s.service.ServerIdentity()) {
-		log.Lvl2(s.service.ServerIdentity(), "(fullName =", fullName, ")\n", "CipherID is local")
-		return s.GetLocalCipherID(name)
-	}
-
-	// Else, send a request to the owner
-	log.Lvl2(s.service.ServerIdentity(), "(fullName =", fullName, ")\n", "CipherID is remote")
-	return s.service.GetRemoteCipherID(s.SessionID, name, owner)
-}
-
-// Retrieves a local CipherID, given its variable name
-func (s *Session) GetLocalCipherID(name string) (messages.CipherID, bool) {
-	s.cipherIDsLock.RLock()
-	id, ok := s.cipherIDs[name]
-	s.cipherIDsLock.RUnlock()
-
-	return id, ok
-}
-
-// Parses the full name to get name and owner
-func (s *Session) parseVarFullName(fullName string) (name string, owner *network.ServerIdentity, err error) {
-	toks := strings.Split(fullName, "@")
-
-	if len(toks) != 2 {
-		err = errors.New("Mis-formed full variable name: length != 2 after splitting")
-		return
-	}
-
-	name = toks[0]
-	ownerIdx, err := strconv.Atoi(toks[1])
-	if err != nil {
-		return
-	}
-	if ownerIdx < 0 || ownerIdx >= len(s.Roster.List) {
-		err = errors.New("Mis-formed full variable name: owner index out of bounds")
-		return
-	}
-
-	owner = s.Roster.List[ownerIdx]
-	return
-}
-
-// Stores a new CipherID under the given name
-func (s *Session) StoreCipherID(name string, id messages.CipherID) {
-	s.cipherIDsLock.Lock()
-	s.cipherIDs[name] = id
-	s.cipherIDsLock.Unlock()
 }
 
 // Retrieves an additive share from the database, given its id. Returns a boolean indicating success.

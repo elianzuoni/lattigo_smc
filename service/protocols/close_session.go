@@ -4,7 +4,7 @@
 // Method NewCloseSessionProtocol:
 // 0) The nodes initialise the variables needed for the protocol. This method is not usable as-is: it
 //    needs to be encapsulated in a proper protocol factory (respecting the onet.NewProtocol signature).
-//    For this reason, though CreateSessionProtocol does implement the onet.ProtocolInstance interface,
+//    For this reason, though CloseSessionProtocol does implement the onet.ProtocolInstance interface,
 //    it is not registered to the onet library, as no protocol factory is yet defined.
 // Method Start:
 // 1) The root sends the wake-up message to itself.
@@ -59,7 +59,7 @@ func NewCloseSessionProtocol(t *onet.TreeNodeInstance, store AbstractSessionStor
 
 // Start starts the protocol (only called at root).
 func (p *CloseSessionProtocol) Start() error {
-	log.Lvl2(p.ServerIdentity(), "Started Encryption-to-Shares protocol")
+	log.Lvl2(p.ServerIdentity(), "Started Close-Session protocol")
 	//Step 1: send wake-up message to self
 	return p.SendTo(p.TreeNode(), &Start{})
 }
@@ -80,7 +80,7 @@ func (p *CloseSessionProtocol) Dispatch() error {
 		return err
 	}
 
-	// Step 3: create session
+	// Step 3: delete session
 	log.Lvl3(p.ServerIdentity(), "Deleting session")
 	p.store.DeleteSession(p.SessionID)
 
@@ -109,5 +109,5 @@ func (p *CloseSessionProtocol) WaitDone() {
 	p.done.Unlock()
 }
 
-// Check that *EncryptionToSharesProtocol implements onet.ProtocolInstance
+// Check that *CloseSessionProtocol implements onet.ProtocolInstance
 var _ onet.ProtocolInstance = (*CloseSessionProtocol)(nil)
