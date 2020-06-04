@@ -30,8 +30,8 @@ type CreateSessionProtocol struct {
 	params    *bfv.Parameters
 
 	// Channels to receive from other nodes.
-	channelStart chan StructStart
-	channelDone  chan []StructDone // A channel of slices allows to receive all shares at once.
+	channelStart chan StructServStart
+	channelDone  chan []StructServDone // A channel of slices allows to receive all shares at once.
 
 	// Used ot wait for termination.
 	done sync.Mutex
@@ -44,8 +44,8 @@ type CloseSessionProtocol struct {
 	SessionID messages.SessionID
 
 	// Channels to receive from other nodes.
-	channelStart chan StructStart
-	channelDone  chan []StructDone // A channel of slices allows to receive all shares at once.
+	channelStart chan StructServStart
+	channelDone  chan []StructServDone // A channel of slices allows to receive all shares at once.
 
 	// Used ot wait for termination.
 	done sync.Mutex
@@ -60,8 +60,8 @@ type CreateCircuitProtocol struct {
 	desc      string
 
 	// Channels to receive from other nodes.
-	channelStart chan StructStart
-	channelDone  chan []StructDone // A channel of slices allows to receive all shares at once.
+	channelStart chan StructServStart
+	channelDone  chan []StructServDone // A channel of slices allows to receive all shares at once.
 
 	// Used ot wait for termination.
 	done sync.Mutex
@@ -74,31 +74,31 @@ type CloseCircuitProtocol struct {
 	CircuitID messages.CircuitID
 
 	// Channels to receive from other nodes.
-	channelStart chan StructStart
-	channelDone  chan []StructDone // A channel of slices allows to receive all shares at once.
+	channelStart chan StructServStart
+	channelDone  chan []StructServDone // A channel of slices allows to receive all shares at once.
 
 	// Used ot wait for termination.
 	done sync.Mutex
 }
 
-// The Start message is sent to wake up the children.
-type Start struct{}
+// The ServStart message is sent to wake up the children.
+type ServStart struct{}
 
 // StructStart is a handler for onet.
 // Wraps the Start message so that it can
 // be passed via onet with the paradigm described in cothority_template
-type StructStart struct {
+type StructServStart struct {
 	*onet.TreeNode
-	Start
+	ServStart
 }
 
-// The Done message is sent to signal completion.
-type Done struct{}
+// The ServDone message is sent to signal completion.
+type ServDone struct{}
 
-// StructDone is a handler for onet.
+// StructServDone is a handler for onet.
 // Wraps the Done message so that it can
 // be passed via onet with the paradigm described in cothority_template
-type StructDone struct {
+type StructServDone struct {
 	*onet.TreeNode
-	Done
+	ServDone
 }

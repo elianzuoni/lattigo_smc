@@ -33,8 +33,8 @@ import (
 func init() {
 	fmt.Println("S2E: init")
 
-	_ = network.RegisterMessage(&StructStart{})
-	_ = network.RegisterMessage(&StructS2EReencryptionShare{})
+	_ = network.RegisterMessage(Start{})
+	_ = network.RegisterMessage(dbfv.S2EReencryptionShare{})
 }
 
 // This is a full-blown constructor. In every context (test, simulation, or deployment) it will have to

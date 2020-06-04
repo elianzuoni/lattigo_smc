@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
@@ -20,6 +21,7 @@ type SMCSimulation struct {
 	onet.SimulationBFTree
 
 	ParamsIdx int
+	Pause     int
 }
 
 func init() {
@@ -67,15 +69,15 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 	size := len(config.Roster.List)
 	log.Lvl1("Called with", size, "nodes; rounds:", sim.Rounds)
 
-	// We need 4 servers
-	if size < 4 {
+	// We need 3 servers
+	if size < 3 {
 		err := errors.New("Called with less than 4 servers")
 		log.Error(err)
 		return err
 	}
 
 	// Setup phase, create clients and session
-	clients := make([]*service.Client, 4)
+	clients := make([]*service.Client, 3)
 
 	log.Lvl2("Going to create new session. Should not return error")
 	c, sid, mpk, err := simNewClientCreateSession(config.Roster, sim.ParamsIdx, "Simulation-0")
@@ -118,17 +120,6 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 	}
 	log.Lvl2("Method BindToSession on Client 2 correctly returned no error")
 
-	// Create client 3
-
-	log.Lvl2("Going to bind to session on Client 3. Should not return error")
-	c, err = simNewClientBindToSession(config.Roster, 3, sim.ParamsIdx, "Simulation-3", sid, mpk)
-	clients[3] = c
-	if err != nil {
-		log.Error("Method BindToSession on Client 3 returned error:", err)
-		return err
-	}
-	log.Lvl2("Method BindToSession on Client 3 correctly returned no error")
-
 	// Repeat the circuit evaluation many times
 	timings := make([]time.Duration, sim.Rounds)
 	for i := 0; i < sim.Rounds; i++ {
@@ -137,8 +128,8 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 		// Create circuit
 
 		log.Lvl2("Going to create circuit. Should not return error")
-		desc := "*(+(+(*(v a@0)(v a@1))(*(v a@1)(v a@2)))(+(*(v a@2)(v a@3))(*(v a@0)(v a@3))))" +
-			"(+(+(*(v b@0)(v b@1))(*(v b@1)(v b@2)))(+(*(v b@2)(v b@3))(*(v b@0)(v b@3))))"
+		desc := "*(+(+(*(v a@0)(v a@1))(*(v a@1)(v a@2)))(+(v a@2)(v a@0)))" +
+			"(+(+(*(v b@0)(v b@1))(*(v b@1)(v b@2)))(+(v b@2)(v b@0)))"
 		circuitID, err := clients[0].CreateCircuit(desc)
 		if err != nil {
 			log.Error("Method CreateCircuit returned error:", err)
@@ -170,16 +161,6 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 
 		log.Lvl2("Going to generate a0 and b0. Should not return error")
 		ctx, a2, b2, err := simGenRandomPolys(sim.ParamsIdx)
-		if err != nil {
-			log.Error("Could not generate random data:", err)
-			return err
-		}
-		log.Lvl2("Successfully generated random data")
-
-		// Generate a3 and b3
-
-		log.Lvl2("Going to generate a3 and b3. Should not return error")
-		ctx, a3, b3, err := simGenRandomPolys(sim.ParamsIdx)
 		if err != nil {
 			log.Error("Could not generate random data:", err)
 			return err
@@ -255,28 +236,6 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 		}
 		log.Lvl2("Method SendStoreAndNameQuery for b2 correctly returned no error")
 
-		// Store a3
-
-		log.Lvl2("Going to store a3. Should not return error")
-		dataA3 := a3.Coeffs[0] // Only one modulus exists
-		_, err = clients[3].SendStoreAndNameQuery(circuitID, "a", dataA3)
-		if err != nil {
-			log.Error("Method SendStoreAndNameQuery for a3 returned error:", err)
-			return err
-		}
-		log.Lvl2("Method SendStoreAndNameQuery for a3 correctly returned no error")
-
-		// Store b3
-
-		log.Lvl2("Going to store b3. Should not return error")
-		dataB3 := b3.Coeffs[0] // Only one modulus exists
-		_, err = clients[3].SendStoreAndNameQuery(circuitID, "b", dataB3)
-		if err != nil {
-			log.Error("Method SendStoreAndNameQuery for b3 returned error:", err)
-			return err
-		}
-		log.Lvl2("Method SendStoreAndNameQuery for b3 correctly returned no error")
-
 		// Evaluate the circuit remotely
 
 		log.Lvl2("Going to evaluate the circuit")
@@ -307,7 +266,7 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 		// Check for correctness.
 
 		// Evaluate the circuit locally
-		// ((a0*a1)+(a1*a2)+(a2*a3)+(a0*a3))*((b0*b1)+(b1*b2)+(b2*b3)+(b0*b3))
+		// ((a0*a1)+(a1*a2)+(a2)+(a0))*((b0*b1)+(b1*b2)+(b2)+(b0))
 
 		log.Lvl2("Going to evaluate the circuit locally")
 		// a0*a1
@@ -319,18 +278,12 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 		// a0*a1+a1*a2
 		a0112 := ctx.NewPoly()
 		ctx.Add(a0a1, a1a2, a0112)
-		// a2*a3
-		a2a3 := ctx.NewPoly()
-		ctx.MulCoeffs(a2, a3, a2a3)
-		// a0*a3
-		a0a3 := ctx.NewPoly()
-		ctx.MulCoeffs(a0, a3, a0a3)
-		// a2*a3+a0*a3
-		a2303 := ctx.NewPoly()
-		ctx.Add(a2a3, a0a3, a2303)
+		// a2+a0
+		a20 := ctx.NewPoly()
+		ctx.Add(a2, a0, a20)
 		// a branch
 		a := ctx.NewPoly()
-		ctx.Add(a0112, a2303, a)
+		ctx.Add(a0112, a20, a)
 		// b0*b1
 		b0b1 := ctx.NewPoly()
 		ctx.MulCoeffs(b0, b1, b0b1)
@@ -340,18 +293,12 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 		// b0*b1+b1*b2
 		b0112 := ctx.NewPoly()
 		ctx.Add(b0b1, b1b2, b0112)
-		// b2*b3
-		b2b3 := ctx.NewPoly()
-		ctx.MulCoeffs(b2, b3, b2b3)
-		// b0*b3
-		b0b3 := ctx.NewPoly()
-		ctx.MulCoeffs(b0, b3, b0b3)
-		// b2*b3+b0*b3
-		b2303 := ctx.NewPoly()
-		ctx.Add(b2b3, b0b3, b2303)
+		// b2+b0
+		b20 := ctx.NewPoly()
+		ctx.Add(b2, b0, b20)
 		// b branch
 		b := ctx.NewPoly()
-		ctx.Add(b0112, b2303, b)
+		ctx.Add(b0112, b20, b)
 		// Final result
 		locCirc := ctx.NewPoly()
 		ctx.MulCoeffs(a, b, locCirc)
@@ -367,12 +314,15 @@ func (sim *SMCSimulation) Run(config *onet.SimulationConfig) error {
 		log.Lvl2("Original result and retrieved result are the same!")
 
 		// Wait a bit before next round
-		<-time.After(1 * time.Second)
+		<-time.After(time.Duration(sim.Pause) * time.Second)
 	}
+
+	fmt.Print("\n******************************* END OF SIMULATION *******************************\n\n")
 
 	// Compute stats.
 	avg := time.Duration(0)
-	for _, t := range timings {
+	for i, t := range timings {
+		log.Lvl2("Elapsed time at round", i, ":", t)
 		avg += t
 	}
 	avg /= time.Duration(sim.Rounds)

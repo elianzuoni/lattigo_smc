@@ -30,10 +30,10 @@ func init() {
 
 	_, _ = onet.GlobalProtocolRegister(RelinearizationKeyProtocolName, NewRelinearizationKey)
 
-	_ = network.RegisterMessage(&StructStart{})
-	_ = network.RegisterMessage(&StructRelinKeyRoundOne{})
-	_ = network.RegisterMessage(&StructRelinKeyRoundTwo{})
-	_ = network.RegisterMessage(&StructRelinKeyRoundThree{})
+	_ = network.RegisterMessage(Start{})
+	_ = network.RegisterMessage(dbfv.RKGShareRoundOne{})
+	_ = network.RegisterMessage(dbfv.RKGShareRoundTwo{})
+	_ = network.RegisterMessage(dbfv.RKGShareRoundThree{})
 }
 
 //Init initializes the variable for the protocol. Should be called before dispatch

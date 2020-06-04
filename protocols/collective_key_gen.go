@@ -31,8 +31,8 @@ func init() {
 		log.ErrFatal(err, "Could not register CollectiveKeyGeneration protocol : ")
 	}
 
-	_ = network.RegisterMessage(&StructPublicKey{})
-	_ = network.RegisterMessage(&StructStart{})
+	_ = network.RegisterMessage(Start{})
+	_ = network.RegisterMessage(dbfv.CKGShare{})
 }
 
 //Init initialize the variables needed for the protocol. Should be done before dispatching

@@ -11,8 +11,8 @@
 // Method Dispatch
 // 2) Every node waits to receive the wake-up message, then re-sends it to children.
 // 3) Every node creates the session, using the AbstractSessionStore.NewSession() method.
-// 		4a) If leaf, the node sends the Done message to the parent straight away.
-//		4b) Else, it first waits to receive the Done message from all children, then it sends it to the parent.
+// 		4a) If leaf, the node sends the ServDone message to the parent straight away.
+//		4b) Else, it first waits to receive the ServDone message from all children, then it sends it to the parent.
 
 package protocols
 
@@ -28,8 +28,8 @@ import (
 func init() {
 	fmt.Println("CreateSession: init")
 
-	_ = network.RegisterMessage(&StructStart{})
-	_ = network.RegisterMessage(&StructDone{})
+	_ = network.RegisterMessage(ServStart{})
+	_ = network.RegisterMessage(ServDone{})
 }
 
 // This is a full-blown constructor. In every context, it will have to
@@ -64,7 +64,7 @@ func NewCreateSessionProtocol(t *onet.TreeNodeInstance, store AbstractSessionSto
 func (p *CreateSessionProtocol) Start() error {
 	log.Lvl2(p.ServerIdentity(), "Started Create-Session protocol")
 	//Step 1: send wake-up message to self
-	return p.SendTo(p.TreeNode(), &Start{})
+	return p.SendTo(p.TreeNode(), &ServStart{})
 }
 
 // Dispatch is called at each node to run the protocol.
@@ -77,7 +77,7 @@ func (p *CreateSessionProtocol) Dispatch() error {
 	wakeup := <-p.channelStart
 	// Send wake-up message to all children
 	log.Lvl3(p.ServerIdentity(), "Sending wake-up message")
-	err := p.SendToChildren(&wakeup.Start)
+	err := p.SendToChildren(&wakeup.ServStart)
 	if err != nil {
 		log.ErrFatal(err, p.ServerIdentity(), "Could not send wake up message: ")
 		return err
@@ -87,12 +87,12 @@ func (p *CreateSessionProtocol) Dispatch() error {
 	log.Lvl3(p.ServerIdentity(), "Creating session")
 	p.store.NewSession(p.SessionID, p.roster, p.params)
 
-	// Step 4: send the Done message
-	log.Lvl3(p.ServerIdentity(), "Sending the Done message")
+	// Step 4: send the ServDone message
+	log.Lvl3(p.ServerIdentity(), "Sending the ServDone message")
 	if !p.IsLeaf() {
 		_ = <-p.channelDone // Block and wait for all children to be done
 	}
-	p.SendToParent(&Done{})
+	p.SendToParent(&ServDone{})
 	// Also signal that the protocol is finished
 	p.done.Unlock()
 

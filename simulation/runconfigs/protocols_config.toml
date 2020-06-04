@@ -1,4 +1,4 @@
-Simulation = "SMCService"
+Simulation = "Protocols"
 Servers = 4
 Rounds = 10
 BF = 3

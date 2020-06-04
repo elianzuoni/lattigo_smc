@@ -30,8 +30,8 @@ func init() {
 		log.ErrFatal(err, "Could not register CollectiveKeySwitching protocol:")
 	}
 
-	_ = network.RegisterMessage(&StructCKSShare{})
-	_ = network.RegisterMessage(&StructStart{})
+	_ = network.RegisterMessage(Start{})
+	_ = network.RegisterMessage(dbfv.CKSShare{})
 }
 
 //Init initialize the variables needed for the protocol. Should be called before dispatch

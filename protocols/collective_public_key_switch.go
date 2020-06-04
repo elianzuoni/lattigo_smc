@@ -25,8 +25,8 @@ func init() {
 
 	_, _ = onet.GlobalProtocolRegister(CollectivePublicKeySwitchingProtocolName, NewCollectivePublicKeySwitching)
 
-	_ = network.RegisterMessage(&StructStart{})
-	_ = network.RegisterMessage(&StructPCKS{})
+	_ = network.RegisterMessage(Start{})
+	_ = network.RegisterMessage(dbfv.PCKSShare{})
 }
 
 //Init initializes the protocol and prepares the variable. Should be called before dispatch

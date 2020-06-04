@@ -213,12 +213,6 @@ type StructStart struct {
 //Start This message is used to wake up the children
 type Start struct{}
 
-//StructPublicKey handler for onet
-type StructPublicKey struct {
-	*onet.TreeNode
-	bfv.PublicKey
-}
-
 //StructPublicKeyShare handler for onet
 type StructPublicKeyShare struct {
 	*onet.TreeNode

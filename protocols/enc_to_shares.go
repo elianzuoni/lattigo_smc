@@ -41,8 +41,8 @@ import (
 func init() {
 	fmt.Println("E2S: init")
 
-	_ = network.RegisterMessage(&StructStart{})
-	_ = network.RegisterMessage(&StructE2SDecryptionShare{})
+	_ = network.RegisterMessage(Start{})
+	_ = network.RegisterMessage(dbfv.E2SDecryptionShare{})
 }
 
 // This is a full-blown constructor. In every context (test, simulation, or deployment) it will have to

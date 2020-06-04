@@ -27,8 +27,8 @@ import (
 func init() {
 	fmt.Println("CloseSession: init")
 
-	_ = network.RegisterMessage(&StructStart{})
-	_ = network.RegisterMessage(&StructDone{})
+	_ = network.RegisterMessage(ServStart{})
+	_ = network.RegisterMessage(ServDone{})
 }
 
 // This is a full-blown constructor. In every context, it will have to
@@ -61,7 +61,7 @@ func NewCloseSessionProtocol(t *onet.TreeNodeInstance, store AbstractSessionStor
 func (p *CloseSessionProtocol) Start() error {
 	log.Lvl2(p.ServerIdentity(), "Started Close-Session protocol")
 	//Step 1: send wake-up message to self
-	return p.SendTo(p.TreeNode(), &Start{})
+	return p.SendTo(p.TreeNode(), &ServStart{})
 }
 
 // Dispatch is called at each node to run the protocol.
@@ -74,7 +74,7 @@ func (p *CloseSessionProtocol) Dispatch() error {
 	wakeup := <-p.channelStart
 	// Send wake-up message to all children
 	log.Lvl3(p.ServerIdentity(), "Sending wake-up message")
-	err := p.SendToChildren(&wakeup.Start)
+	err := p.SendToChildren(&wakeup.ServStart)
 	if err != nil {
 		log.ErrFatal(err, p.ServerIdentity(), "Could not send wake up message: ")
 		return err
@@ -89,7 +89,7 @@ func (p *CloseSessionProtocol) Dispatch() error {
 	if !p.IsLeaf() {
 		_ = <-p.channelDone // Block and wait for all children to be done
 	}
-	p.SendToParent(&Done{})
+	p.SendToParent(&ServDone{})
 	// Also signal that the protocol is finished
 	p.done.Unlock()
 

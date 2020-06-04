@@ -18,8 +18,8 @@ func init() {
 
 	_, _ = onet.GlobalProtocolRegister(RotationProtocolName, NewRotationKey)
 
-	_ = network.RegisterMessage(&StructStart{})
-	_ = network.RegisterMessage(&StructRTGShare{})
+	_ = network.RegisterMessage(Start{})
+	_ = network.RegisterMessage(dbfv.RTGShare{})
 }
 
 //Init initializes the variable for the protocol. Should be called before dispatch

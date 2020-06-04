@@ -21,8 +21,8 @@ func init() {
 		log.ErrFatal(err, "Could not register CollectiveKeyGeneration protocol : ")
 	}
 
-	_ = network.RegisterMessage(&StructStart{})
-	_ = network.RegisterMessage(&StructRShare{})
+	_ = network.RegisterMessage(Start{})
+	_ = network.RegisterMessage(dbfv.RefreshShare{})
 
 }
 
