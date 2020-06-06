@@ -2,9 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/simul/monitor"
@@ -15,15 +15,15 @@ import (
 
 type KeySwitchingSim struct {
 	onet.SimulationBFTree
-	*bfv.Ciphertext
 
-	lt           *utils.LocalTest
-	ParamsIdx    int
-	SwitchDegree uint64
-	Params       *bfv.Parameters
+	lt        *utils.LocalTest
+	ParamsIdx int
+
+	Params *bfv.Parameters
+	sk0    *bfv.SecretKey
+	sk1    *bfv.SecretKey
+	ct     *bfv.Ciphertext
 }
-
-var Cipher *bfv.Ciphertext
 
 func init() {
 	onet.SimulationRegister("CollectiveKeySwitching", NewSimulationKeySwitching)
@@ -48,72 +48,73 @@ func NewSimulationKeySwitching(config string) (onet.Simulation, error) {
 func (s *KeySwitchingSim) Setup(dir string, hosts []string) (*onet.SimulationConfig, error) {
 	//Setup following the config file.
 	log.Lvl2("Setting up the simulation for key switching")
+
 	sc := &onet.SimulationConfig{}
+
 	s.CreateRoster(sc, hosts, 2000)
 	err := s.CreateTree(sc)
 	if err != nil {
 		return nil, err
 	}
+
 	log.Lvl2("here param idx ", s.ParamsIdx)
 	s.lt, err = utils.GetLocalTestForRoster(sc.Roster, s.Params, storageDir)
 	if err != nil {
 		return nil, err
 	}
 
-	lt = s.lt
-
-	//Generate the cipher text !
-	ctxT, err := ring.NewContextWithParams(1<<s.Params.LogN, []uint64{s.Params.T})
+	// Write the local test to file
+	err = s.lt.WriteToFile(dir + "/local_test")
 	if err != nil {
 		return nil, err
 	}
-	coeffs := ctxT.NewUniformPoly()
-	enc := bfv.NewEncoder(s.Params)
-	pt := bfv.NewPlaintext(s.Params)
-
-	enc.EncodeUint(coeffs.Coeffs[0], pt)
-
-	enc0 := bfv.NewEncryptorFromSk(s.Params, lt.IdealSecretKey0)
-
-	s.Ciphertext = enc0.EncryptNew(pt)
-
-	Cipher = s.Ciphertext
 
 	return sc, nil
 }
 
 func (s *KeySwitchingSim) Node(config *onet.SimulationConfig) error {
-
-	idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
-	if idx < 0 {
-		log.Fatal("Error node not found")
-	}
-
 	//Inject the parameters.
 	if _, err := config.Server.ProtocolRegister("CollectiveKeySwitchingSimul", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		return NewKeySwitchingSimul(tni, s)
+		return SimNewCKSProto(tni, s)
 	}); err != nil {
 		return errors.New("Error when registering Collective Key Switching instance " + err.Error())
 	}
-	s.lt = lt
+
+	// Read the local test from file
+	s.lt = &utils.LocalTest{StorageDirectory: storageDir}
+	err := s.lt.ReadFromFile("local_test")
+	if err != nil {
+		return err
+	}
+
+	// Pre-load the secret keys
+	var found bool
+	s.sk0, found = s.lt.SecretKeyShares0[config.Server.ServerIdentity.ID]
+	if !found {
+		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
+	}
+	s.sk1, found = s.lt.SecretKeyShares1[config.Server.ServerIdentity.ID]
+	if !found {
+		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
+	}
+
+	// Pre-load the ciphertext
+	s.ct = s.lt.Ciphertext
 
 	log.Lvl4("Node Setup OK")
 
 	return s.SimulationBFTree.Node(config)
 }
 
-func NewKeySwitchingSimul(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (onet.ProtocolInstance, error) {
-	log.Lvl2("NewKeySwitch simul with degree : ", sim.SwitchDegree)
+func SimNewCKSProto(tni *onet.TreeNodeInstance, sim *KeySwitchingSim) (onet.ProtocolInstance, error) {
 	protocol, err := proto.NewCollectiveKeySwitching(tni)
 
 	if err != nil {
 		return nil, err
 	}
 
-	//cast
 	colkeyswitch := protocol.(*proto.CollectiveKeySwitchingProtocol)
-	sim.Ciphertext = Cipher
-	err = colkeyswitch.Init(sim.Params, sim.lt.SecretKeyShares0[tni.ServerIdentity().ID], sim.lt.SecretKeyShares1[tni.ServerIdentity().ID], sim.Ciphertext)
+	err = colkeyswitch.Init(sim.Params, sim.sk0, sim.sk1, sim.ct)
 
 	return colkeyswitch, nil
 }
@@ -122,7 +123,7 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
 
 	defer func() {
-		err := lt.TearDown(true)
+		err := s.lt.TearDown(true)
 		if err != nil {
 			log.Error(err)
 		}
@@ -155,11 +156,11 @@ func (s *KeySwitchingSim) Run(config *onet.SimulationConfig) error {
 		//Check if correct...
 
 		encoder := bfv.NewEncoder(s.Params)
-		Decryptor1 := bfv.NewDecryptor(s.Params, lt.IdealSecretKey1)
-		Decryptor0 := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
+		Decryptor1 := bfv.NewDecryptor(s.Params, s.lt.IdealSecretKey1)
+		Decryptor0 := bfv.NewDecryptor(s.Params, s.lt.IdealSecretKey0)
 		//expected
 
-		expected := encoder.DecodeUint(Decryptor0.DecryptNew(s.Ciphertext))
+		expected := encoder.DecodeUint(Decryptor0.DecryptNew(s.ct))
 		decoded := encoder.DecodeUint(Decryptor1.DecryptNew(cksp.CiphertextOut))
 		log.Lvl2("Expected :", expected[0:25])
 		log.Lvl2("Decoded : ", decoded[0:25])

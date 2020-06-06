@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
@@ -16,11 +17,13 @@ import (
 type RefreshSimulation struct {
 	*onet.SimulationBFTree
 
-	*bfv.Ciphertext
-
 	lt        *utils.LocalTest
 	ParamsIdx int
-	Params    *bfv.Parameters
+
+	Params *bfv.Parameters
+	sk     *bfv.SecretKey
+	crs    *ring.Poly
+	ct     *bfv.Ciphertext
 }
 
 func init() {
@@ -29,11 +32,12 @@ func init() {
 
 func NewSimulationRefresh(config string) (onet.Simulation, error) {
 	sim := &RefreshSimulation{}
+
 	_, err := toml.Decode(config, sim)
 	if err != nil {
 		return nil, err
 	}
-	log.Lvl2("New Refresh protocol with params :", sim.ParamsIdx)
+
 	sim.Params = bfv.DefaultParams[sim.ParamsIdx]
 
 	return sim, nil
@@ -55,54 +59,60 @@ func (s *RefreshSimulation) Setup(dir string, hosts []string) (*onet.SimulationC
 		return nil, err
 	}
 
-	lt = s.lt
-
-	//Generate the cipher text !
-	ctxT, err := ring.NewContextWithParams(1<<s.Params.LogN, []uint64{s.Params.T})
+	// Write the local test to file
+	err = s.lt.WriteToFile(dir + "/local_test")
 	if err != nil {
 		return nil, err
 	}
-	coeffs := ctxT.NewUniformPoly()
-	enc := bfv.NewEncoder(s.Params)
-	pt := bfv.NewPlaintext(s.Params)
-
-	enc.EncodeUint(coeffs.Coeffs[0], pt)
-
-	enc0 := bfv.NewEncryptorFromSk(s.Params, lt.IdealSecretKey0)
-
-	s.Ciphertext = enc0.EncryptNew(pt)
-
-	Cipher = s.Ciphertext
 
 	return sc, nil
 }
 
 func (s *RefreshSimulation) Node(config *onet.SimulationConfig) error {
 	if _, err := config.Server.ProtocolRegister("CollectiveRefreshSimul", func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
-		return NewRefreshSimul(tni, s)
+		return SimNewRefreshProto(tni, s)
 	}); err != nil {
 		return errors.New("Error when registereing collecting refresh " + err.Error())
 	}
 
-	s.lt = lt
-	s.Ciphertext = Cipher
+	// Read the local test from file
+	s.lt = &utils.LocalTest{StorageDirectory: storageDir}
+	err := s.lt.ReadFromFile("local_test")
+	if err != nil {
+		return err
+	}
+
+	// Pre-load the secret key
+	var found bool
+	s.sk, found = s.lt.SecretKeyShares0[config.Server.ServerIdentity.ID]
+	if !found {
+		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
+	}
+
+	// Pre-load the CRS
+	s.crs = s.lt.CRS
+
+	// Pre-load the Ciphertext
+	s.ct = s.lt.Ciphertext
+
+	log.Lvl3("Node Setup OK")
 	return s.SimulationBFTree.Node(config)
 }
-func NewRefreshSimul(tni *onet.TreeNodeInstance, sim *RefreshSimulation) (onet.ProtocolInstance, error) {
-	log.Lvl2("NewRefresh simul ! ")
+
+func SimNewRefreshProto(tni *onet.TreeNodeInstance, sim *RefreshSimulation) (onet.ProtocolInstance, error) {
 	protocol, err := protocols.NewCollectiveRefresh(tni)
 	if err != nil {
 		return nil, err
 	}
 
 	refresh := protocol.(*protocols.RefreshProtocol)
-	err = refresh.Init(*sim.Params, sim.lt.SecretKeyShares0[tni.ServerIdentity().ID], *Cipher, *sim.lt.Crs)
+	err = refresh.Init(*sim.Params, sim.sk, *sim.ct, *sim.crs)
 	return refresh, err
 }
 
 func (s *RefreshSimulation) Run(config *onet.SimulationConfig) error {
 	defer func() {
-		err := lt.TearDown(true)
+		err := s.lt.TearDown(true)
 		if err != nil {
 			log.Error(err)
 		}
@@ -129,9 +139,9 @@ func (s *RefreshSimulation) Run(config *onet.SimulationConfig) error {
 
 		//check for correcteness.
 		encoder := bfv.NewEncoder(s.Params)
-		DecryptorInput := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0)
+		DecryptorInput := bfv.NewDecryptor(s.Params, s.lt.IdealSecretKey0)
 		//Expected result
-		expected := encoder.DecodeUint(DecryptorInput.DecryptNew(Cipher))
+		expected := encoder.DecodeUint(DecryptorInput.DecryptNew(s.ct))
 		decoded := encoder.DecodeUint(DecryptorInput.DecryptNew(&rp.FinalCiphertext))
 		if !utils.Equalslice(expected, decoded) {
 			log.Error("Decryption failed")

@@ -12,6 +12,8 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"go.dedis.ch/protobuf"
+	uuid "gopkg.in/satori/go.uuid.v1"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -24,13 +26,13 @@ type LocalTest struct {
 	Params          *bfv.Parameters
 	IdealSecretKey0 *bfv.SecretKey
 	IdealSecretKey1 *bfv.SecretKey
+	Ciphertext      *bfv.Ciphertext
 
 	SecretKeyShares0 map[network.ServerIdentityID]*bfv.SecretKey
 	SecretKeyShares1 map[network.ServerIdentityID]*bfv.SecretKey
 	StorageDirectory string
-	CrsGen           *ring.CRPGenerator
-	Crs              *ring.Poly
-	crsCipherGen     *ring.CRPGenerator
+	CRS              *ring.Poly
+	CipherCRS        *ring.Poly
 }
 
 //GetLocalTestForRoster gets the local test for the given roster. The keys will be stored in directory.
@@ -43,10 +45,12 @@ func GetLocalTestForRoster(roster *onet.Roster, params *bfv.Parameters, director
 	lt.SecretKeyShares0 = make(map[network.ServerIdentityID]*bfv.SecretKey)
 	lt.SecretKeyShares1 = make(map[network.ServerIdentityID]*bfv.SecretKey)
 	lt.StorageDirectory = directory
+	_, lt.Ciphertext, _ = lt.GenMsgCtAccum()
 
-	lt.CrsGen = dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
-	lt.Crs = lt.CrsGen.ClockNew()
-	lt.crsCipherGen = dbfv.NewCipherCRPGenerator(params, []byte{'s', 'o', 'r', 'e', 't', 'a'})
+	crsGen := dbfv.NewCRPGenerator(params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
+	lt.CRS = crsGen.ClockNew()
+	crsCipherGen := dbfv.NewCipherCRPGenerator(params, []byte{'s', 'o', 'r', 'e', 't', 'a'})
+	lt.CipherCRS = crsCipherGen.ClockNew()
 
 	rq, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	for _, si := range roster.List {
@@ -299,7 +303,348 @@ func (lt *LocalTest) GenMsgCtAccum() (msg []uint64, ct *bfv.Ciphertext, accum *C
 	return
 }
 
-// NewCipherCRS returns a new crp for ciphertext (Sampled from R_q)
-func (lt *LocalTest) NewCipherCRS() *ring.Poly {
-	return lt.crsCipherGen.ClockNew()
+func (lt *LocalTest) MarshalBinary() (data []byte, err error) {
+	// Marshal Roster
+	rosData, err := protobuf.Encode(lt.Roster)
+	if err != nil {
+		return
+	}
+	rosLen := len(rosData)
+
+	// Marshal Params
+	parData, err := lt.Params.MarshalBinary()
+	if err != nil {
+		return
+	}
+	parLen := len(parData)
+
+	// Marshal IdealSecretKey0
+	isk0Data, err := lt.IdealSecretKey0.MarshalBinary()
+	if err != nil {
+		return
+	}
+	isk0Len := len(isk0Data)
+
+	// Marshal IdealSecretKey1
+	isk1Data, err := lt.IdealSecretKey1.MarshalBinary()
+	if err != nil {
+		return
+	}
+	isk1Len := len(isk1Data)
+
+	// Marshal Ciphertext
+	ctData, err := lt.Ciphertext.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ctLen := len(ctData)
+
+	// Marshal SecretKeyShares0
+	sks0Data, err := marshalKeyMap(lt.SecretKeyShares0)
+	if err != nil {
+		return
+	}
+	sks0Len := len(sks0Data)
+
+	// Marshal SecretKeyShares1
+	sks1Data, err := marshalKeyMap(lt.SecretKeyShares1)
+	if err != nil {
+		return
+	}
+	sks1Len := len(sks1Data)
+
+	// Marshal CRS
+	crsData, err := lt.CRS.MarshalBinary()
+	if err != nil {
+		return
+	}
+	crsLen := len(crsData)
+
+	// Marshal CipherCRS
+	ccrsData, err := lt.CipherCRS.MarshalBinary()
+	if err != nil {
+		return
+	}
+	ccrsLen := len(ccrsData)
+
+	// Build data as [<rosLen>, <parLen>, <isk0Len>, <isk1Len>, <ctLen>, <sks0Len>, <sks1Len>, <crsLen>, <ccrsLen>,
+	// <Roster>, <Params>, <IdealSK0>, <IdealSK1>, <Ciphertext>, <SecretSKs0>, <SecretSKs1>, <CRS>, <CipherCRS>]
+	data = make([]byte, 9*8+rosLen+parLen+isk0Len+isk1Len+ctLen+sks0Len+sks1Len+crsLen+ccrsLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(rosLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(parLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(isk0Len))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(isk1Len))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ctLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sks0Len))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(sks1Len))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(crsLen))
+	ptr += 8
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(ccrsLen))
+	ptr += 8
+	copy(data[ptr:ptr+rosLen], rosData)
+	ptr += rosLen
+	copy(data[ptr:ptr+parLen], parData)
+	ptr += parLen
+	copy(data[ptr:ptr+isk0Len], isk0Data)
+	ptr += isk0Len
+	copy(data[ptr:ptr+isk1Len], isk1Data)
+	ptr += isk1Len
+	copy(data[ptr:ptr+ctLen], ctData)
+	ptr += ctLen
+	copy(data[ptr:ptr+sks0Len], sks0Data)
+	ptr += sks0Len
+	copy(data[ptr:ptr+sks1Len], sks1Data)
+	ptr += sks1Len
+	copy(data[ptr:ptr+crsLen], crsData)
+	ptr += crsLen
+	copy(data[ptr:ptr+ccrsLen], ccrsData)
+	ptr += ccrsLen
+
+	return
+}
+func (lt *LocalTest) UnmarshalBinary(data []byte) (err error) {
+	ptr := 0 // Used to index data
+
+	// Read lengths
+	rosLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	parLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	isk0Len := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	isk1Len := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	ctLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sks0Len := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	sks1Len := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	crsLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+	ccrsLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read Roster
+	if rosLen > 0 {
+		if lt.Roster == nil {
+			lt.Roster = &onet.Roster{}
+		}
+		err = protobuf.Decode(data[ptr:ptr+rosLen], lt.Roster)
+		ptr += rosLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Parameters
+	if parLen > 0 {
+		if lt.Params == nil {
+			lt.Params = &bfv.Parameters{}
+		}
+		err = lt.Params.UnmarshalBinary(data[ptr : ptr+parLen])
+		ptr += parLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read IdealSecretKey0
+	if isk0Len > 0 {
+		if lt.IdealSecretKey0 == nil {
+			lt.IdealSecretKey0 = &bfv.SecretKey{}
+		}
+		err = lt.IdealSecretKey0.UnmarshalBinary(data[ptr : ptr+isk0Len])
+		ptr += isk0Len
+		if err != nil {
+			return
+		}
+	}
+
+	// Read IdealSecretKey1
+	if isk1Len > 0 {
+		if lt.IdealSecretKey1 == nil {
+			lt.IdealSecretKey1 = &bfv.SecretKey{}
+		}
+		err = lt.IdealSecretKey1.UnmarshalBinary(data[ptr : ptr+isk1Len])
+		ptr += isk1Len
+		if err != nil {
+			return
+		}
+	}
+
+	// Read Ciphertext
+	if ctLen > 0 {
+		if lt.Ciphertext == nil {
+			lt.Ciphertext = &bfv.Ciphertext{}
+		}
+		err = lt.Ciphertext.UnmarshalBinary(data[ptr : ptr+ctLen])
+		ptr += ctLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SecretKeyShares0
+	if sks0Len > 0 {
+		lt.SecretKeyShares0, err = unmarshalKeyMap(data[ptr : ptr+sks0Len])
+		ptr += sks0Len
+		if err != nil {
+			return
+		}
+	}
+
+	// Read SecretKeyShares1
+	if sks1Len > 0 {
+		lt.SecretKeyShares1, err = unmarshalKeyMap(data[ptr : ptr+sks1Len])
+		ptr += sks1Len
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CRS
+	if crsLen > 0 {
+		if lt.CRS == nil {
+			lt.CRS = &ring.Poly{}
+		}
+		err = lt.CRS.UnmarshalBinary(data[ptr : ptr+crsLen])
+		ptr += crsLen
+		if err != nil {
+			return
+		}
+	}
+
+	// Read CipherCRS
+	if ccrsLen > 0 {
+		if lt.CipherCRS == nil {
+			lt.CipherCRS = &ring.Poly{}
+		}
+		err = lt.CipherCRS.UnmarshalBinary(data[ptr : ptr+ccrsLen])
+		ptr += ccrsLen
+		if err != nil {
+			return
+		}
+	}
+
+	return
+}
+
+func marshalKeyMap(keyMap map[network.ServerIdentityID]*bfv.SecretKey) (data []byte, err error) {
+	keysData := make(map[network.ServerIdentityID][]byte)
+	valuesData := make(map[network.ServerIdentityID][]byte)
+
+	// Marshal Keys and Values
+	mapLen := 0
+	for key, value := range keyMap {
+		keysData[key], err = uuid.UUID(key).MarshalBinary()
+		if err != nil {
+			return
+		}
+		valuesData[key], err = value.MarshalBinary()
+		if err != nil {
+			return
+		}
+		mapLen += 8 + len(keysData[key]) + 8 + len(valuesData[key])
+	}
+
+	// Build data as [<nEntries>, (<keyLen>, <key>, <valueLen>, <value>)*]
+	data = make([]byte, 8+mapLen)
+	ptr := 0 // Used to index data
+	binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(len(keyMap)))
+	ptr += 8
+	for key, _ := range keyMap {
+		binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(len(keysData[key])))
+		ptr += 8
+		copy(data[ptr:ptr+len(keysData[key])], keysData[key])
+		ptr += len(keysData[key])
+		binary.BigEndian.PutUint64(data[ptr:ptr+8], uint64(len(valuesData[key])))
+		ptr += 8
+		copy(data[ptr:ptr+len(valuesData[key])], valuesData[key])
+		ptr += len(valuesData[key])
+	}
+
+	return
+}
+func unmarshalKeyMap(data []byte) (keyMap map[network.ServerIdentityID]*bfv.SecretKey, err error) {
+	ptr := 0 // Used to index data
+	keyMap = make(map[network.ServerIdentityID]*bfv.SecretKey)
+
+	// Read nEntries
+	nEntries := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+	ptr += 8
+
+	// Read KeyMap
+	for i := 0; i < nEntries; i++ {
+		// Read keyLen
+		keyLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+		ptr += 8
+		// Read key
+		var id uuid.UUID
+		if keyLen > 0 {
+			err = id.UnmarshalBinary(data[ptr : ptr+keyLen])
+			ptr += keyLen
+			if err != nil {
+				return
+			}
+		}
+
+		// Read valueLen
+		valueLen := int(binary.BigEndian.Uint64(data[ptr : ptr+8]))
+		ptr += 8
+		// Read value
+		var sk = &bfv.SecretKey{}
+		if valueLen > 0 {
+			err = sk.UnmarshalBinary(data[ptr : ptr+valueLen])
+			ptr += valueLen
+			if err != nil {
+				return
+			}
+		}
+
+		// Save entry
+		keyMap[network.ServerIdentityID(id)] = sk
+	}
+
+	return
+}
+
+func (lt *LocalTest) WriteToFile(filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	data, err := lt.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	n, err := file.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		err = errors.New("Couldn't write all data")
+		return err
+	}
+
+	return nil
+}
+func (lt *LocalTest) ReadFromFile(filename string) error {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+
+	return lt.UnmarshalBinary(data)
 }

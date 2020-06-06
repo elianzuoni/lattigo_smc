@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
@@ -16,12 +17,12 @@ import (
 type RotationKeySim struct {
 	onet.SimulationBFTree
 
-	bfv.Rotation
 	lt        *utils.LocalTest
 	ParamsIdx int
-	Params    *bfv.Parameters
 
-	K      int
+	Params *bfv.Parameters
+	sk     *bfv.SecretKey
+	K      uint64
 	RotIdx int
 	CRP    protocols.CRP
 }
@@ -40,7 +41,6 @@ func NewSimulationRotationKey(config string) (onet.Simulation, error) {
 	log.Lvl2("New Rotation key simulation ")
 
 	sim.Params = bfv.DefaultParams[sim.ParamsIdx]
-	sim.Rotation = bfv.Rotation(sim.RotIdx)
 	return sim, nil
 }
 
@@ -59,10 +59,37 @@ func (s *RotationKeySim) Setup(dir string, hosts []string) (*onet.SimulationConf
 		return nil, err
 	}
 
-	lt = s.lt
+	// Write the local test to file
+	err = s.lt.WriteToFile(dir + "/local_test")
+	if err != nil {
+		return nil, err
+	}
 
-	//generate local needed variables...
+	return sc, nil
+}
 
+func (s *RotationKeySim) Node(config *onet.SimulationConfig) error {
+	if _, err := config.Server.ProtocolRegister("RotationKeySimulation", func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
+		return SimNewRKGProto(tni, s)
+	}); err != nil {
+		return errors.New("Error when registering rotation key " + err.Error())
+	}
+
+	// Read the local test from file
+	s.lt = &utils.LocalTest{StorageDirectory: storageDir}
+	err := s.lt.ReadFromFile("local_test")
+	if err != nil {
+		return err
+	}
+
+	// Pre-load the secret key
+	var found bool
+	s.sk, found = s.lt.SecretKeyShares0[config.Server.ServerIdentity.ID]
+	if !found {
+		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
+	}
+
+	// CGenerate the CRP
 	params := s.Params
 	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	crpGenerator := ring.NewCRPGenerator(nil, ctxPQ)
@@ -71,24 +98,12 @@ func (s *RotationKeySim) Setup(dir string, hosts []string) (*onet.SimulationConf
 	for j := 0; j < len(modulus); j++ {
 		crp[j] = crpGenerator.ClockNew()
 	}
-	CRP.A = crp
+	s.CRP.A = crp
 
-	return sc, nil
-}
-
-func (s *RotationKeySim) Node(config *onet.SimulationConfig) error {
-	if _, err := config.Server.ProtocolRegister("RotationKeySimulation", func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
-		return NewRotationKeySimul(tni, s)
-	}); err != nil {
-		return errors.New("Error when registering rotation key " + err.Error())
-	}
-
-	s.lt = lt
-	s.CRP = CRP
 	return s.SimulationBFTree.Node(config)
 }
 
-func NewRotationKeySimul(tni *onet.TreeNodeInstance, sim *RotationKeySim) (onet.ProtocolInstance, error) {
+func SimNewRKGProto(tni *onet.TreeNodeInstance, sim *RotationKeySim) (onet.ProtocolInstance, error) {
 	log.Lvl2("New Rotation key simul ")
 	protocol, err := protocols.NewRotationKey(tni)
 	if err != nil {
@@ -96,7 +111,7 @@ func NewRotationKeySimul(tni *onet.TreeNodeInstance, sim *RotationKeySim) (onet.
 	}
 
 	rotation := protocol.(*protocols.RotationKeyProtocol)
-	err = rotation.Init(sim.Params, *sim.lt.SecretKeyShares0[tni.ServerIdentity().ID], nil, sim.Rotation, uint64(sim.K), sim.CRP.A)
+	err = rotation.Init(sim.Params, *sim.sk, nil, bfv.Rotation(sim.RotIdx), sim.K, sim.CRP.A)
 	return rotation, err
 }
 
@@ -104,7 +119,7 @@ func (s *RotationKeySim) Run(config *onet.SimulationConfig) error {
 	size := config.Tree.Size()
 
 	defer func() {
-		err := lt.TearDown(true)
+		err := s.lt.TearDown(true)
 		if err != nil {
 			log.Error(err)
 		}
@@ -144,13 +159,13 @@ func (s *RotationKeySim) Run(config *onet.SimulationConfig) error {
 		pt := bfv.NewPlaintext(s.Params)
 		enc := bfv.NewEncoder(s.Params)
 		enc.EncodeUint(coeffs, pt)
-		ciphertext := bfv.NewEncryptorFromSk(s.Params, lt.IdealSecretKey0).EncryptNew(pt)
+		ciphertext := bfv.NewEncryptorFromSk(s.Params, s.lt.IdealSecretKey0).EncryptNew(pt)
 		evaluator := bfv.NewEvaluator(s.Params)
 		n := 1 << s.Params.LogN
 		mask := uint64(n>>1) - 1
 		expected := make([]uint64, n)
 
-		switch s.Rotation {
+		switch bfv.Rotation(s.RotIdx) {
 		case bfv.RotationRow:
 			evaluator.RotateRows(ciphertext, &rotkey, ciphertext)
 			expected = append(coeffs[n>>1:], coeffs[:n>>1]...)
@@ -161,14 +176,14 @@ func (s *RotationKeySim) Run(config *onet.SimulationConfig) error {
 			log.Fatal("Not implemented correctness verification. ")
 
 		case bfv.RotationLeft:
-			evaluator.RotateColumns(ciphertext, uint64(s.K), &rotkey, ciphertext)
+			evaluator.RotateColumns(ciphertext, s.K, &rotkey, ciphertext)
 			for i := uint64(0); i < uint64(n)>>1; i++ {
-				expected[i] = coeffs[(i+uint64(s.K))&mask]
-				expected[i+uint64(n>>1)] = coeffs[((i+uint64(s.K))&mask)+uint64(n>>1)]
+				expected[i] = coeffs[(i+s.K)&mask]
+				expected[i+uint64(n>>1)] = coeffs[((i+s.K)&mask)+uint64(n>>1)]
 			}
 			break
 		}
-		resultingPt := bfv.NewDecryptor(s.Params, lt.IdealSecretKey0).DecryptNew(ciphertext)
+		resultingPt := bfv.NewDecryptor(s.Params, s.lt.IdealSecretKey0).DecryptNew(ciphertext)
 
 		decoded := enc.DecodeUint(resultingPt)
 

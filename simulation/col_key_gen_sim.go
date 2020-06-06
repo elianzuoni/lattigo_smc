@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
-	"github.com/ldsec/lattigo/dbfv"
 	"github.com/ldsec/lattigo/ring"
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
@@ -20,20 +19,19 @@ import (
 type KeyGenerationSim struct {
 	onet.SimulationBFTree
 
-	lt *utils.LocalTest
-
-	sk        *bfv.SecretKey
-	crp       *ring.Poly
+	lt        *utils.LocalTest
 	ParamsIdx int
-	Params    *bfv.Parameters
+
+	sk     *bfv.SecretKey
+	crp    *ring.Poly
+	Params *bfv.Parameters
 }
 
 func init() {
 	onet.SimulationRegister("CollectiveKeyGeneration", NewSimulationKeyGen)
 }
 
-var storageDir = "tmp/"
-var lt *utils.LocalTest
+const storageDir = "tmp/"
 
 func NewSimulationKeyGen(config string) (onet.Simulation, error) {
 	sim := &KeyGenerationSim{}
@@ -58,7 +56,12 @@ func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 	if err != nil {
 		return nil, err
 	}
-	lt = s.lt
+
+	// Write the local test to file
+	err = s.lt.WriteToFile(dir + "/local_test")
+	if err != nil {
+		return nil, err
+	}
 
 	err = s.CreateTree(sc)
 	if err != nil {
@@ -70,28 +73,33 @@ func (s *KeyGenerationSim) Setup(dir string, hosts []string) (*onet.SimulationCo
 func (s *KeyGenerationSim) Node(config *onet.SimulationConfig) error {
 
 	if _, err := config.Server.ProtocolRegister("CollectiveKeyGenerationSimul", func(tni *onet.TreeNodeInstance) (onet.ProtocolInstance, error) {
-		return NewKeyGenerationSimul(tni, s)
+		return SimNewCKGProto(tni, s)
 	}); err != nil {
 		return errors.New("Error when registering CollectiveKeyGeneration instance " + err.Error())
 	}
-	s.lt = lt
 
-	// Pre-loading of the secret key at the node
+	// Read the local test from file
+	s.lt = &utils.LocalTest{StorageDirectory: storageDir}
+	err := s.lt.ReadFromFile("local_test")
+	if err != nil {
+		return err
+	}
+
+	// Pre-load the secret key
 	var found bool
 	s.sk, found = s.lt.SecretKeyShares0[config.Server.ServerIdentity.ID]
 	if !found {
 		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
 	}
 
-	// Pre-initialize the CRP generator
-	crsGen := dbfv.NewCRPGenerator(s.Params, []byte{'l', 'a', 't', 't', 'i', 'g', 'o'})
-	s.crp = crsGen.ClockNew()
+	// Pre-load the CRS
+	s.crp = s.lt.CRS
 
 	log.Lvl3("Node Setup OK")
 	return s.SimulationBFTree.Node(config)
 }
 
-func NewKeyGenerationSimul(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (onet.ProtocolInstance, error) {
+func SimNewCKGProto(tni *onet.TreeNodeInstance, sim *KeyGenerationSim) (onet.ProtocolInstance, error) {
 	//This part allows to injec the data to the node ~ we don't need the messy channels.
 	protocol, err := proto.NewCollectiveKeyGeneration(tni)
 	if err != nil {

@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/ldsec/lattigo/bfv"
 	"github.com/ldsec/lattigo/ring"
@@ -17,14 +18,14 @@ import (
 
 type RelinearizationKeySimulation struct {
 	onet.SimulationBFTree
-	proto.CRP
 
 	lt        *utils.LocalTest
 	ParamsIdx int
-	Params    *bfv.Parameters
-}
 
-var CRP proto.CRP
+	Params *bfv.Parameters
+	sk     *bfv.SecretKey
+	crp    proto.CRP
+}
 
 func init() {
 	onet.SimulationRegister("RelinearizationKeyGeneration", NewRelinearizationKeyGeneration)
@@ -39,7 +40,6 @@ func NewRelinearizationKeyGeneration(config string) (onet.Simulation, error) {
 		return nil, err
 	}
 
-	sim.CRP = CRP
 	sim.Params = bfv.DefaultParams[sim.ParamsIdx]
 
 	return sim, nil
@@ -54,12 +54,45 @@ func (s *RelinearizationKeySimulation) Setup(dir string, hosts []string) (*onet.
 	if err != nil {
 		return nil, err
 	}
+
 	s.lt, err = utils.GetLocalTestForRoster(sc.Roster, s.Params, storageDir)
 	if err != nil {
 		return nil, err
 	}
-	lt = s.lt
 
+	// Write the local test to file
+	err = s.lt.WriteToFile(dir + "/local_test")
+	if err != nil {
+		return nil, err
+	}
+
+	return sc, nil
+}
+
+func (s *RelinearizationKeySimulation) Node(config *onet.SimulationConfig) error {
+	log.Lvl4("Node Setup")
+	if _, err := config.Server.ProtocolRegister("RelinearizationKeyProtocolSimul", func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
+		return SimNewEKGProto(tni, s)
+	}); err != nil {
+		log.ErrFatal(err, "Error could not inject parameters")
+		return err
+	}
+
+	// Read the local test from file
+	s.lt = &utils.LocalTest{StorageDirectory: storageDir}
+	err := s.lt.ReadFromFile("local_test")
+	if err != nil {
+		return err
+	}
+
+	// Pre-load the secret key
+	var found bool
+	s.sk, found = s.lt.SecretKeyShares0[config.Server.ServerIdentity.ID]
+	if !found {
+		return fmt.Errorf("secret key share for %s not found", config.Server.ServerIdentity.ID.String())
+	}
+
+	// Compute the CRP
 	params := s.Params
 	ctxPQ, _ := ring.NewContextWithParams(1<<params.LogN, append(params.Moduli.Qi, params.Moduli.Pi...))
 	crpGenerator := ring.NewCRPGenerator(nil, ctxPQ)
@@ -68,31 +101,13 @@ func (s *RelinearizationKeySimulation) Setup(dir string, hosts []string) (*onet.
 	for j := 0; j < len(modulus); j++ {
 		crp[j] = crpGenerator.ClockNew()
 	}
-	CRP.A = crp
+	s.crp.A = crp
 
-	return sc, nil
-}
-
-func (s *RelinearizationKeySimulation) Node(config *onet.SimulationConfig) error {
-	idx, _ := config.Roster.Search(config.Server.ServerIdentity.ID)
-	if idx < 0 {
-		log.Fatal("Error node not found")
-	}
-
-	log.Lvl4("Node Setup")
-	if _, err := config.Server.ProtocolRegister("RelinearizationKeyProtocolSimul", func(tni *onet.TreeNodeInstance) (instance onet.ProtocolInstance, e error) {
-		return NewRelinearizationKeySimul(tni, s)
-	}); err != nil {
-		log.ErrFatal(err, "Error could not inject parameters")
-		return err
-	}
-	s.lt = lt
-	s.CRP = CRP
-
+	log.Lvl3("Node Setup OK")
 	return s.SimulationBFTree.Node(config)
 }
 
-func NewRelinearizationKeySimul(tni *onet.TreeNodeInstance, simulation *RelinearizationKeySimulation) (onet.ProtocolInstance, error) {
+func SimNewEKGProto(tni *onet.TreeNodeInstance, sim *RelinearizationKeySimulation) (onet.ProtocolInstance, error) {
 	protocol, err := proto.NewRelinearizationKey(tni)
 	if err != nil {
 		return nil, err
@@ -100,7 +115,7 @@ func NewRelinearizationKeySimul(tni *onet.TreeNodeInstance, simulation *Relinear
 
 	relinkey := protocol.(*proto.RelinearizationKeyProtocol)
 
-	err = relinkey.Init(*simulation.Params, *simulation.lt.SecretKeyShares0[tni.ServerIdentity().ID], simulation.CRP.A)
+	err = relinkey.Init(*sim.Params, *sim.sk, sim.crp.A)
 	return relinkey, nil
 }
 
@@ -108,7 +123,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 	size := config.Tree.Size()
 
 	defer func() {
-		err := lt.TearDown(true)
+		err := s.lt.TearDown(true)
 		if err != nil {
 			log.Error(err)
 		}
@@ -144,7 +159,7 @@ func (s *RelinearizationKeySimulation) Run(config *onet.SimulationConfig) error 
 		log.Lvl1("Relinearization key generated for ", size)
 		log.Lvl1("Elapsed time :", elapsed)
 
-		sk := lt.IdealSecretKey0
+		sk := s.lt.IdealSecretKey0
 		pk := bfv.NewKeyGenerator(s.Params).GenPublicKey(sk)
 		encryptor_pk := bfv.NewEncryptorFromPk(s.Params, pk)
 		encoder := bfv.NewEncoder(s.Params)

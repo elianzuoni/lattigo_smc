@@ -10,7 +10,6 @@ import (
 func TestSimulationCollectiveKeyGen(t *testing.T) {
 	//turn off test variable
 	log.Lvl1("Test !! ")
-	//protocols.TurnOffTest() // TODO: what?
 
 	simul.Start("runconfigs/key_gen_config.toml")
 
