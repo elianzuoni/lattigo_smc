@@ -96,6 +96,9 @@ func registerClientQueryHandlers(serv *Service) error {
 	if err := serv.RegisterHandler(serv.HandleGenRotKeyQuery); err != nil {
 		return errors.New("Couldn't register HandleGenRotKeyQuery: " + err.Error())
 	}
+	if err := serv.RegisterHandler(serv.HandleSwitchQuery); err != nil {
+		return errors.New("Couldn't register HandleSwitchQuery: " + err.Error())
+	}
 
 	return nil
 }

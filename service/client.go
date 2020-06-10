@@ -454,7 +454,7 @@ func (c *Client) SendSwitchQuery(cipherID messages.CipherID) ([]uint64, error) {
 
 	// Send query
 	log.Lvl2(c, "Sending query to entry point")
-	err := c.circuitClient.SendProtobuf(c.entryPoint, query, resp)
+	err := c.sessionClient.SendProtobuf(c.entryPoint, query, resp)
 	if err != nil {
 		log.Error(c, "Switch query returned error:", err)
 		return nil, err

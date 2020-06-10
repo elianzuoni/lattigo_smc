@@ -60,8 +60,6 @@ type MessageTypes struct {
 	MsgGetCipherIDReply   network.MessageTypeID
 
 	MsgSwitchQuery    network.MessageTypeID // Unused
-	MsgSwitchRequest  network.MessageTypeID
-	MsgSwitchReply    network.MessageTypeID
 	MsgSwitchResponse network.MessageTypeID // Unused
 
 	MsgSumQuery    network.MessageTypeID // Unused
@@ -151,9 +149,7 @@ func init() {
 	MsgTypes.MsgGetCipherIDRequest = network.RegisterMessage(&GetCipherIDRequest{})
 	MsgTypes.MsgGetCipherIDReply = network.RegisterMessage(&GetCipherIDReply{})
 
-	MsgTypes.MsgSwitchQuery = network.RegisterMessage(&SwitchQuery{}) // Unused
-	MsgTypes.MsgSwitchRequest = network.RegisterMessage(&SwitchRequest{})
-	MsgTypes.MsgSwitchReply = network.RegisterMessage(&SwitchReply{})
+	MsgTypes.MsgSwitchQuery = network.RegisterMessage(&SwitchQuery{})       // Unused
 	MsgTypes.MsgSwitchResponse = network.RegisterMessage(&SwitchResponse{}) // Unused
 
 	MsgTypes.MsgSumQuery = network.RegisterMessage(&SumQuery{}) // Unused
@@ -548,39 +544,10 @@ type SwitchQuery struct {
 	PublicKey *bfv.PublicKey
 }
 
-type SwitchRequestID uuid.UUID
-
-var switchRIDLock sync.Mutex
-
-func NewSwitchRequestID() SwitchRequestID {
-	switchRIDLock.Lock()
-	defer switchRIDLock.Unlock()
-	return SwitchRequestID(uuid.NewV1())
-}
-func (id SwitchRequestID) String() string {
-	return (uuid.UUID)(id).String()
-}
-
-type SwitchRequest struct {
-	ReqID     SwitchRequestID
-	SessionID SessionID
-
-	CipherID  CipherID
-	PublicKey *bfv.PublicKey
-}
-
 type SwitchConfig struct {
 	SessionID  SessionID
 	PublicKey  *bfv.PublicKey
 	Ciphertext *bfv.Ciphertext
-}
-
-type SwitchReply struct {
-	ReqID     SwitchRequestID
-	SessionID SessionID
-
-	Ciphertext *bfv.Ciphertext // Switched under the new public key
-	Valid      bool
 }
 
 type SwitchResponse struct {

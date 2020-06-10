@@ -50,6 +50,9 @@ func (service *Service) NewProtocol(tni *onet.TreeNodeInstance, conf *onet.Gener
 
 	case CloseSessionProtocolName:
 		protocol, err = service.newProtoCloseSession(tni, conf)
+
+	case protocols.CollectivePublicKeySwitchingProtocolName:
+		protocol, err = service.newProtoPCKS(tni, conf)
 	}
 
 	if err != nil {
@@ -261,4 +264,45 @@ func (service *Service) newProtoCloseSession(tn *onet.TreeNodeInstance, cfg *one
 	}
 
 	return p, nil
+}
+
+// Public collective key switching
+
+func (service *Service) newProtoPCKS(tn *onet.TreeNodeInstance, cfg *onet.GenericConfig) (onet.ProtocolInstance, error) {
+	log.Lvl2(service.ServerIdentity(), "PCKS protocol factory")
+
+	// First, extract configuration
+	config := &messages.SwitchConfig{}
+	err := config.UnmarshalBinary(cfg.Data)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "Could not extract protocol configuration:", err)
+		return nil, err
+	}
+
+	// Then, extract session, if exists
+	s, ok := service.sessions.GetSession(config.SessionID)
+	if !ok {
+		err = errors.New("Requested session does not exist")
+		log.Error(service.ServerIdentity(), err)
+		return nil, err
+	}
+
+	// Instantiate protocol with incomplete constructor
+	log.Lvl2(service.ServerIdentity(), "Instantiating protocol with incomplete constructor")
+	protocol, err := protocols.NewCollectivePublicKeySwitching(tn)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "Could not instantiate protocol")
+		return nil, err
+	}
+	pcks := protocol.(*protocols.CollectivePublicKeySwitchingProtocol)
+
+	// Finally, initialise the rest of the fields
+	log.Lvl3(service.ServerIdentity(), "Initialising protocol")
+	err = pcks.Init(*s.Params, *config.PublicKey, *s.GetSecretKeyShare(), config.Ciphertext)
+	if err != nil {
+		log.Error(service.ServerIdentity(), "Could not initialise protocol", err)
+		return nil, err
+	}
+
+	return pcks, err
 }

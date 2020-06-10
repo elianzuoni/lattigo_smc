@@ -29,8 +29,6 @@ type Service struct {
 	relinReplies       map[messages.RelinRequestID]chan *messages.RelinReply
 	rotationRepLock    sync.RWMutex
 	rotationReplies    map[messages.RotationRequestID]chan *messages.RotationReply
-	switchRepLock      sync.RWMutex
-	switchReplies      map[messages.SwitchRequestID]chan *messages.SwitchReply
 	refreshRepLock     sync.RWMutex
 	refreshReplies     map[messages.RefreshRequestID]chan *messages.RefreshReply
 	encToSharesRepLock sync.RWMutex
@@ -70,7 +68,6 @@ func NewService(c *onet.Context) (onet.Service, error) {
 		multiplyReplies:    make(map[messages.MultiplyRequestID]chan *messages.MultiplyReply),
 		relinReplies:       make(map[messages.RelinRequestID]chan *messages.RelinReply),
 		rotationReplies:    make(map[messages.RotationRequestID]chan *messages.RotationReply),
-		switchReplies:      make(map[messages.SwitchRequestID]chan *messages.SwitchReply),
 		refreshReplies:     make(map[messages.RefreshRequestID]chan *messages.RefreshReply),
 		encToSharesReplies: make(map[messages.EncToSharesRequestID]chan *messages.EncToSharesReply),
 		sharesToEncReplies: make(map[messages.SharesToEncRequestID]chan *messages.SharesToEncReply),
@@ -106,9 +103,6 @@ func registerClientQueryHandlers(service *Service) error {
 	if err := service.RegisterHandler(service.HandleMultiplyQuery); err != nil {
 		return errors.New("Couldn't register HandleMultiplyQuery: " + err.Error())
 	}
-	if err := service.RegisterHandler(service.HandleSwitchQuery); err != nil {
-		return errors.New("Couldn't register HandleSwitchQuery: " + err.Error())
-	}
 	if err := service.RegisterHandler(service.HandleRelinQuery); err != nil {
 		return errors.New("Couldn't register HandleRelinearizationquery: " + err.Error())
 	}
@@ -140,10 +134,6 @@ func registerServerMsgHandler(c *onet.Context, service *Service) {
 	// Get CipherID
 	c.RegisterProcessor(service, messages.MsgTypes.MsgGetCipherIDRequest)
 	c.RegisterProcessor(service, messages.MsgTypes.MsgGetCipherIDReply)
-
-	// Switch
-	c.RegisterProcessor(service, messages.MsgTypes.MsgSwitchRequest)
-	c.RegisterProcessor(service, messages.MsgTypes.MsgSwitchReply)
 
 	// Sum
 	c.RegisterProcessor(service, messages.MsgTypes.MsgSumRequest)
@@ -185,16 +175,6 @@ func (service *Service) Process(msg *network.Envelope) {
 	}
 	if msg.MsgType.Equal(messages.MsgTypes.MsgGetCipherIDReply) {
 		service.processGetCipherIDReply(msg)
-		return
-	}
-
-	// Switch
-	if msg.MsgType.Equal(messages.MsgTypes.MsgSwitchRequest) {
-		service.processSwitchRequest(msg)
-		return
-	}
-	if msg.MsgType.Equal(messages.MsgTypes.MsgSwitchReply) {
-		service.processSwitchReply(msg)
 		return
 	}
 
