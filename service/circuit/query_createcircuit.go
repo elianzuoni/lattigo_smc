@@ -128,28 +128,28 @@ func (service *Service) createCircuit(sessionID messages.SessionID, circuitID me
 	return nil
 }
 
-// Adapts the DelegateSumCiphers method to the signature needed by the Tree constructor
+// Adapts the DelegateSumCiphers method to the signature needed by the OperationTree constructor
 func (service *Service) treeAdder(sessionID messages.SessionID) tree.BinaryOperation {
 	return func(cipherID1 messages.CipherID, cipherID2 messages.CipherID) (messages.CipherID, error) {
 		return service.DelegateSumCiphers(sessionID, cipherID1, cipherID2)
 	}
 }
 
-// Adapts the DelegateMultiplyCiphers method to the signature needed by the Tree constructor
+// Adapts the DelegateMultiplyCiphers method to the signature needed by the OperationTree constructor
 func (service *Service) treeMultiplier(sessionID messages.SessionID) tree.BinaryOperation {
 	return func(cipherID1 messages.CipherID, cipherID2 messages.CipherID) (messages.CipherID, error) {
 		return service.DelegateMultiplyCiphers(sessionID, cipherID1, cipherID2, true)
 	}
 }
 
-// Adapts the DelegateRotateCipher method to the signature needed by the Tree constructor
+// Adapts the DelegateRotateCipher method to the signature needed by the OperationTree constructor
 func (service *Service) treeRotator(sessionID messages.SessionID) tree.RotOperation {
 	return func(cipherID messages.CipherID, rotIdx int, k uint64) (messages.CipherID, error) {
 		return service.DelegateRotateCipher(sessionID, cipherID, rotIdx, k)
 	}
 }
 
-// Adapts the GetCipherID method to the signature needed by the Tree constructor
+// Adapts the GetCipherID method to the signature needed by the OperationTree constructor
 func (service *Service) treeSupplier(circuitID messages.CircuitID) tree.Supplier {
 	return func(fullName string) (messages.CipherID, error) {
 		log.Lvl2(service.ServerIdentity(), "Resolving name:", fullName)

@@ -15,7 +15,7 @@ type BinaryOperation func(id1 messages.CipherID, id2 messages.CipherID) (message
 type RotOperation func(id messages.CipherID, rotIdx int, k uint64) (messages.CipherID, error)
 type Supplier func(name string) (messages.CipherID, error)
 
-type Tree struct {
+type OperationTree struct {
 	Root *Node
 	BF   int // Branching factor
 
@@ -27,7 +27,7 @@ type Tree struct {
 	Rot Action
 }
 
-func NewTree(BF int, get Supplier, add, mul BinaryOperation, rot RotOperation) *Tree {
+func NewTree(BF int, get Supplier, add, mul BinaryOperation, rot RotOperation) *OperationTree {
 	actGet := func(n *Node) {
 		id, err := get(n.Name)
 		if err != nil {
@@ -95,15 +95,15 @@ func NewTree(BF int, get Supplier, add, mul BinaryOperation, rot RotOperation) *
 		return
 	}
 
-	return &Tree{nil, BF, actGet, actAdd, actMul, actRot}
+	return &OperationTree{nil, BF, actGet, actAdd, actMul, actRot}
 }
 
-func NewBinaryTree(Get Supplier, Add, Mul BinaryOperation, Rot RotOperation) *Tree {
+func NewBinaryTree(Get Supplier, Add, Mul BinaryOperation, Rot RotOperation) *OperationTree {
 	return NewTree(2, Get, Add, Mul, Rot)
 }
 
 // Just run every Run in a separate goroutine, no matter the order of visit
-func (t *Tree) Evaluate() messages.CipherID {
+func (t *OperationTree) Evaluate() messages.CipherID {
 	t.Root.RunSubTree()
 	return <-t.Root.Output
 }
@@ -140,7 +140,7 @@ const (
 // RIGHT can only be seen after VAL or RIGHT. When seen, currNode is set to currNode's parent.
 // OP can only be seen after LEFT. When seen, the right action is set in currNode.
 // VAL can only be seen after LEFT. When seen, the actGet action is set in currNode, as well as the right Val.
-func (t *Tree) ParseFromRPN(desc string) error {
+func (t *OperationTree) ParseFromRPN(desc string) error {
 	// Used to access desc
 	ptr := 0
 	// When the description begins, it's as if we had just seen a left.

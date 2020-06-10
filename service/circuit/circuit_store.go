@@ -16,7 +16,7 @@ type Circuit struct {
 	session *session.Session
 
 	Description   string
-	OperationTree *tree.Tree
+	OperationTree *tree.OperationTree
 
 	// Stores the name-CipherID correspondence
 	cipherIDsLock sync.RWMutex
