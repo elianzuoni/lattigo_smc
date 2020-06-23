@@ -5,7 +5,7 @@ In the SMC problem, a group of mutually untrusting parties need to evaluate a jo
 In this setting, parties are organised in a peer-to-peer network (they all carry out computations, and no root is a priori defined among them).
 Every party has a server side, that cooperates in the collective execution of queries made to the system, and a client side, to issue queries to the system.
 
-The local cryptographic operations are provided by the [Lattigo](https://github.com/ldsec/lattigo) library, while the network operations and patterns are provided by the [Onet](https://github.com/dedis/onet) library.
+The local cryptographic operations are provided by the [Lattigo](https://github.com/ldsec/lattigo) library, while the network operations and structures are provided by the [Onet](https://github.com/dedis/onet) library.
   
 ## Overview
 
@@ -28,7 +28,8 @@ However, priority was given first to functional developments (in order to obtain
 
 ### `protocols`
 
-This package implements all the 8 protocols described in the [paper](https://eprint.iacr.org/2020/304) that interactively carry out the operations involving the secret key.
+This package implements all the 8 protocols described in the [paper](https://eprint.iacr.org/2020/304) that interactively carry out the operations involving the secret key.  
+The peer-to-peer approach also reflects on these implementations: the computations are distributed, not entirely delegated to a single computing party (centralised approach).  
 It constitutes the Network Layer.
 
 ### `service`
