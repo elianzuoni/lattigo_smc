@@ -83,7 +83,7 @@ It is identified by the same `CircuitID` at all nodes.
 ### Variable names
 
 The naming infrastructure is organised in a distributed name->`CipherID` correspondence that mirrors exactly the `CipherID`->ciphertext correspondence put up by the Session Service.  
-A `CipherID` can be associated a locally-valid *variable name*, which induces a globally-valid *full name* built as \<variable name>@\<owner>, where the *owner" is the node storing that correspondence.  
+A `CipherID` can be associated a locally-valid *variable name*, which induces a globally-valid *full name* built as \<variable name>@\<owner>, where the *owner* is the node storing that correspondence.  
 As before, the Circuit Service lets the `Circuit` type expose the `GetCipherID` method to resolve any variable's full name, whether local or remote (a `GetCipherIDRequest`-`GetCipherIDReply` message exchange is necessary, if remote).  
 
 This mechanism is implemented in [names.go](circuit/names.go) and [req_getcipherid.go](circuit/req_getcipherid.go).
