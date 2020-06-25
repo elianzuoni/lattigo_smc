@@ -21,7 +21,60 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"sync"
 )
+
+/************************************** Structures **************************************/
+
+//RelinearizationKeyProtocol handler for onet for RLK
+type RelinearizationKeyProtocol struct {
+	*onet.TreeNodeInstance
+	//Params the bfv parameters
+	Params bfv.Parameters
+	//CRP the random ring used during the round 1
+	Crp CRP
+	//SK the secret key of the party
+	Sk bfv.SecretKey
+
+	RelinProto      *dbfv.RKGProtocol
+	RoundOneShare   dbfv.RKGShareRoundOne
+	RoundTwoShare   dbfv.RKGShareRoundTwo
+	RoundThreeShare dbfv.RKGShareRoundThree
+	U               *ring.Poly
+	EvaluationKey   *bfv.EvaluationKey
+
+	//ChannelRoundOne to send the different parts of the key
+	ChannelRoundOne chan StructRelinKeyRoundOne
+	//ChannelRoundTwo to send the different parts of the key
+	ChannelRoundTwo chan StructRelinKeyRoundTwo
+	//ChannelRoundThree to send the different parts of the key
+	ChannelRoundThree chan StructRelinKeyRoundThree
+
+	//Chan to wake up nodes
+	ChannelStart chan StructStart
+
+	done sync.Mutex
+}
+
+//StructRelinKeyRoundOne handler for onet - used to send the share after round one
+type StructRelinKeyRoundOne struct {
+	*onet.TreeNode
+	dbfv.RKGShareRoundOne
+}
+
+//StructRelinKeyRoundTwo handler for onet - used to send share after round two
+type StructRelinKeyRoundTwo struct {
+	*onet.TreeNode
+	dbfv.RKGShareRoundTwo
+}
+
+//StructRelinKeyRoundThree handler for onet - used to send share after round thre e
+type StructRelinKeyRoundThree struct {
+	*onet.TreeNode
+	dbfv.RKGShareRoundThree
+}
+
+/************************************** Methods **************************************/
 
 const RelinearizationKeyProtocolName = "RelinearizationKeyProtocol"
 

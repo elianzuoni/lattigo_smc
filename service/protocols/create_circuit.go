@@ -22,7 +22,24 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
+	"sync"
 )
+
+type CreateCircuitProtocol struct {
+	*onet.TreeNodeInstance
+
+	store     AbstractCircuitStore
+	CircuitID messages.CircuitID
+	SessionID messages.SessionID
+	desc      string
+
+	// Channels to receive from other nodes.
+	channelStart chan StructServStart
+	channelDone  chan []StructServDone // A channel of slices allows to receive all shares at once.
+
+	// Used ot wait for termination.
+	done sync.Mutex
+}
 
 func init() {
 	fmt.Println("CreateCircuit: init")

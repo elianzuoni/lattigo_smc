@@ -16,7 +16,43 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"sync"
 )
+
+/************************************** Structures **************************************/
+
+//CollectivePublicKeySwitchingProtocol Structure for onet for the pcks
+type CollectivePublicKeySwitchingProtocol struct {
+	*onet.TreeNodeInstance
+
+	//Params bfv parameters.
+	Params bfv.Parameters
+
+	bfv.PublicKey
+	//SK the secret key hash
+	Sk bfv.SecretKey
+
+	bfv.Ciphertext
+
+	PublicKeySwitchProtocol *dbfv.PCKSProtocol
+	PCKSShare               dbfv.PCKSShare
+	CiphertextOut           bfv.Ciphertext
+
+	//ChannelPCKS to forward the shares.
+	ChannelPCKS chan StructPCKSShare
+	//ChannelStart to wake up
+	ChannelStart chan StructStart
+
+	done sync.Mutex
+}
+
+//StructPCKSShare handler for onet
+type StructPCKSShare struct {
+	*onet.TreeNode
+	dbfv.PCKSShare
+}
+
+/************************************** Methods **************************************/
 
 const CollectivePublicKeySwitchingProtocolName = "CollectivePublicKeySwitching"
 

@@ -18,7 +18,44 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"sync"
 )
+
+/************************************** Structures **************************************/
+
+//CollectiveKeySwitchingProtocol struct for onet
+type CollectiveKeySwitchingProtocol struct {
+	*onet.TreeNodeInstance
+	*dbfv.CKSProtocol
+	//Params used for the key switching
+	Params        SwitchingParameters
+	CKSShare      dbfv.CKSShare
+	CiphertextOut *bfv.Ciphertext
+
+	//ChannelCKSShare to forward the CKSS share
+	ChannelCKSShare chan StructCKSShare
+
+	//ChannelStart to wake up
+	ChannelStart chan StructStart
+
+	done sync.Mutex
+}
+
+//StructCKSShare handler for onet
+type StructCKSShare struct {
+	*onet.TreeNode
+	dbfv.CKSShare
+}
+
+//switchingParameters contains the public parameters for CKS
+type SwitchingParameters struct {
+	//Params parameters bfv
+	Params *bfv.Parameters
+
+	bfv.Ciphertext
+}
+
+/************************************** Methods **************************************/
 
 const CollectiveKeySwitchingProtocolName = "CollectiveKeySwitching"
 

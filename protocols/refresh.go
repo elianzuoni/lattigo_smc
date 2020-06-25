@@ -9,10 +9,40 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"sync"
 )
 
+/************************************** Structures **************************************/
+
+//RefreshProtocol handler for onet for the refresh protocol
+type RefreshProtocol struct {
+	*onet.TreeNodeInstance
+
+	Sk              bfv.SecretKey
+	Ciphertext      bfv.Ciphertext
+	FinalCiphertext bfv.Ciphertext
+	CRS             ring.Poly
+	Params          bfv.Parameters
+	RShare          dbfv.RefreshShare
+
+	RefreshProto *dbfv.RefreshProtocol
+
+	ChannelRShare chan StructRefreshShare
+	ChannelStart  chan StructStart
+
+	done sync.Mutex
+}
+
+//StructRefreshShare handler for the refresh share.
+type StructRefreshShare struct {
+	*onet.TreeNode
+	dbfv.RefreshShare
+}
+
+/************************************** Methods **************************************/
+
 //CollectiveKeyGenerationProtocolName name of protocol for onet
-const CollectiveRefreshName = "CollectiveRefreshKey"
+const CollectiveRefreshName = "CollectiveRefresh"
 
 func init() {
 	fmt.Println("RefProto: init")

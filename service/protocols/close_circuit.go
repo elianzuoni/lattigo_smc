@@ -22,7 +22,22 @@ import (
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
 	"lattigo-smc/service/messages"
+	"sync"
 )
+
+type CloseCircuitProtocol struct {
+	*onet.TreeNodeInstance
+
+	store     AbstractCircuitStore
+	CircuitID messages.CircuitID
+
+	// Channels to receive from other nodes.
+	channelStart chan StructServStart
+	channelDone  chan []StructServDone // A channel of slices allows to receive all shares at once.
+
+	// Used ot wait for termination.
+	done sync.Mutex
+}
 
 func init() {
 	fmt.Println("CloseCircuit: init")

@@ -9,7 +9,35 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"sync"
 )
+
+/************************************** Structures **************************************/
+
+//RotationKeyProtocol handler for onet for the rotation key protocol
+type RotationKeyProtocol struct {
+	*onet.TreeNodeInstance
+
+	Params           bfv.Parameters
+	RotationProtocol *dbfv.RTGProtocol
+	RTShare          dbfv.RTGShare
+	RotKey           bfv.RotationKeys
+
+	Crp []*ring.Poly
+
+	ChannelRTShare chan StructRTGShare
+	ChannelStart   chan StructStart
+
+	done sync.Mutex
+}
+
+//StructRTGShare handler for onet
+type StructRTGShare struct {
+	*onet.TreeNode
+	dbfv.RTGShare
+}
+
+/************************************** Methods **************************************/
 
 const RotationProtocolName = "RotationKeyProtocol"
 

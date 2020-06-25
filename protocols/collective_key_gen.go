@@ -19,7 +19,47 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"sync"
 )
+
+/************************************** Structures **************************************/
+
+//CollectiveKeyGenerationProtocol structure encapsulating a key gen protocol for onet.
+type CollectiveKeyGenerationProtocol struct {
+	*onet.TreeNodeInstance
+	*dbfv.CKGProtocol
+
+	//Params parameters of the protocol
+	Params *bfv.Parameters
+	//Secret key of the protocol
+	Sk *bfv.SecretKey
+
+	// Public key CRP
+	CKG1 *ring.Poly
+
+	// Public key share in the protocol
+	CKGShare dbfv.CKGShare
+
+	//Public key generated in the protocol
+	Pk *bfv.PublicKey
+
+	Initialized chan bool
+
+	//ChannelPublicKeyShares to send the public key shares
+	ChannelPublicKeyShares chan StructCKGShare
+	//ChannelStart to get the wake up
+	ChannelStart chan StructStart
+
+	done sync.Mutex
+}
+
+// StructCKGShare handler for onet
+type StructCKGShare struct {
+	*onet.TreeNode
+	dbfv.CKGShare
+}
+
+/************************************** Methods **************************************/
 
 //CollectiveKeyGenerationProtocolName name of protocol for onet
 const CollectiveKeyGenerationProtocolName = "CollectiveKeyGeneration"

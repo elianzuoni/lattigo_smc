@@ -28,7 +28,42 @@ import (
 	"go.dedis.ch/onet/v3"
 	"go.dedis.ch/onet/v3/log"
 	"go.dedis.ch/onet/v3/network"
+	"sync"
 )
+
+/************************************** Structures **************************************/
+
+// SharesToEncryptionProtocol implements the onet.Protocol interface.
+// Contains all the variables that the caller needs to supply at some phase of the protocol,
+// plus the private channels to communicate between nodes, and the public channel to output the result.
+type SharesToEncryptionProtocol struct {
+	*onet.TreeNodeInstance
+	*dbfv.S2EProtocol
+
+	//Variables not contained in E2SProtocol.
+	addShare *dbfv.AdditiveShare
+	sk       *bfv.SecretKey
+	crs      *ring.Poly
+
+	//Channels to receive from other nodes.
+	channelStart       chan StructStart
+	channelReencShares chan []StructS2EReencryptionShare //A channel of slices allows to receive all shares at once
+
+	// Re-encrypted ciphertext (to be waited with WaitDone)
+	OutputCiphertext *bfv.Ciphertext
+
+	done sync.Mutex
+}
+
+// StructE2SReencryptionShare is a handler for onet.
+// Wraps the re-encryption share (used in Shares-to-Encryption protocol) so that it can
+// be passed via onet with the paradigm described in cothority_template
+type StructS2EReencryptionShare struct {
+	*onet.TreeNode
+	dbfv.S2EReencryptionShare
+}
+
+/************************************** Methods **************************************/
 
 func init() {
 	fmt.Println("S2E: init")
